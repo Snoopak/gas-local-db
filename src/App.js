@@ -669,8 +669,11 @@ export default function ClientDatabase() {
         }
       };
       if (isOpen) {
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
+        // Невелика затримка щоб клік на кнопку встиг спрацювати
+        setTimeout(() => {
+          document.addEventListener('click', handleClickOutside);
+        }, 0);
+        return () => document.removeEventListener('click', handleClickOutside);
       }
     }, [isOpen]);
 
@@ -678,7 +681,10 @@ export default function ClientDatabase() {
       <div className="relative w-full sm:w-auto" ref={dropdownRef}>
         <button
           type="button"
-          onClick={() => setOpenDropdown(isOpen ? null : name)}
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpenDropdown(isOpen ? null : name);
+          }}
           className="w-full px-3 sm:px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white text-left flex items-center justify-between min-w-full sm:min-w-[180px] text-sm sm:text-base">
           <span className="truncate">{getFilterLabel(selected, options, label)}</span>
           <svg className={`w-4 h-4 transition-transform flex-shrink-0 ml-2 ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -687,14 +693,24 @@ export default function ClientDatabase() {
         </button>
         
         {isOpen && (
-          <div className="absolute z-50 mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+          <div 
+            className="absolute z-50 mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto"
+          >
             {options.length === 0 ? (
               <div className="px-4 py-2 text-gray-400 text-sm">Немає опцій</div>
             ) : (
               options.map(option => (
                 <label
                   key={option}
-                  className="flex items-center px-3 sm:px-4 py-3 sm:py-2 hover:bg-indigo-50 cursor-pointer active:bg-indigo-100">
+                  className="flex items-center px-3 sm:px-4 py-3 sm:py-2 hover:bg-indigo-50 cursor-pointer active:bg-indigo-100"
+                  onClick={(e) => {
+                    // Якщо клікнули не на сам checkbox, то тоглимо вручну
+                    if (e.target.tagName !== 'INPUT') {
+                      e.preventDefault();
+                      toggleSelection(selected, onChange, option);
+                    }
+                  }}
+                >
                   <input
                     type="checkbox"
                     checked={selected.includes(option)}

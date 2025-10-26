@@ -1,21 +1,8 @@
 const CACHE_NAME = 'clients-db-v1';
-const urlsToCache = [
-  '/',
-  '/index.html',
-  '/static/css/main.css',
-  '/static/js/main.js',
-  '/manifest.json'
-];
 
-// Встановлення Service Worker і кешування ресурсів
+// Встановлення Service Worker (БЕЗ попереднього кешування)
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => {
-        console.log('Відкрито cache');
-        return cache.addAll(urlsToCache);
-      })
-  );
+  console.log('Service Worker встановлено');
   self.skipWaiting();
 });
 
@@ -34,6 +21,7 @@ self.addEventListener('activate', (event) => {
     })
   );
   self.clients.claim();
+  console.log('Service Worker активовано');
 });
 
 // Обробка запитів (Network First стратегія)
@@ -65,18 +53,17 @@ self.addEventListener('sync', (event) => {
 });
 
 async function syncClients() {
-  // Тут можна додати логіку синхронізації даних
   console.log('Синхронізація даних...');
 }
 
-// Push notifications (для майбутнього використання)
+// Push notifications
 self.addEventListener('push', (event) => {
   const data = event.data ? event.data.json() : {};
   const title = data.title || 'Нове сповіщення';
   const options = {
     body: data.body || 'У вас нове повідомлення',
-    icon: '/icon-192.png',
-    badge: '/icon-192.png',
+    icon: './icon-192.png',
+    badge: './icon-192.png',
     vibrate: [200, 100, 200]
   };
 

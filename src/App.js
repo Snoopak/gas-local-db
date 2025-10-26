@@ -28,6 +28,26 @@ const openDB = () => {
   });
 };
 
+// Функція для розбиття та форматування телефонів
+const formatPhones = (phoneString) => {
+  if (!phoneString) return null;
+  
+  // Розбиваємо по комі та прибираємо пробіли
+  const phones = phoneString.split(',').map(p => p.trim()).filter(p => p);
+  
+  return phones.map((phone, index) => (
+    <span key={index}>
+      <a 
+        href={`tel:${phone.replace(/[^\d+]/g, '')}`} 
+        className="text-blue-600 hover:text-blue-800 hover:underline"
+      >
+        {phone}
+      </a>
+      {index < phones.length - 1 && ', '}
+    </span>
+  ));
+};
+
 const addClient = async (client) => {
   const db = await openDB();
   return new Promise((resolve, reject) => {
@@ -185,6 +205,12 @@ export default function ClientDatabase() {
   
   // State для відкритих dropdown
   const [openDropdown, setOpenDropdown] = useState(null);
+  
+  // State для згортання фільтрів лічильників на мобільних
+  const [showMeterFilters, setShowMeterFilters] = useState(false);
+  
+  // State для згортання фільтрів адреси на мобільних
+  const [showAddressFilters, setShowAddressFilters] = useState(false);
 
   // useEffect для закриття модалки на ESC
   useEffect(() => {
@@ -693,10 +719,11 @@ export default function ClientDatabase() {
         <div className="bg-white rounded-lg shadow-lg p-3 sm:p-6 mb-4 sm:mb-6">
           <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-indigo-900 mb-4 sm:mb-6">База абонентів газопостачання</h1>
           
-          <div className="flex flex-col sm:flex-row gap-3 mb-4">
-            <div className="flex-1 min-w-full sm:min-w-[250px] relative">
+          {/* Головний пошук на всю ширину */}
+          <div className="mb-3">
+            <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-              <input type="text" placeholder="Пошук..."
+              <input type="text" placeholder="Пошук за ПІБ, особовим рахунком, телефоном..."
                 className="w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-base"
                 value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(0); }} />
               {searchTerm && (
@@ -706,7 +733,113 @@ export default function ClientDatabase() {
                 </button>
               )}
             </div>
-            
+          </div>
+
+          {/* Фільтри для мобільних - 2 кнопки */}
+          <div className="sm:hidden grid grid-cols-2 gap-2 mb-3">
+            {/* Кнопка фільтрів адреси */}
+            <button 
+              onClick={() => setShowAddressFilters(!showAddressFilters)}
+              className="px-3 py-3 bg-gradient-to-r from-blue-50 to-cyan-50 hover:from-blue-100 hover:to-cyan-100 border border-blue-200 text-blue-900 rounded-lg flex items-center justify-between transition-all shadow-sm"
+            >
+              <span className="flex items-center gap-1 font-medium text-sm">
+                <Home size={18} />
+                Адреса
+                {(selectedSettlement.length > 0 || selectedStreet.length > 0) && (
+                  <span className="bg-blue-600 text-white text-xs px-1.5 py-0.5 rounded-full font-bold">
+                    {selectedSettlement.length + selectedStreet.length}
+                  </span>
+                )}
+              </span>
+              <span className="text-sm">{showAddressFilters ? '▲' : '▼'}</span>
+            </button>
+
+            {/* Кнопка фільтрів лічильників */}
+            <button 
+              onClick={() => setShowMeterFilters(!showMeterFilters)}
+              className="px-3 py-3 bg-gradient-to-r from-purple-50 to-indigo-50 hover:from-purple-100 hover:to-indigo-100 border border-purple-200 text-purple-900 rounded-lg flex items-center justify-between transition-all shadow-sm"
+            >
+              <span className="flex items-center gap-1 font-medium text-sm">
+                <Gauge size={18} />
+                Лічильник
+                {(selectedMeterGroups.length > 0 || selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || selectedMeterYear.length > 0) && (
+                  <span className="bg-purple-600 text-white text-xs px-1.5 py-0.5 rounded-full font-bold">
+                    {selectedMeterGroups.length + selectedMeterBrand.length + selectedMeterSize.length + selectedMeterYear.length}
+                  </span>
+                )}
+              </span>
+              <span className="text-sm">{showMeterFilters ? '▲' : '▼'}</span>
+            </button>
+          </div>
+
+          {/* Фільтри для Desktop - 2 колонки */}
+          <div className="hidden sm:grid sm:grid-cols-2 gap-4 mb-4">
+            {/* Ліва колонка - Фільтри адреси */}
+            <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+              <h3 className="text-sm font-semibold text-blue-900 mb-2 flex items-center gap-2">
+                <Home size={16} />
+                Фільтри адреси
+              </h3>
+              <div className="space-y-2">
+                <MultiSelectDropdown
+                  options={settlements}
+                  selected={selectedSettlement}
+                  onChange={setSelectedSettlement}
+                  label="Населений пункт"
+                  name="settlement"
+                />
+                <MultiSelectDropdown
+                  options={streets}
+                  selected={selectedStreet}
+                  onChange={setSelectedStreet}
+                  label="Вулиця"
+                  name="street"
+                />
+              </div>
+            </div>
+
+            {/* Права колонка - Фільтри лічильників */}
+            <div className="bg-purple-50 p-3 rounded-lg border border-purple-200">
+              <h3 className="text-sm font-semibold text-purple-900 mb-2 flex items-center gap-2">
+                <Gauge size={16} />
+                Фільтри лічильників
+              </h3>
+              <div className="grid grid-cols-2 gap-2">
+                <MultiSelectDropdown
+                  options={meterGroups}
+                  selected={selectedMeterGroups}
+                  onChange={setSelectedMeterGroups}
+                  label="Група"
+                  name="meterGroup"
+                />
+                <MultiSelectDropdown
+                  options={meterBrands}
+                  selected={selectedMeterBrand}
+                  onChange={setSelectedMeterBrand}
+                  label="Марка"
+                  name="meterBrand"
+                />
+                <MultiSelectDropdown
+                  options={meterSizes}
+                  selected={selectedMeterSize}
+                  onChange={setSelectedMeterSize}
+                  label="Розмір"
+                  name="meterSize"
+                />
+                <MultiSelectDropdown
+                  options={meterYears}
+                  selected={selectedMeterYear}
+                  onChange={setSelectedMeterYear}
+                  label="Рік"
+                  name="meterYear"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Фільтри адреси для мобільних (згортаються) */}
+          <div className={`sm:hidden mb-3 ${showAddressFilters ? 'block' : 'hidden'}`}>
+            <div className="bg-blue-50 p-3 rounded-lg border border-blue-200 space-y-2">
             <MultiSelectDropdown
               options={settlements}
               selected={selectedSettlement}
@@ -714,7 +847,6 @@ export default function ClientDatabase() {
               label="Населений пункт"
               name="settlement"
             />
-            
             <MultiSelectDropdown
               options={streets}
               selected={selectedStreet}
@@ -722,10 +854,12 @@ export default function ClientDatabase() {
               label="Вулиця"
               name="street"
             />
+            </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3 mb-4">
-
+          {/* Фільтри лічильників для мобільних (згортаються) */}
+          <div className={`sm:hidden mb-3 ${showMeterFilters ? 'block' : 'hidden'}`}>
+            <div className="bg-purple-50 p-3 rounded-lg border border-purple-200 space-y-2">
             <MultiSelectDropdown
               options={meterGroups}
               selected={selectedMeterGroups}
@@ -733,7 +867,6 @@ export default function ClientDatabase() {
               label="Група лічильника"
               name="meterGroup"
             />
-            
             <MultiSelectDropdown
               options={meterBrands}
               selected={selectedMeterBrand}
@@ -741,7 +874,6 @@ export default function ClientDatabase() {
               label="Марка лічильника"
               name="meterBrand"
             />
-            
             <MultiSelectDropdown
               options={meterSizes}
               selected={selectedMeterSize}
@@ -749,7 +881,6 @@ export default function ClientDatabase() {
               label="Типорозмір"
               name="meterSize"
             />
-            
             <MultiSelectDropdown
               options={meterYears}
               selected={selectedMeterYear}
@@ -757,9 +888,11 @@ export default function ClientDatabase() {
               label="Рік випуску"
               name="meterYear"
             />
-            
+            </div>
+          </div>
 
-            
+          {/* Кнопка "Скинути всі фільтри" */}
+          <div className="mb-4">
             {(searchTerm || selectedSettlement.length > 0 || selectedStreet.length > 0 || 
               selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || selectedMeterYear.length > 0 || selectedMeterGroups.length > 0) && (
               <button onClick={() => {
@@ -875,7 +1008,14 @@ export default function ClientDatabase() {
                           <div className="space-y-1 text-xs sm:text-sm">
                             <p className="text-gray-700"><span className="font-medium">Особовий рахунок:</span> {c.accountNumber}</p>
                             {c.eic && <p className="text-gray-700"><span className="font-medium">EIC:</span> {c.eic}</p>}
-                            {c.phone && <div className="flex items-center gap-2"><Phone size={14} className="text-gray-500" /><a href={`tel:${c.phone}`} className="text-blue-600">{c.phone}</a></div>}
+                            {c.phone && (
+                              <div className="flex items-center gap-2">
+                                <Phone size={14} className="text-gray-500 flex-shrink-0" />
+                                <div className="flex flex-wrap gap-x-1">
+                                  {formatPhones(c.phone)}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </div>
 

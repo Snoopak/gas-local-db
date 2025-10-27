@@ -2,7 +2,7 @@
   "name": "База абонентів газопостачання",
   "short_name": "Абоненти",
   "description": "Система обліку абонентів газопостачання",
-  "start_url": "/",
+  "start_url": ".",
   "display": "standalone",
   "background_color": "#EFF6FF",
   "theme_color": "#4F46E5",
@@ -24,13 +24,13 @@
   "categories": ["utilities", "business"],
   "lang": "uk-UA",
   "dir": "ltr",
-  "scope": "/",
+  "scope": "./",
   "shortcuts": [
     {
       "name": "Додати клієнта",
       "short_name": "Додати",
       "description": "Швидко додати нового клієнта",
-      "url": "/?action=add",
+      "url": "./?action=add",
       "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
     }
   ]

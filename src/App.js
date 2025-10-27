@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Plus, Edit2, Trash2, X, Save, Phone, Home, Gauge, Upload, Download, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Plus, Edit2, Trash2, X, Save, Phone, Home, Gauge, Upload, Download, FileText } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 // IndexedDB ініціалізація
@@ -176,6 +176,23 @@ const searchClients = async (searchTerm, settlements, streets, meterBrands, mete
   });
 };
 
+// ⭐ НОВА ФУНКЦІЯ: Пошук з пагінацією для infinite scroll
+const searchClientsPaginated = async (searchTerm, settlements, streets, meterBrands, meterSizes, meterYears, meterGroups, page, pageSize) => {
+  // Спочатку отримуємо ВСІ результати
+  const allResults = await searchClients(searchTerm, settlements, streets, meterBrands, meterSizes, meterYears, meterGroups);
+  
+  // Повертаємо тільки потрібну сторінку
+  const start = page * pageSize;
+  const end = start + pageSize;
+  
+  return {
+    items: allResults.slice(start, end),
+    total: allResults.length,
+    hasMore: end < allResults.length
+  };
+};
+
+
 export default function ClientDatabase() {
   const [clients, setClients] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -189,6 +206,7 @@ export default function ClientDatabase() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState(null);
   const [totalCount, setTotalCount] = useState(0);
+  const [filteredTotalCount, setFilteredTotalCount] = useState(0); // ⭐ Для фільтрованих даних
   const [currentPage, setCurrentPage] = useState(0);
   const [loading, setLoading] = useState(false);
   const [settlements, setSettlements] = useState(['Всі']);
@@ -198,6 +216,22 @@ export default function ClientDatabase() {
   const [meterYears, setMeterYears] = useState(['Всі']);
   const [meterGroups, setMeterGroups] = useState([]);
   const pageSize = 50;
+  
+  // ⭐ INFINITE SCROLL: Додаткові state
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const isFirstRender = useRef(true);
+  const stateRestored = useRef(false);
+  
+  // ⭐ SessionStorage ключі для збереження стану
+  const STORAGE_KEYS = {
+    CLIENTS: 'clients_infinite_scroll',
+    SCROLL_Y: 'clients_scroll_position',
+    PAGE: 'clients_current_page',
+    FILTERS: 'clients_filters',
+    HAS_MORE: 'clients_has_more',
+    FILTERED_TOTAL: 'clients_filtered_total' // ⭐ Загальна кількість відфільтрованих
+  };
   
   // Додаємо ref для debounce таймера та debouncedSearchTerm
   const searchTimeoutRef = useRef(null);
@@ -265,19 +299,32 @@ export default function ClientDatabase() {
     };
   }, [searchTerm]);
 
-  useEffect(() => {
-    loadClients();
-    loadTotalCount();
-    loadSettlements();
-    loadStreets();
-    loadMeterData();
-  }, [currentPage]);
+  // ⭐ СТАРИЙ useEffect ВИДАЛЕНО - тепер є правильний нижче!
 
   useEffect(() => {
+    // ⭐ Пропускаємо перший рендер (дані завантажуються в init useEffect)
+    if (isFirstRender.current) {
+      return;
+    }
+    
+    // ⭐ Якщо тільки що відновили стан - пропускаємо один раз
+    if (stateRestored.current) {
+      stateRestored.current = false;
+      return;
+    }
+
     if (debouncedSearchTerm || selectedSettlement.length > 0 || selectedStreet.length > 0 || 
         selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || selectedMeterYear.length > 0 || selectedMeterGroups.length > 0) {
+      // ⭐ При фільтрації ТЕОЖ використовуємо infinite scroll!
+      clearScrollState();
+      setCurrentPage(0);
+      setHasMore(true); // ⭐ Увімкнуто!
       performSearch();
     } else {
+      // ⭐ Без фільтрів - скидаємо і завантажуємо заново
+      clearScrollState();
+      setCurrentPage(0);
+      setHasMore(true);
       loadClients();
     }
   }, [debouncedSearchTerm, selectedSettlement, selectedStreet, selectedMeterBrand, selectedMeterSize, selectedMeterYear, selectedMeterGroups]);
@@ -287,39 +334,23 @@ export default function ClientDatabase() {
     const updateDynamicFilters = async () => {
       const allClients = await getAllClients();
       
-      // Фільтруємо клієнтів на основі всіх обраних фільтрів
-      let filteredClients = allClients;
+      // Фільтруємо клієнтів ТІЛЬКИ по адресі (для оновлення списків лічильників)
+      let filteredByAddress = allClients;
       
       if (selectedSettlement.length > 0) {
-        filteredClients = filteredClients.filter(c => selectedSettlement.includes(c.settlement));
+        filteredByAddress = filteredByAddress.filter(c => selectedSettlement.includes(c.settlement));
       }
       
       if (selectedStreet.length > 0) {
-        filteredClients = filteredClients.filter(c => {
+        filteredByAddress = filteredByAddress.filter(c => {
           const clientStreetName = [c.streetType, c.street].filter(s => s).join(' ');
           return selectedStreet.includes(clientStreetName);
         });
       }
       
-      if (selectedMeterBrand.length > 0) {
-        filteredClients = filteredClients.filter(c => selectedMeterBrand.includes(c.meterBrand));
-      }
-      
-      if (selectedMeterSize.length > 0) {
-        filteredClients = filteredClients.filter(c => selectedMeterSize.includes(c.meterSize));
-      }
-      
-      if (selectedMeterYear.length > 0) {
-        filteredClients = filteredClients.filter(c => selectedMeterYear.includes(c.meterYear));
-      }
-      
-      if (selectedMeterGroups.length > 0) {
-        filteredClients = filteredClients.filter(c => selectedMeterGroups.includes(c.meterGroup));
-      }
-      
-      // Оновлюємо список вулиць
-      if (selectedSettlement.length > 0 || selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || selectedMeterYear.length > 0 || selectedMeterGroups.length > 0) {
-        const uniqueStreets = [...new Set(filteredClients.map(c => {
+      // Оновлюємо список вулиць (фільтрується по населеному пункту)
+      if (selectedSettlement.length > 0) {
+        const uniqueStreets = [...new Set(filteredByAddress.map(c => {
           const streetName = [c.streetType, c.street].filter(s => s).join(' ');
           return streetName;
         }).filter(s => s))].sort();
@@ -328,55 +359,126 @@ export default function ClientDatabase() {
         await loadStreets();
       }
       
-      // Оновлюємо список марок лічильників
-      if (selectedSettlement.length > 0 || selectedStreet.length > 0 || selectedMeterSize.length > 0 || selectedMeterYear.length > 0 || selectedMeterGroups.length > 0) {
-        const uniqueBrands = [...new Set(filteredClients.map(c => c.meterBrand).filter(b => b))].sort();
-        setMeterBrands(uniqueBrands);
-      } else {
-        const uniqueBrands = [...new Set(allClients.map(c => c.meterBrand).filter(b => b))].sort();
-        setMeterBrands(uniqueBrands);
-      }
+      // ⭐ КЛЮЧОВЕ ВИПРАВЛЕННЯ: Фільтри лічильників беруть дані по адресі,
+      // але НЕ фільтруються між собою (не залежать від selectedMeterBrand, selectedMeterSize і т.д.)
       
-      // Оновлюємо список типорозмірів
-      if (selectedSettlement.length > 0 || selectedStreet.length > 0 || selectedMeterBrand.length > 0 || selectedMeterYear.length > 0 || selectedMeterGroups.length > 0) {
-        const uniqueSizes = [...new Set(filteredClients.map(c => c.meterSize).filter(s => s))].sort();
-        setMeterSizes(uniqueSizes);
-      } else {
-        const uniqueSizes = [...new Set(allClients.map(c => c.meterSize).filter(s => s))].sort();
-        setMeterSizes(uniqueSizes);
-      }
+      // Оновлюємо список марок лічильників (по адресі, але НЕ по іншим фільтрам лічильників)
+      const uniqueBrands = [...new Set(filteredByAddress.map(c => c.meterBrand).filter(b => b))].sort();
+      setMeterBrands(uniqueBrands);
       
-      // Оновлюємо список років
-      if (selectedSettlement.length > 0 || selectedStreet.length > 0 || selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || selectedMeterGroups.length > 0) {
-        const uniqueYears = [...new Set(filteredClients.map(c => c.meterYear).filter(y => y))].sort((a, b) => b - a);
-        setMeterYears(uniqueYears);
-      } else {
-        const uniqueYears = [...new Set(allClients.map(c => c.meterYear).filter(y => y))].sort((a, b) => b - a);
-        setMeterYears(uniqueYears);
-      }
+      // Оновлюємо список типорозмірів (по адресі, але НЕ по іншим фільтрам лічильників)
+      const uniqueSizes = [...new Set(filteredByAddress.map(c => c.meterSize).filter(s => s))].sort();
+      setMeterSizes(uniqueSizes);
       
-      // Оновлюємо список груп лічильників
-      if (selectedSettlement.length > 0 || selectedStreet.length > 0 || selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || selectedMeterYear.length > 0) {
-        const uniqueGroups = [...new Set(filteredClients.map(c => c.meterGroup).filter(g => g))].sort();
-        setMeterGroups(uniqueGroups);
-      } else {
-        const uniqueGroups = [...new Set(allClients.map(c => c.meterGroup).filter(g => g))].sort();
-        setMeterGroups(uniqueGroups);
-      }
+      // Оновлюємо список років (по адресі, але НЕ по іншим фільтрам лічильників)
+      const uniqueYears = [...new Set(filteredByAddress.map(c => c.meterYear).filter(y => y))].sort((a, b) => b - a);
+      setMeterYears(uniqueYears);
+      
+      // Оновлюємо список груп лічильників (по адресі, але НЕ по іншим фільтрам лічильників)
+      const uniqueGroups = [...new Set(filteredByAddress.map(c => c.meterGroup).filter(g => g))].sort();
+      setMeterGroups(uniqueGroups);
     };
     
     updateDynamicFilters();
-  }, [selectedSettlement, selectedStreet, selectedMeterBrand, selectedMeterSize, selectedMeterYear, selectedMeterGroups]);
+  }, [selectedSettlement, selectedStreet]); // ⭐ ВАЖЛИВО: Тільки адреса, БЕЗ фільтрів лічильників!
 
-  const loadClients = async () => {
-    setLoading(true);
+  // ⭐ INFINITE SCROLL: Слухач скролу
+  useEffect(() => {
+    const handleScroll = () => {
+      // ⭐ INFINITE SCROLL працює ЗАВЖДИ (і з фільтрами, і без!)
+      const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+      const windowHeight = window.innerHeight;
+      const documentHeight = document.documentElement.scrollHeight;
+      
+      // Якщо до кінця залишилось менше 400px і є ще дані - завантажуємо
+      if (scrollTop + windowHeight >= documentHeight - 400 && hasMore && !isLoadingMore) {
+        setCurrentPage(prev => prev + 1);
+      }
+
+      // Зберігаємо позицію скролу (з debounce)
+      clearTimeout(window.scrollSaveTimeout);
+      window.scrollSaveTimeout = setTimeout(() => {
+        saveScrollState();
+      }, 200);
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [hasMore, isLoadingMore]);
+
+  // ⭐ INFINITE SCROLL: Завантаження при зміні currentPage
+  useEffect(() => {
+    if (currentPage > 0) {
+      // Перевіряємо чи є фільтри
+      const hasFilters = debouncedSearchTerm || selectedSettlement.length > 0 || selectedStreet.length > 0 || 
+                        selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || 
+                        selectedMeterYear.length > 0 || selectedMeterGroups.length > 0;
+      
+      if (hasFilters) {
+        performSearch(true); // append = true для фільтрів
+      } else {
+        loadClients(true); // append = true для всіх клієнтів
+      }
+    }
+  }, [currentPage]);
+
+  // ⭐ INFINITE SCROLL: Відновлення стану при mount
+  useEffect(() => {
+    // Завантажуємо фільтри завжди
+    loadTotalCount();
+    loadSettlements();
+    loadStreets();
+    loadMeterData();
+    
+    // Спробуємо відновити стан
+    const restored = restoreScrollState();
+    if (!restored) {
+      // Якщо немає збереженого стану - завантажуємо перших клієнтів
+      loadClients();
+    }
+    
+    // ⭐ Дозволяємо useEffect з фільтрами спрацьовувати після mount
+    isFirstRender.current = false;
+  }, []);
+
+  const loadClients = async (append = false) => {
+    // ⭐ INFINITE SCROLL: Якщо вже завантажуємо або немає більше - виходимо
+    if (isLoadingMore || (!append && loading)) return;
+    
+    if (append) {
+      setIsLoadingMore(true);
+    } else {
+      setLoading(true);
+    }
+    
     try {
       const data = await getClientsByPage(currentPage, pageSize);
-      setClients(data);
+      
+      if (append) {
+        // ⭐ INFINITE SCROLL: Додаємо до існуючих
+        setClients(prev => [...prev, ...data]);
+      } else {
+        // Звичайне завантаження
+        setClients(data);
+      }
+      
+      // Перевіряємо чи є ще дані
+      setHasMore(data.length === pageSize);
+      
+      // ⭐ Зберігаємо стан після рендеру (щоб не було конфлікту)
+      setTimeout(() => {
+        saveScrollState();
+      }, 100);
+      
     } catch (error) {
       console.error('Error loading clients:', error);
     }
-    setLoading(false);
+    
+    if (append) {
+      setIsLoadingMore(false);
+    } else {
+      setLoading(false);
+    }
   };
 
   const loadTotalCount = async () => {
@@ -415,16 +517,148 @@ export default function ClientDatabase() {
     setMeterGroups(uniqueGroups);
   };
 
-  const performSearch = async () => {
-    setLoading(true);
+  // ⭐ INFINITE SCROLL: Збереження стану в SessionStorage
+  const saveScrollState = () => {
     try {
-      const results = await searchClients(debouncedSearchTerm, selectedSettlement, selectedStreet,
-                                         selectedMeterBrand, selectedMeterSize, selectedMeterYear, selectedMeterGroups);
-      setClients(results);
+      sessionStorage.setItem(STORAGE_KEYS.CLIENTS, JSON.stringify(clients));
+      sessionStorage.setItem(STORAGE_KEYS.SCROLL_Y, window.scrollY.toString());
+      sessionStorage.setItem(STORAGE_KEYS.PAGE, currentPage.toString());
+      sessionStorage.setItem(STORAGE_KEYS.HAS_MORE, hasMore.toString());
+      sessionStorage.setItem(STORAGE_KEYS.FILTERED_TOTAL, filteredTotalCount.toString()); // ⭐ Зберігаємо
+      sessionStorage.setItem(STORAGE_KEYS.FILTERS, JSON.stringify({
+        searchTerm,
+        selectedSettlement,
+        selectedStreet,
+        selectedMeterBrand,
+        selectedMeterSize,
+        selectedMeterYear,
+        selectedMeterGroups
+      }));
+    } catch (e) {
+      console.error('Error saving scroll state:', e);
+    }
+  };
+
+  // ⭐ INFINITE SCROLL: Відновлення стану з SessionStorage
+  const restoreScrollState = () => {
+    try {
+      const savedClients = sessionStorage.getItem(STORAGE_KEYS.CLIENTS);
+      const savedScrollY = sessionStorage.getItem(STORAGE_KEYS.SCROLL_Y);
+      const savedPage = sessionStorage.getItem(STORAGE_KEYS.PAGE);
+      const savedFilters = sessionStorage.getItem(STORAGE_KEYS.FILTERS);
+      const savedHasMore = sessionStorage.getItem(STORAGE_KEYS.HAS_MORE);
+      const savedFilteredTotal = sessionStorage.getItem(STORAGE_KEYS.FILTERED_TOTAL); // ⭐ Читаємо
+
+      if (savedClients && savedPage) {
+        setClients(JSON.parse(savedClients));
+        setCurrentPage(parseInt(savedPage));
+        setHasMore(savedHasMore === 'true');
+        setFilteredTotalCount(parseInt(savedFilteredTotal) || 0); // ⭐ Відновлюємо
+        
+        if (savedFilters) {
+          const filters = JSON.parse(savedFilters);
+          setSearchTerm(filters.searchTerm || '');
+          setSelectedSettlement(filters.selectedSettlement || []);
+          setSelectedStreet(filters.selectedStreet || []);
+          setSelectedMeterBrand(filters.selectedMeterBrand || []);
+          setSelectedMeterSize(filters.selectedMeterSize || []);
+          setSelectedMeterYear(filters.selectedMeterYear || []);
+          setSelectedMeterGroups(filters.selectedMeterGroups || []);
+        }
+        
+        // Відновлюємо позицію скролу після рендеру
+        setTimeout(() => {
+          if (savedScrollY) {
+            window.scrollTo(0, parseInt(savedScrollY));
+          }
+        }, 100);
+        
+        // ⭐ Позначаємо що стан відновлено
+        stateRestored.current = true;
+        
+        return true;
+      }
+    } catch (e) {
+      console.error('Error restoring scroll state:', e);
+    }
+    return false;
+  };
+
+  // ⭐ INFINITE SCROLL: Очищення стану (при зміні фільтрів)
+  const clearScrollState = () => {
+    try {
+      sessionStorage.removeItem(STORAGE_KEYS.CLIENTS);
+      sessionStorage.removeItem(STORAGE_KEYS.SCROLL_Y);
+      sessionStorage.removeItem(STORAGE_KEYS.PAGE);
+      sessionStorage.removeItem(STORAGE_KEYS.FILTERS);
+      sessionStorage.removeItem(STORAGE_KEYS.HAS_MORE);
+      sessionStorage.removeItem(STORAGE_KEYS.FILTERED_TOTAL); // ⭐ Очищуємо
+    } catch (e) {
+      console.error('Error clearing scroll state:', e);
+    }
+  };
+
+  // ⭐ INFINITE SCROLL: Обробка кліку по картці з збереженням стану
+  const handleClientCardClick = (clientId) => {
+    // Зберігаємо стан перед відкриттям деталей
+    saveScrollState();
+    // Відкриваємо/закриваємо картку
+    setExpandedClientId(expandedClientId === clientId ? null : clientId);
+    
+    // Якщо закриваємо - відновлюємо позицію
+    if (expandedClientId === clientId) {
+      setTimeout(() => {
+        const savedScrollY = sessionStorage.getItem(STORAGE_KEYS.SCROLL_Y);
+        if (savedScrollY) {
+          window.scrollTo(0, parseInt(savedScrollY));
+        }
+      }, 50);
+    }
+  };
+
+  const performSearch = async (append = false) => {
+    // ⭐ INFINITE SCROLL для фільтрів
+    if (isLoadingMore || (!append && loading)) return;
+    
+    if (append) {
+      setIsLoadingMore(true);
+    } else {
+      setLoading(true);
+    }
+    
+    try {
+      const result = await searchClientsPaginated(
+        debouncedSearchTerm, selectedSettlement, selectedStreet,
+        selectedMeterBrand, selectedMeterSize, selectedMeterYear, selectedMeterGroups,
+        currentPage, pageSize
+      );
+      
+      if (append) {
+        // ⭐ Додаємо до існуючих
+        setClients(prev => [...prev, ...result.items]);
+      } else {
+        // Перші результати
+        setClients(result.items);
+      }
+      
+      // Зберігаємо загальну кількість знайдених
+      setFilteredTotalCount(result.total);
+      setHasMore(result.hasMore);
+      
+      // Зберігаємо стан
+      setTimeout(() => {
+        saveScrollState();
+      }, 100);
+      
     } catch (error) {
       console.error('Error searching:', error);
     }
-    setLoading(false);
+    
+    if (append) {
+      setIsLoadingMore(false);
+    } else {
+      setLoading(false);
+    }
   };
 
   const handleSubmit = async () => {
@@ -704,6 +938,8 @@ export default function ClientDatabase() {
                   key={option}
                   className="flex items-center px-3 sm:px-4 py-3 sm:py-2 hover:bg-indigo-50 cursor-pointer active:bg-indigo-100"
                   onClick={(e) => {
+                    // ⭐ ФІКС: Зупиняємо propagation щоб dropdown не закривався
+                    e.stopPropagation();
                     // Якщо клікнули не на сам checkbox, то тоглимо вручну
                     if (e.target.tagName !== 'INPUT') {
                       e.preventDefault();
@@ -714,7 +950,9 @@ export default function ClientDatabase() {
                   <input
                     type="checkbox"
                     checked={selected.includes(option)}
-                    onChange={() => {
+                    onChange={(e) => {
+                      // ⭐ ФІКС: Зупиняємо propagation щоб dropdown не закривався
+                      e.stopPropagation();
                       toggleSelection(selected, onChange, option);
                     }}
                     className="w-5 h-5 sm:w-4 sm:h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 flex-shrink-0"
@@ -731,6 +969,25 @@ export default function ClientDatabase() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-2 sm:p-4">
+      {/* ⭐ ПЛАВАЮЧИЙ ЛІЧИЛЬНИК - показується ЗАВЖДИ */}
+      {clients.length > 0 && (
+        <div className="fixed top-4 right-4 z-40 bg-white/95 backdrop-blur-sm shadow-lg rounded-lg px-4 py-2 border border-indigo-200 transition-all hover:shadow-xl">
+          <div className="text-center">
+            <p className="text-xs text-gray-500 font-medium">Завантажено</p>
+            <p className="text-lg font-bold text-indigo-900">
+              {clients.length} <span className="text-sm text-gray-400">/</span> {
+                // Показуємо filteredTotalCount якщо є фільтри, інакше totalCount
+                (debouncedSearchTerm || selectedSettlement.length > 0 || selectedStreet.length > 0 || 
+                 selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || 
+                 selectedMeterYear.length > 0 || selectedMeterGroups.length > 0)
+                  ? filteredTotalCount
+                  : totalCount
+              }
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto">
         <div className="bg-white rounded-lg shadow-lg p-3 sm:p-6 mb-4 sm:mb-6">
           <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-indigo-900 mb-4 sm:mb-6">База абонентів газопостачання</h1>
@@ -959,64 +1216,137 @@ export default function ClientDatabase() {
               Всього: {totalCount} | Показано: {clients.length}
             </div>
             
-            {!searchTerm && selectedSettlement.length === 0 && selectedStreet.length === 0 && 
-             selectedMeterBrand.length === 0 && selectedMeterSize.length === 0 && selectedMeterYear.length === 0 && selectedMeterGroups.length === 0 && totalPages > 1 && (
-              <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-start">
-                <button onClick={() => setCurrentPage(Math.max(0, currentPage - 1))} disabled={currentPage === 0 || loading}
-                  className="p-2 border rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed">
-                  <ChevronLeft size={20} />
-                </button>
-                <span className="text-sm text-gray-600">
-                  Сторінка {currentPage + 1} з {totalPages}
-                </span>
-                <button onClick={() => setCurrentPage(Math.min(totalPages - 1, currentPage + 1))} disabled={currentPage >= totalPages - 1 || loading}
-                  className="p-2 border rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed">
-                  <ChevronRight size={20} />
-                </button>
-              </div>
-            )}
+            {/* ⭐ Стара пагінація видалена - тепер Infinite Scroll! */}
           </div>
 
           {loading && <div className="text-center py-8 text-gray-500">Завантаження...</div>}
 
           {!loading && (
-            <div className="space-y-2 sm:space-y-3">
-              {clients.map(c => (
-                <div key={c.id} className="bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow">
-                  <div onClick={() => setExpandedClientId(expandedClientId === c.id ? null : c.id)}
-                    className="p-3 sm:p-4 cursor-pointer hover:bg-gray-50 active:bg-gray-100 transition-colors">
-                    <div className="flex justify-between items-start gap-2">
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate">{c.fullName}</h3>
-                        <p className="text-xs sm:text-sm text-gray-600 mt-1">
-                          {c.settlement}, {c.streetType} {c.street}, буд. {c.building}{c.buildingLetter}
-                          {c.apartment && `, кв. ${c.apartment}${c.apartmentLetter}`}
-                        </p>
-                        <p className="text-xs sm:text-sm text-indigo-600 font-medium mt-1">
-                          Особовий рахунок: {c.accountNumber}
-                        </p>
+            <div className="space-y-3">
+              {clients.map(c => {
+                const statusColor = c.gasDisconnected === 'Так' ? 'border-red-500' : 
+                                   c.temporaryAbsent ? 'border-yellow-400' : 
+                                   c.dacha ? 'border-orange-400' : 'border-transparent';
+                
+                return (
+                  <div key={c.id} className={`bg-white rounded-lg shadow hover:shadow-md transition-shadow border-l-4 ${statusColor}`}>
+                    {/* Компактний вид */}
+                    <div className="short-client-info p-3">
+                      {/* Заголовок */}
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-bold text-gray-900 text-base">{c.fullName}</h3>
+                            {c.temporaryAbsent && (
+                              <span className="inline-flex items-center gap-1 bg-yellow-100 text-yellow-800 text-xs font-semibold px-2 py-0.5 rounded">
+                                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                </svg>
+                                Відсутній
+                              </span>
+                            )}
+                            {c.dacha && (
+                              <span className="inline-flex items-center gap-1 bg-orange-100 text-orange-800 text-xs font-semibold px-2 py-0.5 rounded">
+                                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                  <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
+                                </svg>
+                                Дача
+                              </span>
+                            )}
+                            {c.gasDisconnected === 'Так' && (
+                              <span className="inline-flex items-center gap-1 bg-red-100 text-red-800 text-xs font-semibold px-2 py-0.5 rounded">
+                                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
+                                </svg>
+                                Відключений
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            <span className="font-medium">о/р:</span> {c.accountNumber}
+                          </p>
+                        </div>
+                        <div className="flex gap-1.5 ml-2">
+                          <button onClick={(e) => { e.stopPropagation(); handleEdit(c); }} 
+                            className="text-blue-600 hover:bg-blue-50 p-1 rounded">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                          <button onClick={(e) => { e.stopPropagation(); handleDelete(c.id); }} 
+                            className="text-red-600 hover:bg-red-50 p-1 rounded">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex flex-col sm:flex-row gap-1 sm:gap-2 items-end sm:items-start flex-shrink-0">
-                        {c.temporaryAbsent && <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 bg-yellow-100 text-yellow-800 text-[10px] sm:text-xs rounded whitespace-nowrap">Відсутній</span>}
-                        {c.dacha && <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 bg-green-100 text-green-800 text-[10px] sm:text-xs rounded whitespace-nowrap">Дача</span>}
-                        {c.gasDisconnected === 'Так' && <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 bg-red-100 text-red-800 text-[10px] sm:text-xs rounded whitespace-nowrap">Вимкнено</span>}
-                        <div className="ml-2 text-gray-400 text-lg sm:text-base">{expandedClientId === c.id ? '▼' : '▶'}</div>
+                      
+                      {/* Адреса та телефон */}
+                      <div className="text-sm text-gray-700 mb-2 space-y-1">
+                        <p className="flex items-start gap-1.5">
+                          <svg className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                          <span>
+                            {c.settlement}, {c.streetType} {c.street}, буд. {c.building}{c.buildingLetter}
+                            {c.apartment && `, кв. ${c.apartment}${c.apartmentLetter}`}
+                          </span>
+                        </p>
+                        {c.phone && (
+                          <p className="flex items-center gap-1.5">
+                            <svg className="w-4 h-4 text-green-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                            </svg>
+                            <span className="flex flex-wrap gap-x-1">
+                              {formatPhones(c.phone)}
+                            </span>
+                          </p>
+                        )}
                       </div>
+                      
+                      {/* Лічильник компактно */}
+                      {c.meterNumber && (
+                        <div className="bg-purple-50 px-3 py-2 rounded text-sm flex items-center gap-2">
+                          <svg className="w-4 h-4 text-purple-800 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                          </svg>
+                          <span>
+                            <span className="font-semibold">
+                              {c.meterBrand} {c.meterSize && `G${c.meterSize}`}
+                            </span>
+                            <span className="text-gray-600">
+                              {' '}№{c.meterNumber}
+                              {c.meterYear && ` ${c.meterYear}р.`}
+                            </span>
+                          </span>
+                        </div>
+                      )}
+                      
+                      {/* Інфо про відключення для відключених */}
+                      {c.gasDisconnected === 'Так' && (c.disconnectDate || c.disconnectMethod) && (
+                        <div className="mt-2 bg-red-50 border border-red-200 rounded px-3 py-2 text-xs text-red-800">
+                          <p>
+                            {c.disconnectDate && <><strong>Відключено:</strong> {c.disconnectDate}</>}
+                            {c.disconnectDate && c.disconnectMethod && ' | '}
+                            {c.disconnectMethod && <><strong>Метод:</strong> {c.disconnectMethod}</>}
+                          </p>
+                        </div>
+                      )}
+                      
+                      {/* Кнопка детальніше */}
+                      <button 
+                        onClick={() => handleClientCardClick(c.id)}
+                        className="mt-2 w-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 py-2 rounded text-sm font-medium transition-colors">
+                        📋 Детальніше
+                      </button>
                     </div>
-                  </div>
 
-                  {expandedClientId === c.id && (
-                    <div className="border-t border-gray-200 bg-gray-50 p-3 sm:p-4">
-                      <div className="flex flex-col sm:flex-row gap-2 mb-4">
-                        <button onClick={(e) => { e.stopPropagation(); handleEdit(c); }} 
-                          className="flex-1 px-3 sm:px-4 py-2.5 sm:py-2 text-blue-600 hover:bg-blue-100 active:bg-blue-200 rounded-lg flex items-center justify-center gap-2 text-sm">
-                          <Edit2 size={16} /> Редагувати
-                        </button>
-                        <button onClick={(e) => { e.stopPropagation(); handleDelete(c.id); }} 
-                          className="flex-1 px-3 sm:px-4 py-2.5 sm:py-2 text-red-600 hover:bg-red-100 active:bg-red-200 rounded-lg flex items-center justify-center gap-2 text-sm">
-                          <Trash2 size={16} /> Видалити
-                        </button>
-                      </div>
+                    
+                    {/* Розгорнута детальна інформація */}
+                    {expandedClientId === c.id && (
+                      <div className="border-t border-gray-200 bg-gray-50 p-3 sm:p-4">
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
                         <div className="bg-blue-50 p-2.5 sm:p-3 rounded-lg">
@@ -1083,20 +1413,62 @@ export default function ClientDatabase() {
                         </div>
                       )}
 
-                      {(c.area || c.utilityGroup || c.grs) && (
-                        <div className="mt-4 bg-white p-3 rounded-lg border border-gray-200">
-                          <p className="text-xs font-semibold text-gray-900 mb-2">ДОДАТКОВА ІНФОРМАЦІЯ</p>
-                          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
-                            {c.area && <p className="text-gray-600"><span className="font-medium">Площа:</span> {c.area} м²</p>}
-                            {c.utilityGroup && <p className="text-gray-600"><span className="font-medium">Група:</span> {c.utilityGroup}</p>}
-                            {c.grs && <p className="text-gray-600"><span className="font-medium">ГРС:</span> {c.grs}</p>}
+                        {(c.area || c.utilityGroup || c.grs) && (
+                          <div className="mt-4 bg-white p-3 rounded-lg border border-gray-200">
+                            <p className="text-xs font-semibold text-gray-900 mb-2">ДОДАТКОВА ІНФОРМАЦІЯ</p>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
+                              {c.area && <p className="text-gray-600"><span className="font-medium">Площа:</span> {c.area} м²</p>}
+                              {c.utilityGroup && <p className="text-gray-600"><span className="font-medium">Група:</span> {c.utilityGroup}</p>}
+                              {c.grs && <p className="text-gray-600"><span className="font-medium">ГРС:</span> {c.grs}</p>}
+                            </div>
                           </div>
+                        )}
+                        
+                        {/* Кнопки редагування та видалення */}
+                        <div className="mt-4 flex flex-col sm:flex-row gap-2">
+                          <button onClick={(e) => { e.stopPropagation(); handleEdit(c); }} 
+                            className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center gap-2 text-sm font-medium">
+                            <Edit2 size={16} /> Редагувати
+                          </button>
+                          <button onClick={(e) => { e.stopPropagation(); handleDelete(c.id); }} 
+                            className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg flex items-center justify-center gap-2 text-sm font-medium">
+                            <Trash2 size={16} /> Видалити
+                          </button>
                         </div>
-                      )}
-                    </div>
-                  )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* ⭐ INFINITE SCROLL: Індикатор завантаження */}
+              {isLoadingMore && (
+                <div className="text-center py-8">
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-indigo-500 border-t-transparent"></div>
+                  <p className="text-gray-600 mt-2 text-sm">Завантаження...</p>
                 </div>
-              ))}
+              )}
+
+              {/* ⭐ INFINITE SCROLL: Кінець списку */}
+              {!hasMore && clients.length > 0 && (
+                <div className="text-center py-8">
+                  <div className="text-4xl mb-3">🎉</div>
+                  <p className="text-lg font-semibold text-gray-800">
+                    {(debouncedSearchTerm || selectedSettlement.length > 0 || selectedStreet.length > 0 || 
+                      selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || 
+                      selectedMeterYear.length > 0 || selectedMeterGroups.length > 0)
+                      ? 'Це всі результати!'
+                      : 'Це всі клієнти!'}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    {(debouncedSearchTerm || selectedSettlement.length > 0 || selectedStreet.length > 0 || 
+                      selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || 
+                      selectedMeterYear.length > 0 || selectedMeterGroups.length > 0)
+                      ? `Знайдено ${filteredTotalCount} клієнтів`
+                      : 'Ви переглянули всю базу'}
+                  </p>
+                </div>
+              )}
 
               {clients.length === 0 && (
                 <div className="text-center py-12 text-gray-500">

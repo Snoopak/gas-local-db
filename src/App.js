@@ -1,6 +1,303 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Search, Plus, Edit2, Trash2, X, Save, Phone, Home, Gauge, Upload, Download, FileText } from 'lucide-react';
+import React, { useState, useEffect, useRef, createContext, useContext, useCallback } from 'react';
+import { Search, Plus, Edit2, Trash2, X, Save, Phone, Home, Gauge, Upload, Download, FileText, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 import * as XLSX from 'xlsx';
+
+// ==================== ALERT SYSTEM ====================
+// Context для Alert System
+const AlertContext = createContext();
+
+export const useAlert = () => {
+  const context = useContext(AlertContext);
+  if (!context) {
+    throw new Error('useAlert must be used within AlertProvider');
+  }
+  return context;
+};
+
+// Progress Toast Component
+const ProgressToast = ({ type, message, duration, onClose }) => {
+  const [isVisible, setIsVisible] = useState(true);
+
+  const colors = {
+    success: 'bg-green-600',
+    error: 'bg-red-600',
+    warning: 'bg-yellow-600',
+    info: 'bg-blue-600'
+  };
+
+  const icons = {
+    success: <CheckCircle className="w-5 h-5" />,
+    error: <AlertCircle className="w-5 h-5" />,
+    warning: <AlertTriangle className="w-5 h-5" />,
+    info: <Info className="w-5 h-5" />
+  };
+
+  const handleClose = () => {
+    setIsVisible(false);
+    setTimeout(onClose, 300);
+  };
+
+  return (
+    <div
+      className={`${colors[type]} text-white rounded-lg shadow-2xl overflow-hidden min-w-[320px] max-w-md transform transition-all duration-300 ${
+        isVisible ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'
+      }`}
+    >
+      <div className="px-4 py-3">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            {icons[type]}
+            <span className="font-medium">{message}</span>
+          </div>
+          <button
+            onClick={handleClose}
+            className="text-white hover:text-gray-200 ml-2 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="h-1 bg-white bg-opacity-30 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-white"
+            style={{
+              animation: `progress-bar ${duration}ms linear`,
+              width: '100%'
+            }}
+          />
+        </div>
+      </div>
+      <style>{`
+        @keyframes progress-bar {
+          from { width: 100%; }
+          to { width: 0%; }
+        }
+      `}</style>
+    </div>
+  );
+};
+
+// Modal Component
+const Modal = ({ type, title, message, onConfirm, onCancel, onClose }) => {
+  const colors = {
+    success: 'text-green-600',
+    error: 'text-red-600',
+    warning: 'text-yellow-600',
+    info: 'text-blue-600',
+    confirm: 'text-gray-900'
+  };
+
+  const icons = {
+    success: <CheckCircle className="w-12 h-12" />,
+    error: <AlertCircle className="w-12 h-12" />,
+    warning: <AlertTriangle className="w-12 h-12" />,
+    info: <Info className="w-12 h-12" />,
+    confirm: <AlertCircle className="w-12 h-12" />
+  };
+
+  const isConfirm = type === 'confirm';
+
+  const handleConfirm = () => {
+    if (onConfirm) onConfirm();
+    onClose();
+  };
+
+  const handleCancel = () => {
+    if (onCancel) onCancel();
+    onClose();
+  };
+
+  const handleBackdropClick = (e) => {
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+      style={{ animation: 'fade-in 0.3s ease-out' }}
+      onClick={handleBackdropClick}
+    >
+      <div className="bg-white rounded-lg shadow-2xl max-w-md w-full" style={{ animation: 'scale-in 0.3s ease-out' }}>
+        <div className="p-6">
+          <div className="flex items-start gap-4 mb-4">
+            <div className={colors[type]}>{icons[type]}</div>
+            <div className="flex-1">
+              <h3 className={`text-xl font-bold ${colors[type]} mb-2`}>
+                {title}
+              </h3>
+              <p className="text-gray-600">{message}</p>
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end">
+            {isConfirm ? (
+              <>
+                <button
+                  onClick={handleCancel}
+                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium transition-colors"
+                >
+                  Скасувати
+                </button>
+                <button
+                  onClick={handleConfirm}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
+                >
+                  Видалити
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={onClose}
+                className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors"
+              >
+                OK
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+      <style>{`
+        @keyframes fade-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes scale-in {
+          from { opacity: 0; transform: scale(0.9); }
+          to { opacity: 1; transform: scale(1); }
+        }
+      `}</style>
+    </div>
+  );
+};
+
+// Snackbar Component
+const Snackbar = ({ message, actionText, onAction, onClose }) => {
+  const [isVisible, setIsVisible] = useState(true);
+
+  const handleClose = () => {
+    setIsVisible(false);
+    setTimeout(onClose, 300);
+  };
+
+  const handleAction = () => {
+    if (onAction) onAction();
+    handleClose();
+  };
+
+  return (
+    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50">
+      <div
+        className={`bg-gray-900 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-4 min-w-[300px] max-w-md transform transition-all duration-300 ${
+          isVisible ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'
+        }`}
+      >
+        <span className="flex-1">{message}</span>
+        {actionText && (
+          <button
+            onClick={handleAction}
+            className="text-yellow-400 hover:text-yellow-300 font-semibold uppercase text-sm transition-colors"
+          >
+            {actionText}
+          </button>
+        )}
+        <button
+          onClick={handleClose}
+          className="text-gray-400 hover:text-white transition-colors"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// Alert Provider Component
+const AlertProvider = ({ children }) => {
+  const [toasts, setToasts] = useState([]);
+  const [modal, setModal] = useState(null);
+  const [snackbar, setSnackbar] = useState(null);
+
+  const showToast = useCallback((type, message, duration = 3000) => {
+    const id = Date.now();
+    const toast = { id, type, message, duration };
+    setToasts(prev => [...prev, toast]);
+
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, duration);
+  }, []);
+
+  const showModal = useCallback((type, title, message, onConfirm, onCancel) => {
+    setModal({ type, title, message, onConfirm, onCancel });
+  }, []);
+
+  const closeModal = useCallback(() => {
+    setModal(null);
+  }, []);
+
+  const showSnackbar = useCallback((message, actionText, onAction) => {
+    setSnackbar({ message, actionText, onAction });
+
+    setTimeout(() => {
+      setSnackbar(null);
+    }, 4000);
+  }, []);
+
+  const closeSnackbar = useCallback(() => {
+    setSnackbar(null);
+  }, []);
+
+  const value = {
+    showToast,
+    showModal,
+    closeModal,
+    showSnackbar,
+    closeSnackbar
+  };
+
+  return (
+    <AlertContext.Provider value={value}>
+      {children}
+      
+      {/* Toast Container */}
+      <div className="fixed top-4 right-4 z-50 space-y-2">
+        {toasts.map(toast => (
+          <ProgressToast
+            key={toast.id}
+            type={toast.type}
+            message={toast.message}
+            duration={toast.duration}
+            onClose={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}
+          />
+        ))}
+      </div>
+
+      {/* Modal */}
+      {modal && (
+        <Modal
+          type={modal.type}
+          title={modal.title}
+          message={modal.message}
+          onConfirm={modal.onConfirm}
+          onCancel={modal.onCancel}
+          onClose={closeModal}
+        />
+      )}
+
+      {/* Snackbar */}
+      {snackbar && (
+        <Snackbar
+          message={snackbar.message}
+          actionText={snackbar.actionText}
+          onAction={snackbar.onAction}
+          onClose={closeSnackbar}
+        />
+      )}
+    </AlertContext.Provider>
+  );
+};
+// ==================== END ALERT SYSTEM ====================
+
 
 // IndexedDB ініціалізація
 const DB_NAME = 'ClientsDB';
@@ -193,7 +490,10 @@ const searchClientsPaginated = async (searchTerm, settlements, streets, meterBra
 };
 
 
-export default function ClientDatabase() {
+function ClientDatabase() {
+  // ⭐ Alert System
+  const { showToast, showModal, showSnackbar } = useAlert();
+  
   const [clients, setClients] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSettlement, setSelectedSettlement] = useState([]);
@@ -663,15 +963,17 @@ export default function ClientDatabase() {
 
   const handleSubmit = async () => {
     if (!formData.accountNumber || !formData.fullName) {
-      alert('Заповніть обов\'язкові поля: Особовий рахунок та ПІБ');
+      showToast('warning', 'Заповніть обов\'язкові поля: Особовий рахунок та ПІБ');
       return;
     }
     
     try {
       if (editingClient) {
         await updateClient({ ...formData, id: editingClient.id });
+        showToast('success', 'Зміни успішно збережено!');
       } else {
         await addClient(formData);
+        showToast('success', 'Клієнта успішно додано!');
       }
       await loadClients();
       await loadTotalCount();
@@ -681,7 +983,7 @@ export default function ClientDatabase() {
       resetForm();
     } catch (error) {
       console.error('Error saving client:', error);
-      alert('Помилка при збереженні клієнта');
+      showToast('error', 'Помилка при збереженні клієнта');
     }
   };
 
@@ -692,19 +994,30 @@ export default function ClientDatabase() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Видалити клієнта з бази?')) return;
-    
-    try {
-      await deleteClient(id);
-      await loadClients();
-      await loadTotalCount();
-      await loadSettlements();
-      await loadStreets();
-      await loadMeterData();
-    } catch (error) {
-      console.error('Error deleting client:', error);
-      alert('Помилка при видаленні клієнта');
-    }
+    showModal(
+      'confirm',
+      'Підтвердження видалення',
+      'Ви впевнені що хочете видалити цього клієнта з бази? Цю дію не можна буде відмінити.',
+      async () => {
+        // Підтверджено - видаляємо
+        try {
+          await deleteClient(id);
+          await loadClients();
+          await loadTotalCount();
+          await loadSettlements();
+          await loadStreets();
+          await loadMeterData();
+          showToast('success', 'Клієнта успішно видалено!');
+        } catch (error) {
+          console.error('Error deleting client:', error);
+          showToast('error', 'Помилка при видаленні клієнта');
+        }
+      },
+      () => {
+        // Скасовано - нічого не робимо
+        console.log('Видалення скасовано');
+      }
+    );
   };
 
   const handleImportExcel = async (e) => {
@@ -784,10 +1097,10 @@ export default function ClientDatabase() {
         await loadSettlements();
         await loadStreets();
         await loadMeterData();
-        alert(`Імпортовано ${imported} клієнтів`);
+        showToast('success', `Імпортовано ${imported} клієнтів!`, 4000);
       } catch (error) {
         console.error('Import error:', error);
-        alert('Помилка при імпорті файлу');
+        showToast('error', 'Помилка при імпорті файлу');
       }
       setLoading(false);
     };
@@ -797,6 +1110,7 @@ export default function ClientDatabase() {
 
   const handleExportExcel = async () => {
     setLoading(true);
+    showToast('info', 'Експорт в Excel...', 3000);
     try {
       const allClients = await getAllClients();
       const exportData = allClients.map(c => ({
@@ -823,9 +1137,10 @@ export default function ClientDatabase() {
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Клієнти');
       XLSX.writeFile(wb, `Абоненти_${new Date().toISOString().split('T')[0]}.xlsx`);
+      showToast('success', `Експортовано ${allClients.length} клієнтів!`, 4000);
     } catch (error) {
       console.error('Export error:', error);
-      alert('Помилка при експорті');
+      showToast('error', 'Помилка при експорті');
     }
     setLoading(false);
   };
@@ -1706,5 +2021,14 @@ export default function ClientDatabase() {
         </div>
       )}
     </div>
+  );
+}
+
+// Обгортаємо ClientDatabase в AlertProvider
+export default function AppWithAlerts() {
+  return (
+    <AlertProvider>
+      <ClientDatabase />
+    </AlertProvider>
   );
 }

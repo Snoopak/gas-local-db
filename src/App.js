@@ -753,6 +753,9 @@ function ClientDatabase() {
       loadStreets();
       loadMeterData();
       
+      // ⭐ Дозволяємо useEffect з фільтрами спрацьовувати тільки ПІСЛЯ завантаження
+      isFirstRender.current = false;
+      
       // Спробуємо відновити стан
       const restored = restoreScrollState();
       if (!restored) {
@@ -762,9 +765,6 @@ function ClientDatabase() {
       
       // ⭐ Завершили початкове завантаження
       setIsInitialLoading(false);
-      
-      // ⭐ Дозволяємо useEffect з фільтрами спрацьовувати після mount
-      isFirstRender.current = false;
     };
     
     initializeApp();
@@ -1653,6 +1653,7 @@ function ClientDatabase() {
           {/* ⭐ ФІЛЬТРИ СТАТУСІВ - компактні чіпси */}
           <div className="mb-4">
             <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-medium text-gray-500">Статуси:</span>
               <label className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white hover:bg-red-50 border border-gray-200 hover:border-red-300 rounded-md cursor-pointer transition-all text-xs">
                 <input 
                   type="checkbox" 
@@ -1690,6 +1691,7 @@ function ClientDatabase() {
               filterDisconnected || filterDacha || filterAbsent) && (
               <button onClick={() => {
                 setSearchTerm('');
+                setDebouncedSearchTerm(''); // ⭐ Очищаємо debounced пошук
                 setSelectedSettlement([]);
                 setSelectedStreet([]);
                 setSelectedMeterBrand([]);
@@ -1700,6 +1702,10 @@ function ClientDatabase() {
                 setFilterDacha(false);
                 setFilterAbsent(false);
                 setCurrentPage(0);
+                setHasMore(true);
+                // ⭐ Очищаємо scroll state і перезавантажуємо
+                clearScrollState();
+                loadClients();
               }}
                 className="px-3 py-1.5 bg-white hover:bg-red-50 text-red-600 border border-red-200 hover:border-red-300 rounded-md flex items-center gap-1.5 transition-colors text-sm font-medium">
                 <X size={16} /> Скинути фільтри

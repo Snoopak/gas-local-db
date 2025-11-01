@@ -524,6 +524,7 @@ function ClientDatabase() {
   const [filteredTotalCount, setFilteredTotalCount] = useState(0); // ⭐ Для фільтрованих даних
   const [currentPage, setCurrentPage] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true); // ⭐ Для онбордингу
   const [settlements, setSettlements] = useState(['Всі']);
   const [streets, setStreets] = useState(['Всі']);
   const [meterBrands, setMeterBrands] = useState(['Всі']);
@@ -744,21 +745,28 @@ function ClientDatabase() {
 
   // ⭐ INFINITE SCROLL: Відновлення стану при mount
   useEffect(() => {
-    // Завантажуємо фільтри завжди
-    loadTotalCount();
-    loadSettlements();
-    loadStreets();
-    loadMeterData();
+    const initializeApp = async () => {
+      // Завантажуємо фільтри завжди
+      await loadTotalCount();
+      loadSettlements();
+      loadStreets();
+      loadMeterData();
+      
+      // Спробуємо відновити стан
+      const restored = restoreScrollState();
+      if (!restored) {
+        // Якщо немає збереженого стану - завантажуємо перших клієнтів
+        await loadClients();
+      }
+      
+      // ⭐ Завершили початкове завантаження
+      setIsInitialLoading(false);
+      
+      // ⭐ Дозволяємо useEffect з фільтрами спрацьовувати після mount
+      isFirstRender.current = false;
+    };
     
-    // Спробуємо відновити стан
-    const restored = restoreScrollState();
-    if (!restored) {
-      // Якщо немає збереженого стану - завантажуємо перших клієнтів
-      loadClients();
-    }
-    
-    // ⭐ Дозволяємо useEffect з фільтрами спрацьовувати після mount
-    isFirstRender.current = false;
+    initializeApp();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1916,10 +1924,108 @@ function ClientDatabase() {
               )}
 
               {clients.length === 0 && (
-                <div className="text-center py-12 text-gray-500">
+                <div>
                   {searchTerm || selectedSettlement.length > 0 || selectedStreet.length > 0 || 
-                   selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || selectedMeterYear.length > 0 || selectedMeterGroups.length > 0
-                   ? 'Нічого не знайдено' : 'Немає жодного клієнта. Додайте першого!'}
+                   selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || selectedMeterYear.length > 0 || selectedMeterGroups.length > 0 ? (
+                    // Якщо є фільтри - показуємо звичайне повідомлення
+                    <div className="text-center py-12 text-gray-500">
+                      Нічого не знайдено
+                    </div>
+                  ) : isInitialLoading ? (
+                    // Поки завантажуємо - показуємо loader
+                    <div className="text-center py-12 text-gray-500">
+                      <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-indigo-500 border-t-transparent mb-2"></div>
+                      <p>Завантаження...</p>
+                    </div>
+                  ) : totalCount === 0 ? (
+                    // Якщо база порожня - показуємо онбординг
+                    <div className="max-w-3xl mx-auto py-12 px-4">
+                      {/* Заголовок */}
+                      <div className="text-center mb-8">
+                        <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-indigo-500 to-blue-500 rounded-full mb-4">
+                          <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                          </svg>
+                        </div>
+                        <h2 className="text-3xl font-bold text-gray-900 mb-2">Вітаємо в базі абонентів!</h2>
+                        <p className="text-gray-600 text-lg">Почніть роботу з додавання ваших перших клієнтів</p>
+                      </div>
+
+                      {/* Кроки */}
+                      <div className="grid md:grid-cols-3 gap-6 mb-8">
+                        {/* Крок 1 */}
+                        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+                          <div className="flex items-center justify-center w-12 h-12 bg-indigo-100 rounded-lg mb-4">
+                            <span className="text-2xl font-bold text-indigo-600">1</span>
+                          </div>
+                          <h3 className="font-semibold text-gray-900 mb-2 text-lg">Завантажте шаблон</h3>
+                          <p className="text-gray-600 text-sm mb-4">Скачайте Excel шаблон з правильною структурою даних</p>
+                          <button 
+                            onClick={handleDownloadTemplate}
+                            className="w-full px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg flex items-center justify-center gap-2 transition-colors text-sm font-medium"
+                          >
+                            <FileText size={16} />
+                            Завантажити шаблон
+                          </button>
+                        </div>
+
+                        {/* Крок 2 */}
+                        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+                          <div className="flex items-center justify-center w-12 h-12 bg-blue-100 rounded-lg mb-4">
+                            <span className="text-2xl font-bold text-blue-600">2</span>
+                          </div>
+                          <h3 className="font-semibold text-gray-900 mb-2 text-lg">Заповніть дані</h3>
+                          <p className="text-gray-600 text-sm mb-4">Внесіть інформацію про клієнтів в Excel файл</p>
+                          <div className="w-full px-4 py-2 bg-gray-50 text-gray-500 rounded-lg text-center text-sm">
+                            Або додайте вручну →
+                          </div>
+                        </div>
+
+                        {/* Крок 3 */}
+                        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+                          <div className="flex items-center justify-center w-12 h-12 bg-green-100 rounded-lg mb-4">
+                            <span className="text-2xl font-bold text-green-600">3</span>
+                          </div>
+                          <h3 className="font-semibold text-gray-900 mb-2 text-lg">Імпортуйте базу</h3>
+                          <p className="text-gray-600 text-sm mb-4">Завантажте заповнений файл в систему</p>
+                          <label className="w-full px-4 py-2 bg-green-50 hover:bg-green-100 text-green-700 rounded-lg flex items-center justify-center gap-2 transition-colors cursor-pointer text-sm font-medium">
+                            <Upload size={16} />
+                            Імпортувати Excel
+                            <input type="file" accept=".xlsx,.xls" onChange={handleImportExcel} className="hidden" />
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* Швидкі дії */}
+                      <div className="bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl p-6 border-2 border-indigo-100">
+                        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                          <div className="text-center md:text-left">
+                            <h3 className="font-semibold text-gray-900 mb-1">Або почніть з одного клієнта</h3>
+                            <p className="text-gray-600 text-sm">Додайте першого абонента вручну через форму</p>
+                          </div>
+                          <button
+                            onClick={() => setIsModalOpen(true)}
+                            className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg flex items-center gap-2 transition-colors font-medium shadow-sm hover:shadow-md whitespace-nowrap"
+                          >
+                            <Plus size={20} />
+                            Додати клієнта
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Підказка */}
+                      <div className="mt-6 text-center">
+                        <p className="text-sm text-gray-500">
+                          💡 <span className="font-medium">Порада:</span> Для швидкого старту рекомендуємо використати імпорт з Excel
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    // Якщо є дані але зараз порожньо (через фільтри які щойно скинули)
+                    <div className="text-center py-12 text-gray-500">
+                      Немає жодного клієнта. Додайте першого!
+                    </div>
+                  )}
                 </div>
               )}
               </div>

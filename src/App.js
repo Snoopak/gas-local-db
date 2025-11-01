@@ -525,6 +525,7 @@ function ClientDatabase() {
   const [currentPage, setCurrentPage] = useState(0);
   const [loading, setLoading] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true); // ⭐ Для онбордингу
+  const [importProgress, setImportProgress] = useState({ show: false, current: 0, total: 0, fileName: '' }); // ⭐ Для прогресу імпорту
   const [settlements, setSettlements] = useState(['Всі']);
   const [streets, setStreets] = useState(['Всі']);
   const [meterBrands, setMeterBrands] = useState(['Всі']);
@@ -1070,6 +1071,8 @@ function ClientDatabase() {
     if (!file) return;
     
     setLoading(true);
+    setImportProgress({ show: true, current: 0, total: 0, fileName: file.name });
+    
     const reader = new FileReader();
     reader.onload = async (event) => {
       try {
@@ -1078,8 +1081,12 @@ function ClientDatabase() {
         const worksheet = workbook.Sheets[workbook.SheetNames[0]];
         const jsonData = XLSX.utils.sheet_to_json(worksheet);
         
+        // Встановлюємо загальну кількість
+        setImportProgress(prev => ({ ...prev, total: jsonData.length }));
+        
         let imported = 0;
-        for (const row of jsonData) {
+        for (let i = 0; i < jsonData.length; i++) {
+          const row = jsonData[i];
           const acc = row['Особовий рахунок'] || '';
           const name = row['ПІБ'] || '';
           
@@ -1135,6 +1142,9 @@ function ClientDatabase() {
           
           await addClient(client);
           imported++;
+          
+          // Оновлюємо прогрес
+          setImportProgress(prev => ({ ...prev, current: i + 1 }));
         }
         
         await loadClients();
@@ -1142,9 +1152,14 @@ function ClientDatabase() {
         await loadSettlements();
         await loadStreets();
         await loadMeterData();
+        
+        // Завершили імпорт
+        setImportProgress({ show: false, current: 0, total: 0, fileName: '' });
+        setIsInitialLoading(false); // ⭐ Відключаємо початковий loader після першого імпорту
         showToast('success', `Імпортовано ${imported} клієнтів!`, 4000);
       } catch (error) {
         console.error('Import error:', error);
+        setImportProgress({ show: false, current: 0, total: 0, fileName: '' });
         showToast('error', 'Помилка при імпорті файлу');
       }
       setLoading(false);
@@ -1327,6 +1342,56 @@ function ClientDatabase() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-2 sm:p-4">
+      {/* ⭐ MODAL ПРОГРЕСУ ІМПОРТУ */}
+      {importProgress.show && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 transform transition-all">
+            {/* Іконка завантаження */}
+            <div className="flex justify-center mb-6">
+              <div className="relative">
+                <div className="w-20 h-20 rounded-full border-4 border-indigo-100"></div>
+                <div className="absolute top-0 left-0 w-20 h-20 rounded-full border-4 border-indigo-600 border-t-transparent animate-spin"></div>
+                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                  <Upload className="w-8 h-8 text-indigo-600" />
+                </div>
+              </div>
+            </div>
+
+            {/* Заголовок */}
+            <h3 className="text-2xl font-bold text-gray-900 text-center mb-2">
+              Імпорт даних
+            </h3>
+            <p className="text-gray-600 text-center mb-6 text-sm">
+              {importProgress.fileName}
+            </p>
+
+            {/* Прогрес бар */}
+            <div className="mb-4">
+              <div className="flex justify-between text-sm font-medium text-gray-700 mb-2">
+                <span>Оброблено записів</span>
+                <span>{importProgress.current} / {importProgress.total}</span>
+              </div>
+              <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-indigo-500 to-blue-500 rounded-full transition-all duration-300 ease-out"
+                  style={{ width: `${importProgress.total > 0 ? (importProgress.current / importProgress.total) * 100 : 0}%` }}
+                ></div>
+              </div>
+              <div className="text-center mt-2">
+                <span className="text-lg font-bold text-indigo-600">
+                  {importProgress.total > 0 ? Math.round((importProgress.current / importProgress.total) * 100) : 0}%
+                </span>
+              </div>
+            </div>
+
+            {/* Підказка */}
+            <p className="text-xs text-gray-500 text-center">
+              ⏳ Будь ласка, зачекайте. Не закривайте вікно.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* ⭐ ПЛАВАЮЧИЙ ЛІЧИЛЬНИК - показується ЗАВЖДИ */}
       {clients.length > 0 && (
         <div className="fixed top-4 right-4 z-40 bg-white/95 backdrop-blur-sm shadow-lg rounded-lg px-4 py-2 border border-indigo-200 transition-all hover:shadow-xl">
@@ -1410,6 +1475,9 @@ function ClientDatabase() {
             </div>
           </div>
           
+          {/* Показуємо фільтри та пошук ТІЛЬКИ якщо база не порожня */}
+          {!isInitialLoading && totalCount > 0 && (
+          <>
           {/* Головний пошук на всю ширину */}
           <div className="mb-3">
             <div className="relative">
@@ -1665,15 +1733,19 @@ function ClientDatabase() {
             
             {/* ⭐ Стара пагінація видалена - тепер Infinite Scroll! */}
           </div>
+          </>
+          )}
 
           {loading && <div className="text-center py-8 text-gray-500">Завантаження...</div>}
 
           {!loading && (
             <>
-              {/* Розділювач перед списком - тільки лінія */}
-              <div className="mb-5 mt-2">
-                <div className="border-t border-gray-200"></div>
-              </div>
+              {/* Розділювач перед списком - показуємо тільки якщо база не порожня */}
+              {totalCount > 0 && (
+                <div className="mb-5 mt-2">
+                  <div className="border-t border-gray-200"></div>
+                </div>
+              )}
 
               <div className="space-y-3">
               {clients.map(c => {

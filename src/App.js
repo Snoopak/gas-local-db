@@ -431,7 +431,7 @@ const countClients = async () => {
   });
 };
 
-const searchClients = async (searchTerm, settlements, streets, meterBrands, meterSizes, meterYears, meterGroups) => {
+const searchClients = async (searchTerm, settlements, streets, meterBrands, meterSizes, meterYears, meterGroups, filterDisconnected, filterDacha, filterAbsent) => {
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction([STORE_NAME], 'readonly');
@@ -460,8 +460,17 @@ const searchClients = async (searchTerm, settlements, streets, meterBrands, mete
         const matchesMeterYear = meterYears.length === 0 || meterYears.includes(client.meterYear);
         const matchesMeterGroup = meterGroups.length === 0 || meterGroups.includes(client.meterGroup);
         
+        // ⭐ ФІЛЬТРИ СТАТУСІВ
+        let matchesStatus = true;
+        if (filterDisconnected || filterDacha || filterAbsent) {
+          matchesStatus = 
+            (filterDisconnected && client.gasDisconnected === 'Так') ||
+            (filterDacha && client.dacha === true) ||
+            (filterAbsent && client.temporaryAbsent === true);
+        }
+        
         if (matchesSearch && matchesSettlement && matchesStreet && 
-            matchesMeterBrand && matchesMeterSize && matchesMeterYear && matchesMeterGroup) {
+            matchesMeterBrand && matchesMeterSize && matchesMeterYear && matchesMeterGroup && matchesStatus) {
           results.push(client);
         }
         cursor.continue();
@@ -474,9 +483,9 @@ const searchClients = async (searchTerm, settlements, streets, meterBrands, mete
 };
 
 // ⭐ НОВА ФУНКЦІЯ: Пошук з пагінацією для infinite scroll
-const searchClientsPaginated = async (searchTerm, settlements, streets, meterBrands, meterSizes, meterYears, meterGroups, page, pageSize) => {
+const searchClientsPaginated = async (searchTerm, settlements, streets, meterBrands, meterSizes, meterYears, meterGroups, filterDisconnected, filterDacha, filterAbsent, page, pageSize) => {
   // Спочатку отримуємо ВСІ результати
-  const allResults = await searchClients(searchTerm, settlements, streets, meterBrands, meterSizes, meterYears, meterGroups);
+  const allResults = await searchClients(searchTerm, settlements, streets, meterBrands, meterSizes, meterYears, meterGroups, filterDisconnected, filterDacha, filterAbsent);
   
   // Повертаємо тільки потрібну сторінку
   const start = page * pageSize;
@@ -498,6 +507,12 @@ function ClientDatabase() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSettlement, setSelectedSettlement] = useState([]);
   const [selectedStreet, setSelectedStreet] = useState([]);
+  // ⭐ НОВІ ФІЛЬТРИ СТАТУСІВ
+  const [filterDisconnected, setFilterDisconnected] = useState(false);
+  const [filterDacha, setFilterDacha] = useState(false);
+  const [filterAbsent, setFilterAbsent] = useState(false);
+  // ⭐ Dropdown швидких дій
+  const [showQuickActions, setShowQuickActions] = useState(false);
   const [selectedMeterBrand, setSelectedMeterBrand] = useState([]);
   const [selectedMeterSize, setSelectedMeterSize] = useState([]);
   const [selectedMeterYear, setSelectedMeterYear] = useState([]);
@@ -614,7 +629,8 @@ function ClientDatabase() {
     }
 
     if (debouncedSearchTerm || selectedSettlement.length > 0 || selectedStreet.length > 0 || 
-        selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || selectedMeterYear.length > 0 || selectedMeterGroups.length > 0) {
+        selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || selectedMeterYear.length > 0 || selectedMeterGroups.length > 0 ||
+        filterDisconnected || filterDacha || filterAbsent) {
       // ⭐ При фільтрації ТЕОЖ використовуємо infinite scroll!
       clearScrollState();
       setCurrentPage(0);
@@ -627,7 +643,7 @@ function ClientDatabase() {
       setHasMore(true);
       loadClients();
     }
-  }, [debouncedSearchTerm, selectedSettlement, selectedStreet, selectedMeterBrand, selectedMeterSize, selectedMeterYear, selectedMeterGroups]);
+  }, [debouncedSearchTerm, selectedSettlement, selectedStreet, selectedMeterBrand, selectedMeterSize, selectedMeterYear, selectedMeterGroups, filterDisconnected, filterDacha, filterAbsent]);
 
   // Динамічне оновлення фільтрів на основі вибраних значень
   useEffect(() => {
@@ -712,7 +728,8 @@ function ClientDatabase() {
       // Перевіряємо чи є фільтри
       const hasFilters = debouncedSearchTerm || selectedSettlement.length > 0 || selectedStreet.length > 0 || 
                         selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || 
-                        selectedMeterYear.length > 0 || selectedMeterGroups.length > 0;
+                        selectedMeterYear.length > 0 || selectedMeterGroups.length > 0 ||
+                        filterDisconnected || filterDacha || filterAbsent;
       
       if (hasFilters) {
         performSearch(true); // append = true для фільтрів
@@ -740,6 +757,21 @@ function ClientDatabase() {
     // ⭐ Дозволяємо useEffect з фільтрами спрацьовувати після mount
     isFirstRender.current = false;
   }, []);
+
+  // ⭐ Закриття dropdown швидких дій при кліку поза ним
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showQuickActions && !event.target.closest('.relative')) {
+        setShowQuickActions(false);
+      }
+    };
+
+    if (showQuickActions) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [showQuickActions]);
+
 
   const loadClients = async (append = false) => {
     // ⭐ INFINITE SCROLL: Якщо вже завантажуємо або немає більше - виходимо
@@ -930,6 +962,7 @@ function ClientDatabase() {
       const result = await searchClientsPaginated(
         debouncedSearchTerm, selectedSettlement, selectedStreet,
         selectedMeterBrand, selectedMeterSize, selectedMeterYear, selectedMeterGroups,
+        filterDisconnected, filterDacha, filterAbsent,
         currentPage, pageSize
       );
       
@@ -1294,7 +1327,8 @@ function ClientDatabase() {
                 // Показуємо filteredTotalCount якщо є фільтри, інакше totalCount
                 (debouncedSearchTerm || selectedSettlement.length > 0 || selectedStreet.length > 0 || 
                  selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || 
-                 selectedMeterYear.length > 0 || selectedMeterGroups.length > 0)
+                 selectedMeterYear.length > 0 || selectedMeterGroups.length > 0 ||
+                 filterDisconnected || filterDacha || filterAbsent)
                   ? filteredTotalCount
                   : totalCount
               }
@@ -1305,7 +1339,66 @@ function ClientDatabase() {
 
       <div className="max-w-7xl mx-auto">
         <div className="bg-white rounded-lg shadow-lg p-3 sm:p-6 mb-4 sm:mb-6">
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-indigo-900 mb-4 sm:mb-6">База абонентів газопостачання</h1>
+          {/* Заголовок + Швидкі дії */}
+          <div className="flex justify-between items-center mb-4 sm:mb-6">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-indigo-900">База абонентів газопостачання</h1>
+            
+            {/* Dropdown з швидкими діями */}
+            <div className="relative">
+              <button 
+                onClick={() => setShowQuickActions(!showQuickActions)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Швидкі дії"
+              >
+                <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </button>
+              
+              {/* Dropdown меню */}
+              {showQuickActions && (
+                <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-2xl border-2 border-gray-200 z-50">
+                  <div className="p-2">
+                    <button onClick={() => { handleDownloadTemplate(); setShowQuickActions(false); }} className="w-full px-4 py-3 text-left hover:bg-purple-50 rounded-lg flex items-center gap-3 transition-colors">
+                      <FileText className="w-5 h-5 text-purple-600" />
+                      <div>
+                        <div className="font-semibold text-sm text-gray-900">Шаблон</div>
+                        <div className="text-xs text-gray-500">Завантажити Excel</div>
+                      </div>
+                    </button>
+                    
+                    <label className="w-full px-4 py-3 hover:bg-green-50 rounded-lg flex items-center gap-3 transition-colors cursor-pointer">
+                      <Upload className="w-5 h-5 text-green-600" />
+                      <div>
+                        <div className="font-semibold text-sm text-gray-900">Імпорт</div>
+                        <div className="text-xs text-gray-500">Завантажити дані</div>
+                      </div>
+                      <input type="file" accept=".xlsx,.xls" onChange={(e) => { handleImportExcel(e); setShowQuickActions(false); }} className="hidden" disabled={loading} />
+                    </label>
+                    
+                    <button onClick={() => { handleExportExcel(); setShowQuickActions(false); }} disabled={totalCount === 0 || loading} className="w-full px-4 py-3 text-left hover:bg-blue-50 rounded-lg flex items-center gap-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                      <Download className="w-5 h-5 text-blue-600" />
+                      <div>
+                        <div className="font-semibold text-sm text-gray-900">Експорт</div>
+                        <div className="text-xs text-gray-500">Зберегти в Excel</div>
+                      </div>
+                    </button>
+                    
+                    <div className="border-t my-2"></div>
+                    
+                    <button onClick={() => { setIsModalOpen(true); setShowQuickActions(false); }} disabled={loading} className="w-full px-4 py-3 text-left hover:bg-indigo-50 rounded-lg flex items-center gap-3 transition-colors">
+                      <Plus className="w-5 h-5 text-indigo-600" />
+                      <div>
+                        <div className="font-semibold text-sm text-gray-900">Додати клієнта</div>
+                        <div className="text-xs text-gray-500">Новий запис</div>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
           
           {/* Головний пошук на всю ширину */}
           <div className="mb-3">
@@ -1479,10 +1572,45 @@ function ClientDatabase() {
             </div>
           </div>
 
-          {/* Кнопка "Скинути всі фільтри" */}
+          {/* ⭐ ФІЛЬТРИ СТАТУСІВ - компактні чіпси */}
+          <div className="mb-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-medium text-gray-500">Статуси:</span>
+              <label className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white hover:bg-red-50 border border-gray-200 hover:border-red-300 rounded-md cursor-pointer transition-all text-xs">
+                <input 
+                  type="checkbox" 
+                  checked={filterDisconnected}
+                  onChange={(e) => setFilterDisconnected(e.target.checked)}
+                  className="w-3.5 h-3.5 text-red-600 rounded" 
+                />
+                <span className="font-medium text-gray-700">🔴 Відключений</span>
+              </label>
+              <label className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white hover:bg-orange-50 border border-gray-200 hover:border-orange-300 rounded-md cursor-pointer transition-all text-xs">
+                <input 
+                  type="checkbox" 
+                  checked={filterDacha}
+                  onChange={(e) => setFilterDacha(e.target.checked)}
+                  className="w-3.5 h-3.5 text-orange-600 rounded" 
+                />
+                <span className="font-medium text-gray-700">🟠 Дача</span>
+              </label>
+              <label className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white hover:bg-yellow-50 border border-gray-200 hover:border-yellow-300 rounded-md cursor-pointer transition-all text-xs">
+                <input 
+                  type="checkbox" 
+                  checked={filterAbsent}
+                  onChange={(e) => setFilterAbsent(e.target.checked)}
+                  className="w-3.5 h-3.5 text-yellow-600 rounded" 
+                />
+                <span className="font-medium text-gray-700">🟡 Не проживає</span>
+              </label>
+            </div>
+          </div>
+
+          {/* Кнопка "Скинути всі фільтри" - компактна */}
           <div className="mb-4">
             {(searchTerm || selectedSettlement.length > 0 || selectedStreet.length > 0 || 
-              selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || selectedMeterYear.length > 0 || selectedMeterGroups.length > 0) && (
+              selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || selectedMeterYear.length > 0 || selectedMeterGroups.length > 0 ||
+              filterDisconnected || filterDacha || filterAbsent) && (
               <button onClick={() => {
                 setSearchTerm('');
                 setSelectedSettlement([]);
@@ -1491,44 +1619,38 @@ function ClientDatabase() {
                 setSelectedMeterSize([]);
                 setSelectedMeterYear([]);
                 setSelectedMeterGroups([]);
+                setFilterDisconnected(false);
+                setFilterDacha(false);
+                setFilterAbsent(false);
                 setCurrentPage(0);
               }}
-                className="px-4 py-3 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg flex items-center gap-2 transition-colors">
-                <X size={18} /> Скинути фільтри
+                className="px-3 py-1.5 bg-white hover:bg-red-50 text-red-600 border border-red-200 hover:border-red-300 rounded-md flex items-center gap-1.5 transition-colors text-sm font-medium">
+                <X size={16} /> Скинути фільтри
               </button>
             )}
           </div>
 
-          <div className="grid grid-cols-2 sm:flex gap-2 sm:gap-3 mb-4 sm:mb-6">
-            <button onClick={handleDownloadTemplate}
-              className="bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white px-3 sm:px-4 py-3 rounded-lg flex items-center justify-center gap-2 transition-colors text-xs sm:text-sm">
-              <FileText size={16} className="sm:w-[18px] sm:h-[18px]" /> 
-              <span className="hidden sm:inline">Шаблон</span>
-              <span className="sm:hidden">Шаблон</span>
-            </button>
-            <label className="bg-green-600 hover:bg-green-700 active:bg-green-800 text-white px-3 sm:px-4 py-3 rounded-lg flex items-center justify-center gap-2 transition-colors cursor-pointer text-xs sm:text-sm">
-              <Upload size={16} className="sm:w-[18px] sm:h-[18px]" /> 
-              <span className="hidden sm:inline">Імпорт</span>
-              <span className="sm:hidden">Імпорт</span>
-              <input type="file" accept=".xlsx,.xls" onChange={handleImportExcel} className="hidden" disabled={loading} />
-            </label>
-            <button onClick={handleExportExcel} disabled={totalCount === 0 || loading}
-              className="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-3 sm:px-4 py-3 rounded-lg flex items-center justify-center gap-2 transition-colors text-xs sm:text-sm">
-              <Download size={16} className="sm:w-[18px] sm:h-[18px]" /> 
-              <span className="hidden sm:inline">Експорт</span>
-              <span className="sm:hidden">Експорт</span>
-            </button>
-            <button onClick={() => setIsModalOpen(true)} disabled={loading}
-              className="bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white px-3 sm:px-4 py-3 rounded-lg flex items-center justify-center gap-2 transition-colors text-xs sm:text-sm">
-              <Plus size={16} className="sm:w-[18px] sm:h-[18px]" /> 
-              <span className="hidden sm:inline">Додати</span>
-              <span className="sm:hidden">Додати</span>
-            </button>
-          </div>
-
+          {/* ⭐ СТАТИСТИКА з іконками */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4">
-            <div className="text-xs sm:text-sm text-gray-600">
-              Всього: {totalCount} | Показано: {clients.length}
+            <div className="bg-white border border-gray-200 rounded-lg px-4 py-2 shadow-sm">
+              <div className="text-sm text-gray-600 flex items-center gap-3">
+                <span className="flex items-center gap-1.5">
+                  <svg className="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                  <span className="font-medium text-gray-700">Всього:</span>
+                  <span className="font-semibold text-indigo-600">{totalCount}</span>
+                </span>
+                <span className="text-gray-300">|</span>
+                <span className="flex items-center gap-1.5">
+                  <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                  <span className="font-medium text-gray-700">Показано:</span>
+                  <span className="font-semibold text-blue-600">{clients.length}</span>
+                </span>
+              </div>
             </div>
             
             {/* ⭐ Стара пагінація видалена - тепер Infinite Scroll! */}
@@ -1537,7 +1659,13 @@ function ClientDatabase() {
           {loading && <div className="text-center py-8 text-gray-500">Завантаження...</div>}
 
           {!loading && (
-            <div className="space-y-3">
+            <>
+              {/* Розділювач перед списком - тільки лінія */}
+              <div className="mb-5 mt-2">
+                <div className="border-t border-gray-200"></div>
+              </div>
+
+              <div className="space-y-3">
               {clients.map(c => {
                 const statusColor = c.gasDisconnected === 'Так' ? 'border-red-500' : 
                                    c.temporaryAbsent ? 'border-yellow-400' : 
@@ -1792,7 +1920,8 @@ function ClientDatabase() {
                    ? 'Нічого не знайдено' : 'Немає жодного клієнта. Додайте першого!'}
                 </div>
               )}
-            </div>
+              </div>
+            </>
           )}
         </div>
       </div>

@@ -500,6 +500,15 @@ const searchClientsPaginated = async (searchTerm, settlements, streets, meterBra
 
 
 function ClientDatabase() {
+  // ⭐ КОНФІГУРАЦІЯ
+  const CONFIG = {
+    PAGE_SIZE: 50,
+    DEBOUNCE_DELAY: 500,
+    SCROLL_THRESHOLD: 400,
+    STATE_RESTORE_DELAY: 100,
+    SCROLL_SAVE_DEBOUNCE: 200
+  };
+  
   // ⭐ Alert System
   const { showToast, showModal } = useAlert();
   
@@ -532,7 +541,6 @@ function ClientDatabase() {
   const [meterSizes, setMeterSizes] = useState(['Всі']);
   const [meterYears, setMeterYears] = useState(['Всі']);
   const [meterGroups, setMeterGroups] = useState([]);
-  const pageSize = 50;
   
   // ⭐ INFINITE SCROLL: Додаткові state
   const [hasMore, setHasMore] = useState(true);
@@ -603,10 +611,10 @@ function ClientDatabase() {
       clearTimeout(searchTimeoutRef.current);
     }
 
-    // Встановлюємо новий таймер на 300мс
+    // Встановлюємо новий таймер
     searchTimeoutRef.current = setTimeout(() => {
       setDebouncedSearchTerm(searchTerm);
-    }, 300);
+    }, CONFIG.DEBOUNCE_DELAY);
 
     // Cleanup функція
     return () => {
@@ -703,26 +711,32 @@ function ClientDatabase() {
 
   // ⭐ INFINITE SCROLL: Слухач скролу
   useEffect(() => {
+    let scrollSaveTimeout = null; // ⭐ Локальна змінна для очищення
+    
     const handleScroll = () => {
       // ⭐ INFINITE SCROLL працює ЗАВЖДИ (і з фільтрами, і без!)
       const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
       const windowHeight = window.innerHeight;
       const documentHeight = document.documentElement.scrollHeight;
       
-      // Якщо до кінця залишилось менше 400px і є ще дані - завантажуємо
-      if (scrollTop + windowHeight >= documentHeight - 400 && hasMore && !isLoadingMore) {
+      // Якщо до кінця залишилось менше SCROLL_THRESHOLD і є ще дані - завантажуємо
+      if (scrollTop + windowHeight >= documentHeight - CONFIG.SCROLL_THRESHOLD && hasMore && !isLoadingMore) {
         setCurrentPage(prev => prev + 1);
       }
 
       // Зберігаємо позицію скролу (з debounce)
-      clearTimeout(window.scrollSaveTimeout);
-      window.scrollSaveTimeout = setTimeout(() => {
+      if (scrollSaveTimeout) clearTimeout(scrollSaveTimeout);
+      scrollSaveTimeout = setTimeout(() => {
         saveScrollState();
-      }, 200);
+      }, CONFIG.SCROLL_SAVE_DEBOUNCE);
     };
 
     window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      if (scrollSaveTimeout) clearTimeout(scrollSaveTimeout); // ⭐ Очищаємо при unmount
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasMore, isLoadingMore]);
 
@@ -747,27 +761,65 @@ function ClientDatabase() {
   // ⭐ INFINITE SCROLL: Відновлення стану при mount
   useEffect(() => {
     const initializeApp = async () => {
+      // ⭐ Перевіряємо чи це повне перезавантаження (F5)
+      const isPageReload = !sessionStorage.getItem('app_initialized');
+      
       // Завантажуємо фільтри завжди
       await loadTotalCount();
       loadSettlements();
       loadStreets();
       loadMeterData();
       
-      // ⭐ Дозволяємо useEffect з фільтрами спрацьовувати тільки ПІСЛЯ завантаження
-      isFirstRender.current = false;
-      
-      // Спробуємо відновити стан
-      const restored = restoreScrollState();
-      if (!restored) {
-        // Якщо немає збереженого стану - завантажуємо перших клієнтів
+      if (isPageReload) {
+        // ⭐ При F5: зберігаємо тільки позицію скролу, але скидаємо клієнтів
+        const savedScrollY = sessionStorage.getItem(STORAGE_KEYS.SCROLL_Y);
+        
+        // Очищаємо клієнтів і сторінки
+        sessionStorage.removeItem(STORAGE_KEYS.CLIENTS);
+        sessionStorage.removeItem(STORAGE_KEYS.PAGE);
+        sessionStorage.removeItem(STORAGE_KEYS.HAS_MORE);
+        sessionStorage.removeItem(STORAGE_KEYS.FILTERED_TOTAL);
+        
+        // Завантажуємо перших клієнтів
         await loadClients();
+        
+        // Відновлюємо тільки скрол
+        if (savedScrollY) {
+          setTimeout(() => {
+            window.scrollTo(0, parseInt(savedScrollY));
+          }, CONFIG.STATE_RESTORE_DELAY);
+        }
+        
+        sessionStorage.setItem('app_initialized', 'true');
+      } else {
+        // ⭐ При переключенні вкладок: повне відновлення
+        const restored = restoreScrollState();
+        if (!restored) {
+          await loadClients();
+        }
       }
       
       // ⭐ Завершили початкове завантаження
       setIsInitialLoading(false);
+      
+      // ⭐ Дозволяємо useEffect з фільтрами спрацьовувати тільки ПІСЛЯ всього завантаження
+      setTimeout(() => {
+        isFirstRender.current = false;
+      }, CONFIG.STATE_RESTORE_DELAY);
     };
     
     initializeApp();
+    
+    // ⭐ Очищуємо прапорець при закритті вкладки
+    const handleBeforeUnload = () => {
+      sessionStorage.removeItem('app_initialized');
+    };
+    
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -797,7 +849,7 @@ function ClientDatabase() {
     }
     
     try {
-      const data = await getClientsByPage(currentPage, pageSize);
+      const data = await getClientsByPage(currentPage, CONFIG.PAGE_SIZE);
       
       if (append) {
         // ⭐ INFINITE SCROLL: Додаємо до існуючих
@@ -808,7 +860,7 @@ function ClientDatabase() {
       }
       
       // Перевіряємо чи є ще дані
-      setHasMore(data.length === pageSize);
+      setHasMore(data.length === CONFIG.PAGE_SIZE);
       
       // ⭐ Зберігаємо стан після рендеру (щоб не було конфлікту)
       setTimeout(() => {
@@ -916,7 +968,7 @@ function ClientDatabase() {
           if (savedScrollY) {
             window.scrollTo(0, parseInt(savedScrollY));
           }
-        }, 100);
+        }, CONFIG.STATE_RESTORE_DELAY);
         
         // ⭐ Позначаємо що стан відновлено
         stateRestored.current = true;
@@ -976,7 +1028,7 @@ function ClientDatabase() {
         debouncedSearchTerm, selectedSettlement, selectedStreet,
         selectedMeterBrand, selectedMeterSize, selectedMeterYear, selectedMeterGroups,
         filterDisconnected, filterDacha, filterAbsent,
-        currentPage, pageSize
+        currentPage, CONFIG.PAGE_SIZE
       );
       
       if (append) {
@@ -1061,7 +1113,6 @@ function ClientDatabase() {
       },
       () => {
         // Скасовано - нічого не робимо
-        console.log('Видалення скасовано');
       }
     );
   };

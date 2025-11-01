@@ -501,7 +501,7 @@ const searchClientsPaginated = async (searchTerm, settlements, streets, meterBra
 
 function ClientDatabase() {
   // ⭐ Alert System
-  const { showToast, showModal, showSnackbar } = useAlert();
+  const { showToast, showModal } = useAlert();
   
   const [clients, setClients] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -643,6 +643,7 @@ function ClientDatabase() {
       setHasMore(true);
       loadClients();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearchTerm, selectedSettlement, selectedStreet, selectedMeterBrand, selectedMeterSize, selectedMeterYear, selectedMeterGroups, filterDisconnected, filterDacha, filterAbsent]);
 
   // Динамічне оновлення фільтрів на основі вибраних значень
@@ -720,6 +721,7 @@ function ClientDatabase() {
 
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasMore, isLoadingMore]);
 
   // ⭐ INFINITE SCROLL: Завантаження при зміні currentPage
@@ -737,6 +739,7 @@ function ClientDatabase() {
         loadClients(true); // append = true для всіх клієнтів
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage]);
 
   // ⭐ INFINITE SCROLL: Відновлення стану при mount
@@ -756,6 +759,7 @@ function ClientDatabase() {
     
     // ⭐ Дозволяємо useEffect з фільтрами спрацьовувати після mount
     isFirstRender.current = false;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ⭐ Закриття dropdown швидких дій при кліку поза ним
@@ -1220,8 +1224,6 @@ function ClientDatabase() {
     setEditingClient(null);
     setIsModalOpen(false);
   };
-
-  const totalPages = Math.ceil(totalCount / pageSize);
 
   // Функції для обробки множинного вибору
   const toggleSelection = (array, setArray, value) => {

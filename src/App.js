@@ -542,6 +542,9 @@ function ClientDatabase() {
   const [meterYears, setMeterYears] = useState(['Всі']);
   const [meterGroups, setMeterGroups] = useState([]);
   
+  // ⭐ Лічильники для статусів
+  const [statusCounts, setStatusCounts] = useState({ disconnected: 0, dacha: 0, absent: 0 });
+  
   // ⭐ INFINITE SCROLL: Додаткові state
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -769,6 +772,7 @@ function ClientDatabase() {
       loadSettlements();
       loadStreets();
       loadMeterData();
+      loadStatusCounts(); // ⭐ Завантажуємо лічильники статусів
       
       if (isPageReload) {
         // ⭐ При F5: зберігаємо тільки позицію скролу, але скидаємо клієнтів
@@ -881,6 +885,17 @@ function ClientDatabase() {
   const loadTotalCount = async () => {
     const count = await countClients();
     setTotalCount(count);
+  };
+  
+  // ⭐ Підрахунок клієнтів за статусами
+  const loadStatusCounts = async () => {
+    const allClients = await getAllClients();
+    const counts = {
+      disconnected: allClients.filter(c => c.gasDisconnected === 'Так').length,
+      dacha: allClients.filter(c => c.dacha === true).length,
+      absent: allClients.filter(c => c.temporaryAbsent === true).length
+    };
+    setStatusCounts(counts);
   };
 
   const loadSettlements = async () => {
@@ -1526,6 +1541,98 @@ function ClientDatabase() {
             </div>
           </div>
           
+          {/* 🔥 ГІБРИДНИЙ LOADER: Skeleton пошуку + Disabled фільтри при завантаженні */}
+          {isInitialLoading && (
+            <>
+              <style>{`
+                @keyframes shimmer {
+                  0% { background-position: -1000px 0; }
+                  100% { background-position: 1000px 0; }
+                }
+                .skeleton {
+                  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+                  background-size: 1000px 100%;
+                  animation: shimmer 2s infinite;
+                }
+              `}</style>
+              
+              {/* Skeleton пошуку */}
+              <div className="mb-3">
+                <div className="skeleton h-12 rounded-lg"></div>
+              </div>
+              
+              {/* Disabled фільтри */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4 opacity-50">
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                  <h3 className="text-sm font-semibold text-blue-900 mb-2">🏠 Фільтри адреси</h3>
+                  <select className="w-full px-3 py-2 border rounded-lg mb-2 bg-gray-50 cursor-not-allowed" disabled>
+                    <option>Населений пункт</option>
+                  </select>
+                  <select className="w-full px-3 py-2 border rounded-lg bg-gray-50 cursor-not-allowed" disabled>
+                    <option>Вулиця</option>
+                  </select>
+                </div>
+                <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                  <h3 className="text-sm font-semibold text-purple-900 mb-2">⚙️ Фільтри лічильників</h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    <select className="px-3 py-2 border rounded-lg text-sm bg-gray-50 cursor-not-allowed" disabled>
+                      <option>Група</option>
+                    </select>
+                    <select className="px-3 py-2 border rounded-lg text-sm bg-gray-50 cursor-not-allowed" disabled>
+                      <option>Марка</option>
+                    </select>
+                    <select className="px-3 py-2 border rounded-lg text-sm bg-gray-50 cursor-not-allowed" disabled>
+                      <option>Розмір</option>
+                    </select>
+                    <select className="px-3 py-2 border rounded-lg text-sm bg-gray-50 cursor-not-allowed" disabled>
+                      <option>Рік</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Disabled статуси */}
+              <div className="mb-4 opacity-50">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-medium text-gray-500">Статуси:</span>
+                  <div className="px-3 py-2 bg-gray-100 border border-gray-200 rounded-md text-xs text-gray-400 cursor-not-allowed">
+                    ⚠️ Відключений
+                  </div>
+                  <div className="px-3 py-2 bg-gray-100 border border-gray-200 rounded-md text-xs text-gray-400 cursor-not-allowed">
+                    🏠 Дача
+                  </div>
+                  <div className="px-3 py-2 bg-gray-100 border border-gray-200 rounded-md text-xs text-gray-400 cursor-not-allowed">
+                    ⚠️ Не проживає
+                  </div>
+                </div>
+              </div>
+              
+              {/* Статистика з іконками та ... */}
+              <div className="mb-4 opacity-50">
+                <div className="bg-white border border-gray-200 rounded-lg px-4 py-2 inline-block">
+                  <div className="text-sm text-gray-400 flex items-center gap-3">
+                    <span className="flex items-center gap-1.5">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                      <span className="font-medium">Всього:</span> <span className="font-semibold">...</span>
+                    </span>
+                    <span className="text-gray-300">|</span>
+                    <span className="flex items-center gap-1.5">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                      <span className="font-medium">Показано:</span> <span className="font-semibold">...</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="border-t border-gray-200 mb-5 mt-2"></div>
+            </>
+          )}
+          
           {/* Показуємо фільтри та пошук ТІЛЬКИ якщо база не порожня */}
           {!isInitialLoading && totalCount > 0 && (
           <>
@@ -1701,37 +1808,173 @@ function ClientDatabase() {
             </div>
           </div>
 
-          {/* ⭐ ФІЛЬТРИ СТАТУСІВ - компактні чіпси */}
+          {/* ⭐ ФІЛЬТРИ СТАТУСІВ - новий дизайн з лічильниками */}
           <div className="mb-4">
+            <style>{`
+              .status-checkbox {
+                appearance: none;
+                position: absolute;
+                opacity: 0;
+              }
+              
+              .status-label {
+                position: relative;
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                padding: 8px 12px;
+                border-radius: 6px;
+                cursor: pointer;
+                transition: all 0.2s ease;
+                user-select: none;
+                background-color: #f3f4f6;
+                color: #9ca3af;
+                border: 2px solid transparent;
+              }
+              
+              .status-label:hover {
+                border-color: #d1d5db;
+                color: #6b7280;
+              }
+              
+              .status-checkbox:checked + .status-label {
+                background-color: #ef4444;
+                color: white;
+                border-color: #ef4444;
+              }
+              
+              .status-checkbox.orange:checked + .status-label {
+                background-color: #f97316;
+                border-color: #f97316;
+              }
+              
+              .status-checkbox.yellow:checked + .status-label {
+                background-color: #eab308;
+                border-color: #eab308;
+              }
+              
+              .checkbox-icon {
+                width: 18px;
+                height: 18px;
+                border: 2px solid currentColor;
+                border-radius: 3px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background-color: transparent;
+                transition: all 0.2s ease;
+                flex-shrink: 0;
+              }
+              
+              .checkbox-icon::after {
+                content: '';
+                width: 10px;
+                height: 6px;
+                border-left: 2px solid white;
+                border-bottom: 2px solid white;
+                transform: rotate(-45deg) scale(0);
+                transition: transform 0.2s ease;
+              }
+              
+              .status-checkbox:checked + .status-label .checkbox-icon {
+                background-color: white;
+                border-color: white;
+              }
+              
+              .status-checkbox:checked + .status-label .checkbox-icon::after {
+                transform: rotate(-45deg) scale(1);
+                border-color: #ef4444;
+              }
+              
+              .status-checkbox.orange:checked + .status-label .checkbox-icon::after {
+                border-color: #f97316;
+              }
+              
+              .status-checkbox.yellow:checked + .status-label .checkbox-icon::after {
+                border-color: #eab308;
+              }
+            `}</style>
+            
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs font-medium text-gray-500">Статуси:</span>
-              <label className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white hover:bg-red-50 border border-gray-200 hover:border-red-300 rounded-md cursor-pointer transition-all text-xs">
+              
+              {/* Відключений */}
+              <div className="relative">
                 <input 
                   type="checkbox" 
+                  id="filter-disconnected"
                   checked={filterDisconnected}
                   onChange={(e) => setFilterDisconnected(e.target.checked)}
-                  className="w-3.5 h-3.5 text-red-600 rounded" 
+                  className="status-checkbox"
                 />
-                <span className="font-medium text-gray-700">🔴 Відключений</span>
-              </label>
-              <label className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white hover:bg-orange-50 border border-gray-200 hover:border-orange-300 rounded-md cursor-pointer transition-all text-xs">
+                <label htmlFor="filter-disconnected" className="status-label">
+                  <span className="checkbox-icon"></span>
+                  <svg className="w-4 h-4 hidden sm:block" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  <svg className="w-5 h-5 sm:hidden" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  <span className="hidden sm:inline font-medium text-sm">Відключений</span>
+                  {statusCounts.disconnected > 0 && (
+                    <span className="ml-1 px-1.5 py-0.5 bg-black bg-opacity-20 rounded text-xs font-semibold">
+                      {statusCounts.disconnected}
+                    </span>
+                  )}
+                </label>
+              </div>
+              
+              {/* Дача */}
+              <div className="relative">
                 <input 
                   type="checkbox" 
+                  id="filter-dacha"
                   checked={filterDacha}
                   onChange={(e) => setFilterDacha(e.target.checked)}
-                  className="w-3.5 h-3.5 text-orange-600 rounded" 
+                  className="status-checkbox orange"
                 />
-                <span className="font-medium text-gray-700">🟠 Дача</span>
-              </label>
-              <label className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white hover:bg-yellow-50 border border-gray-200 hover:border-yellow-300 rounded-md cursor-pointer transition-all text-xs">
+                <label htmlFor="filter-dacha" className="status-label">
+                  <span className="checkbox-icon"></span>
+                  <svg className="w-4 h-4 hidden sm:block" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
+                  </svg>
+                  <svg className="w-5 h-5 sm:hidden" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
+                  </svg>
+                  <span className="hidden sm:inline font-medium text-sm">Дача</span>
+                  {statusCounts.dacha > 0 && (
+                    <span className="ml-1 px-1.5 py-0.5 bg-black bg-opacity-20 rounded text-xs font-semibold">
+                      {statusCounts.dacha}
+                    </span>
+                  )}
+                </label>
+              </div>
+              
+              {/* Не проживає */}
+              <div className="relative">
                 <input 
                   type="checkbox" 
+                  id="filter-absent"
                   checked={filterAbsent}
                   onChange={(e) => setFilterAbsent(e.target.checked)}
-                  className="w-3.5 h-3.5 text-yellow-600 rounded" 
+                  className="status-checkbox yellow"
                 />
-                <span className="font-medium text-gray-700">🟡 Не проживає</span>
-              </label>
+                <label htmlFor="filter-absent" className="status-label">
+                  <span className="checkbox-icon"></span>
+                  <svg className="w-4 h-4 hidden sm:block" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  <svg className="w-5 h-5 sm:hidden" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  <span className="hidden sm:inline font-medium text-sm">Не проживає</span>
+                  {statusCounts.absent > 0 && (
+                    <span className="ml-1 px-1.5 py-0.5 bg-black bg-opacity-20 rounded text-xs font-semibold">
+                      {statusCounts.absent}
+                    </span>
+                  )}
+                </label>
+              </div>
             </div>
           </div>
 
@@ -2060,10 +2303,40 @@ function ClientDatabase() {
                       Нічого не знайдено
                     </div>
                   ) : isInitialLoading ? (
-                    // Поки завантажуємо - показуємо loader
-                    <div className="text-center py-12 text-gray-500">
-                      <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-indigo-500 border-t-transparent mb-2"></div>
-                      <p>Завантаження...</p>
+                    // 🔥 ГІБРИДНИЙ ВАРІАНТ: Skeleton + disabled UI
+                    <div className="space-y-3">
+                      <style>{`
+                        @keyframes shimmer {
+                          0% { background-position: -1000px 0; }
+                          100% { background-position: 1000px 0; }
+                        }
+                        .skeleton {
+                          background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+                          background-size: 1000px 100%;
+                          animation: shimmer 2s infinite;
+                        }
+                      `}</style>
+                      
+                      {/* Skeleton картки клієнтів */}
+                      {[1,2,3].map((i) => (
+                        <div key={i} className="border border-gray-200 rounded-lg p-4 bg-white">
+                          <div className="flex justify-between items-start mb-3">
+                            <div className="flex-1">
+                              <div className="skeleton h-6 w-56 mb-2 rounded"></div>
+                              <div className="skeleton h-4 w-32 rounded"></div>
+                            </div>
+                            <div className="flex gap-2">
+                              <div className="skeleton h-8 w-8 rounded"></div>
+                              <div className="skeleton h-8 w-8 rounded"></div>
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="skeleton h-4 w-full rounded"></div>
+                            <div className="skeleton h-4 w-3/4 rounded"></div>
+                            <div className="skeleton h-4 w-2/3 rounded"></div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   ) : totalCount === 0 ? (
                     // Якщо база порожня - показуємо онбординг

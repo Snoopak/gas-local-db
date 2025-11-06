@@ -831,14 +831,18 @@ function ClientDatabase() {
   // ⭐ Закриття dropdown швидких дій при кліку поза ним
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (showQuickActions && !event.target.closest('.relative')) {
+      // Перевіряємо чи клік поза кнопкою швидких дій та його меню
+      const quickActionsButton = event.target.closest('button[title="Швидкі дії"]');
+      const quickActionsMenu = event.target.closest('.absolute.right-0.mt-2.w-80');
+      
+      if (showQuickActions && !quickActionsButton && !quickActionsMenu) {
         setShowQuickActions(false);
       }
     };
 
     if (showQuickActions) {
-      document.addEventListener('click', handleClickOutside);
-      return () => document.removeEventListener('click', handleClickOutside);
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
     }
   }, [showQuickActions]);
 
@@ -1548,13 +1552,11 @@ if (needsProxy) {
       if (!isOpen) return;
 
       const handleClickOutside = (event) => {
-        // Перевіряємо чи клік всередині dropdown
         if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
           setOpenDropdown(null);
         }
       };
 
-      // Невелика затримка щоб уникнути конфлікту з відкриттям
       const timer = setTimeout(() => {
         document.addEventListener('mousedown', handleClickOutside);
       }, 0);
@@ -1565,7 +1567,7 @@ if (needsProxy) {
       };
     }, [isOpen]);
 
-    const handleOptionClick = (option) => {
+    const toggleOption = (option) => {
       toggleSelection(selected, onChange, option);
     };
 
@@ -1597,13 +1599,13 @@ if (needsProxy) {
                   className="flex items-center px-3 sm:px-4 py-3 sm:py-2 hover:bg-indigo-50 cursor-pointer active:bg-indigo-100"
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleOptionClick(option);
+                    toggleOption(option);
                   }}
                 >
                   <input
                     type="checkbox"
                     checked={selected.includes(option)}
-                    onChange={() => {}} 
+                    onChange={() => {}}
                     readOnly
                     className="w-5 h-5 sm:w-4 sm:h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 flex-shrink-0 pointer-events-none"
                   />
@@ -1621,30 +1623,8 @@ if (needsProxy) {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-2 sm:p-4">
       {/* ⭐ MODAL ПРОГРЕСУ ІМПОРТУ */}
       {importProgress.show && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm"
-          onClick={() => {
-            // Закрити при кліку поза модалкою (тільки якщо імпорт завершено)
-            if (importProgress.current === importProgress.total && importProgress.total > 0) {
-              setImportProgress({ show: false, current: 0, total: 0, fileName: '' });
-            }
-          }}
-        >
-          <div 
-            className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 transform transition-all relative"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Кнопка закриття (показується тільки після завершення) */}
-            {importProgress.current === importProgress.total && importProgress.total > 0 && (
-              <button
-                onClick={() => setImportProgress({ show: false, current: 0, total: 0, fileName: '' })}
-                className="absolute top-4 right-4 p-2 hover:bg-gray-100 rounded-full transition-colors"
-                title="Закрити"
-              >
-                <X className="w-5 h-5 text-gray-500" />
-              </button>
-            )}
-            
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 transform transition-all">
             {/* Іконка завантаження */}
             <div className="flex justify-center mb-6">
               <div className="relative">
@@ -1685,10 +1665,7 @@ if (needsProxy) {
 
             {/* Підказка */}
             <p className="text-xs text-gray-500 text-center">
-              {importProgress.current === importProgress.total && importProgress.total > 0 
-                ? '✅ Імпорт завершено! Натисніть X щоб закрити.'
-                : '⏳ Будь ласка, зачекайте. Не закривайте вікно.'
-              }
+              ⏳ Будь ласка, зачекайте. Не закривайте вікно.
             </p>
           </div>
         </div>
@@ -1892,6 +1869,8 @@ if (needsProxy) {
               {/* Disabled статуси - виглядають як справжні (треба додати CSS стилі окремо!) */}
               <div className="mb-4 opacity-60 pointer-events-none">
                 <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-medium text-gray-500">Статуси:</span>
+                  
                   {/* Disabled статуси - використовуємо інлайн стиль замість класу */}
                   <div className="relative inline-flex items-center gap-2 px-3 py-2 rounded-md bg-gray-100 text-gray-500 border-2 border-transparent cursor-not-allowed">
                     <span className="inline-block w-[18px] h-[18px] border-2 border-gray-400 rounded"></span>
@@ -2228,9 +2207,11 @@ if (needsProxy) {
               }
             `}</style>
             
-            <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:flex-wrap sm:overflow-visible sm:pb-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-medium text-gray-500">Статуси:</span>
+              
               {/* Відключений */}
-              <div className="relative flex-shrink-0">
+              <div className="relative">
                 <input 
                   type="checkbox" 
                   id="filter-disconnected"
@@ -2257,7 +2238,7 @@ if (needsProxy) {
               </div>
               
               {/* Дача */}
-              <div className="relative flex-shrink-0">
+              <div className="relative">
                 <input 
                   type="checkbox" 
                   id="filter-dacha"
@@ -2283,7 +2264,7 @@ if (needsProxy) {
               </div>
               
               {/* Не проживає */}
-              <div className="relative flex-shrink-0">
+              <div className="relative">
                 <input 
                   type="checkbox" 
                   id="filter-absent"

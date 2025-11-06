@@ -841,6 +841,13 @@ function ClientDatabase() {
     }
   }, [showQuickActions]);
 
+  // ⭐ Оновлюємо лічильники статусів при зміні фільтрів
+  useEffect(() => {
+    if (!isFirstRender.current) {
+      loadStatusCounts();
+    }
+  }, [selectedSettlement, selectedStreet, selectedMeterGroups, selectedMeterBrand, selectedMeterSize, selectedMeterYear]);
+
 
   const loadClients = async (append = false) => {
     // ⭐ INFINITE SCROLL: Якщо вже завантажуємо або немає більше - виходимо
@@ -887,13 +894,38 @@ function ClientDatabase() {
     setTotalCount(count);
   };
   
-  // ⭐ Підрахунок клієнтів за статусами
+  // ⭐ Підрахунок клієнтів за статусами (враховує фільтри!)
   const loadStatusCounts = async () => {
     const allClients = await getAllClients();
+    
+    // Фільтруємо клієнтів за поточними фільтрами
+    const filteredClients = allClients.filter(client => {
+      // Фільтр по населеному пункту
+      const matchesSettlement = selectedSettlement.length === 0 || selectedSettlement.includes(client.settlement);
+      
+      // Фільтр по вулиці
+      const matchesStreet = selectedStreet.length === 0 || selectedStreet.includes(client.street);
+      
+      // Фільтр по групі лічильника
+      const matchesMeterGroup = selectedMeterGroups.length === 0 || selectedMeterGroups.includes(client.meterGroup);
+      
+      // Фільтр по марці лічильника
+      const matchesMeterBrand = selectedMeterBrand.length === 0 || selectedMeterBrand.includes(client.meterBrand);
+      
+      // Фільтр по розміру лічильника
+      const matchesMeterSize = selectedMeterSize.length === 0 || selectedMeterSize.includes(client.meterSize);
+      
+      // Фільтр по року лічильника
+      const matchesMeterYear = selectedMeterYear.length === 0 || selectedMeterYear.includes(client.meterYear);
+      
+      return matchesSettlement && matchesStreet && matchesMeterGroup && matchesMeterBrand && matchesMeterSize && matchesMeterYear;
+    });
+    
+    // Рахуємо клієнтів з кожним статусом серед відфільтрованих
     const counts = {
-      disconnected: allClients.filter(c => c.gasDisconnected === 'Так').length,
-      dacha: allClients.filter(c => c.dacha === true).length,
-      absent: allClients.filter(c => c.temporaryAbsent === true).length
+      disconnected: filteredClients.filter(c => c.gasDisconnected === 'Так').length,
+      dacha: filteredClients.filter(c => c.dacha === true).length,
+      absent: filteredClients.filter(c => c.temporaryAbsent === true).length
     };
     setStatusCounts(counts);
   };
@@ -1542,7 +1574,8 @@ function ClientDatabase() {
           </div>
           
           {/* 🔥 ГІБРИДНИЙ LOADER: Skeleton пошуку + Disabled фільтри при завантаженні */}
-          {isInitialLoading && (
+          {/* Показується ТІЛЬКИ якщо база не порожня (totalCount !== 0) */}
+          {(loading || isInitialLoading) && clients.length === 0 && totalCount !== 0 && (
             <>
               <style>{`
                 @keyframes shimmer {
@@ -1561,48 +1594,128 @@ function ClientDatabase() {
                 <div className="skeleton h-12 rounded-lg"></div>
               </div>
               
-              {/* Disabled фільтри */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4 opacity-50">
-                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                  <h3 className="text-sm font-semibold text-blue-900 mb-2">🏠 Фільтри адреси</h3>
-                  <select className="w-full px-3 py-2 border rounded-lg mb-2 bg-gray-50 cursor-not-allowed" disabled>
-                    <option>Населений пункт</option>
-                  </select>
-                  <select className="w-full px-3 py-2 border rounded-lg bg-gray-50 cursor-not-allowed" disabled>
-                    <option>Вулиця</option>
-                  </select>
+              {/* Disabled фільтри - виглядають як справжні, але неактивні */}
+              
+              {/* Фільтри для Desktop - 2 колонки (disabled) */}
+              <div className="hidden sm:grid sm:grid-cols-2 gap-4 mb-4 opacity-60 pointer-events-none">
+                {/* Ліва колонка - Фільтри адреси */}
+                <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                  <h3 className="text-sm font-semibold text-blue-900 mb-2 flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                    </svg>
+                    Фільтри адреси
+                  </h3>
+                  <div className="space-y-2">
+                    <select className="w-full px-3 py-3 border border-gray-300 rounded-lg bg-white text-sm cursor-not-allowed" disabled>
+                      <option>Населений пункт</option>
+                    </select>
+                    <select className="w-full px-3 py-3 border border-gray-300 rounded-lg bg-white text-sm cursor-not-allowed" disabled>
+                      <option>Вулиця</option>
+                    </select>
+                  </div>
                 </div>
-                <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
-                  <h3 className="text-sm font-semibold text-purple-900 mb-2">⚙️ Фільтри лічильників</h3>
+                
+                {/* Права колонка - Фільтри лічильників */}
+                <div className="bg-purple-50 p-3 rounded-lg border border-purple-200">
+                  <h3 className="text-sm font-semibold text-purple-900 mb-2 flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"></path>
+                      <path d="M12 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"></path>
+                      <path d="M13 12l6 -6"></path>
+                    </svg>
+                    Фільтри лічильників
+                  </h3>
                   <div className="grid grid-cols-2 gap-2">
-                    <select className="px-3 py-2 border rounded-lg text-sm bg-gray-50 cursor-not-allowed" disabled>
+                    <select className="px-3 py-3 border border-gray-300 rounded-lg bg-white text-sm cursor-not-allowed" disabled>
                       <option>Група</option>
                     </select>
-                    <select className="px-3 py-2 border rounded-lg text-sm bg-gray-50 cursor-not-allowed" disabled>
+                    <select className="px-3 py-3 border border-gray-300 rounded-lg bg-white text-sm cursor-not-allowed" disabled>
                       <option>Марка</option>
                     </select>
-                    <select className="px-3 py-2 border rounded-lg text-sm bg-gray-50 cursor-not-allowed" disabled>
+                    <select className="px-3 py-3 border border-gray-300 rounded-lg bg-white text-sm cursor-not-allowed" disabled>
                       <option>Розмір</option>
                     </select>
-                    <select className="px-3 py-2 border rounded-lg text-sm bg-gray-50 cursor-not-allowed" disabled>
+                    <select className="px-3 py-3 border border-gray-300 rounded-lg bg-white text-sm cursor-not-allowed" disabled>
                       <option>Рік</option>
                     </select>
                   </div>
                 </div>
               </div>
+
+              {/* Кнопки фільтрів для мобільних (disabled) */}
+              <div className="sm:hidden grid grid-cols-2 gap-2 mb-3 opacity-60 pointer-events-none">
+                <button className="px-3 py-3 bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 text-blue-900 rounded-lg flex items-center justify-between shadow-sm cursor-not-allowed">
+                  <span className="flex items-center gap-1 font-medium text-sm">
+                    <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                    </svg>
+                    Адреса
+                  </span>
+                  <span className="text-sm">▼</span>
+                </button>
+                <button className="px-3 py-3 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 text-purple-900 rounded-lg flex items-center justify-between shadow-sm cursor-not-allowed">
+                  <span className="flex items-center gap-1 font-medium text-sm">
+                    <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"></path>
+                      <path d="M12 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"></path>
+                      <path d="M13 12l6 -6"></path>
+                    </svg>
+                    Лічильник
+                  </span>
+                  <span className="text-sm">▼</span>
+                </button>
+              </div>
               
-              {/* Disabled статуси */}
-              <div className="mb-4 opacity-50">
+              {/* Disabled статуси - виглядають як справжні (треба додати CSS стилі окремо!) */}
+              <div className="mb-4 opacity-60 pointer-events-none">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs font-medium text-gray-500">Статуси:</span>
-                  <div className="px-3 py-2 bg-gray-100 border border-gray-200 rounded-md text-xs text-gray-400 cursor-not-allowed">
-                    ⚠️ Відключений
+                  
+                  {/* Disabled статуси - використовуємо інлайн стиль замість класу */}
+                  <div className="relative inline-flex items-center gap-2 px-3 py-2 rounded-md bg-gray-100 text-gray-500 border-2 border-transparent cursor-not-allowed">
+                    <span className="inline-block w-[18px] h-[18px] border-2 border-gray-400 rounded"></span>
+                    {/* Знак заборони */}
+                    <svg className="w-4 h-4 hidden sm:block" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
+                    </svg>
+                    <svg className="w-5 h-5 sm:hidden" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
+                    </svg>
+                    <span className="hidden sm:inline font-medium text-sm">Відключений</span>
                   </div>
-                  <div className="px-3 py-2 bg-gray-100 border border-gray-200 rounded-md text-xs text-gray-400 cursor-not-allowed">
-                    🏠 Дача
+                  
+                  <div className="relative inline-flex items-center gap-2 px-3 py-2 rounded-md bg-gray-100 text-gray-500 border-2 border-transparent cursor-not-allowed">
+                    <span className="inline-block w-[18px] h-[18px] border-2 border-gray-400 rounded"></span>
+                    <svg className="w-4 h-4 hidden sm:block" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
+                    </svg>
+                    <svg className="w-5 h-5 sm:hidden" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
+                    </svg>
+                    <span className="hidden sm:inline font-medium text-sm">Дача</span>
                   </div>
-                  <div className="px-3 py-2 bg-gray-100 border border-gray-200 rounded-md text-xs text-gray-400 cursor-not-allowed">
-                    ⚠️ Не проживає
+                  
+                  <div className="relative inline-flex items-center gap-2 px-3 py-2 rounded-md bg-gray-100 text-gray-500 border-2 border-transparent cursor-not-allowed">
+                    <span className="inline-block w-[18px] h-[18px] border-2 border-gray-400 rounded"></span>
+                    {/* Будинок перекреслений */}
+                    <div className="relative w-4 h-4 hidden sm:block">
+                      <svg className="w-4 h-4 absolute" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/>
+                      </svg>
+                      <svg className="w-4 h-4 absolute" fill="none" stroke="currentColor" viewBox="0 0 20 20" strokeWidth="2.5">
+                        <line x1="2" y1="2" x2="18" y2="18"/>
+                      </svg>
+                    </div>
+                    <div className="relative w-5 h-5 sm:hidden">
+                      <svg className="w-5 h-5 absolute" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/>
+                      </svg>
+                      <svg className="w-5 h-5 absolute" fill="none" stroke="currentColor" viewBox="0 0 20 20" strokeWidth="2.5">
+                        <line x1="2" y1="2" x2="18" y2="18"/>
+                      </svg>
+                    </div>
+                    <span className="hidden sm:inline font-medium text-sm">Не проживає</span>
                   </div>
                 </div>
               </div>
@@ -1909,11 +2022,12 @@ function ClientDatabase() {
                 />
                 <label htmlFor="filter-disconnected" className="status-label">
                   <span className="checkbox-icon"></span>
+                  {/* Знак заборони як у бейджі ⛔ */}
                   <svg className="w-4 h-4 hidden sm:block" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
                   </svg>
                   <svg className="w-5 h-5 sm:hidden" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
                   </svg>
                   <span className="hidden sm:inline font-medium text-sm">Відключений</span>
                   {statusCounts.disconnected > 0 && (
@@ -1961,12 +2075,23 @@ function ClientDatabase() {
                 />
                 <label htmlFor="filter-absent" className="status-label">
                   <span className="checkbox-icon"></span>
-                  <svg className="w-4 h-4 hidden sm:block" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                  </svg>
-                  <svg className="w-5 h-5 sm:hidden" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                  </svg>
+                  {/* Будинок перекреслений 🏠̷ */}
+                  <div className="relative w-4 h-4 hidden sm:block">
+                    <svg className="w-4 h-4 absolute" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/>
+                    </svg>
+                    <svg className="w-4 h-4 absolute" fill="none" stroke="currentColor" viewBox="0 0 20 20" strokeWidth="2.5">
+                      <line x1="2" y1="2" x2="18" y2="18"/>
+                    </svg>
+                  </div>
+                  <div className="relative w-5 h-5 sm:hidden">
+                    <svg className="w-5 h-5 absolute" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/>
+                    </svg>
+                    <svg className="w-5 h-5 absolute" fill="none" stroke="currentColor" viewBox="0 0 20 20" strokeWidth="2.5">
+                      <line x1="2" y1="2" x2="18" y2="18"/>
+                    </svg>
+                  </div>
                   <span className="hidden sm:inline font-medium text-sm">Не проживає</span>
                   {statusCounts.absent > 0 && (
                     <span className="ml-1 px-1.5 py-0.5 bg-black bg-opacity-20 rounded text-xs font-semibold">
@@ -2035,7 +2160,45 @@ function ClientDatabase() {
           </>
           )}
 
-          {loading && <div className="text-center py-8 text-gray-500">Завантаження...</div>}
+          {/* ⭐ Видалено зайвий "Завантаження..." - тепер одразу показуємо дані після скелетону */}
+          
+          {/* 🔥 SKELETON LOADER: Показується ОДРАЗУ при початковому завантаженні (але НЕ для порожньої бази) */}
+          {((isInitialLoading && clients.length === 0 && totalCount !== 0) || (loading && clients.length === 0 && totalCount > 0)) && (
+            <div className="space-y-3">
+              <style>{`
+                @keyframes shimmer {
+                  0% { background-position: -1000px 0; }
+                  100% { background-position: 1000px 0; }
+                }
+                .skeleton {
+                  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+                  background-size: 1000px 100%;
+                  animation: shimmer 2s infinite;
+                }
+              `}</style>
+              
+              {/* Skeleton картки клієнтів */}
+              {[1,2,3].map((i) => (
+                <div key={i} className="border border-gray-200 rounded-lg p-4 bg-white">
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="flex-1">
+                      <div className="skeleton h-6 w-56 mb-2 rounded"></div>
+                      <div className="skeleton h-4 w-32 rounded"></div>
+                    </div>
+                    <div className="flex gap-2">
+                      <div className="skeleton h-8 w-8 rounded"></div>
+                      <div className="skeleton h-8 w-8 rounded"></div>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="skeleton h-4 w-full rounded"></div>
+                    <div className="skeleton h-4 w-3/4 rounded"></div>
+                    <div className="skeleton h-4 w-2/3 rounded"></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {!loading && (
             <>
@@ -2294,7 +2457,7 @@ function ClientDatabase() {
                 </div>
               )}
 
-              {clients.length === 0 && (
+              {clients.length === 0 && !loading && (
                 <div>
                   {searchTerm || selectedSettlement.length > 0 || selectedStreet.length > 0 || 
                    selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || selectedMeterYear.length > 0 || selectedMeterGroups.length > 0 ? (
@@ -2302,44 +2465,8 @@ function ClientDatabase() {
                     <div className="text-center py-12 text-gray-500">
                       Нічого не знайдено
                     </div>
-                  ) : isInitialLoading ? (
-                    // 🔥 ГІБРИДНИЙ ВАРІАНТ: Skeleton + disabled UI
-                    <div className="space-y-3">
-                      <style>{`
-                        @keyframes shimmer {
-                          0% { background-position: -1000px 0; }
-                          100% { background-position: 1000px 0; }
-                        }
-                        .skeleton {
-                          background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-                          background-size: 1000px 100%;
-                          animation: shimmer 2s infinite;
-                        }
-                      `}</style>
-                      
-                      {/* Skeleton картки клієнтів */}
-                      {[1,2,3].map((i) => (
-                        <div key={i} className="border border-gray-200 rounded-lg p-4 bg-white">
-                          <div className="flex justify-between items-start mb-3">
-                            <div className="flex-1">
-                              <div className="skeleton h-6 w-56 mb-2 rounded"></div>
-                              <div className="skeleton h-4 w-32 rounded"></div>
-                            </div>
-                            <div className="flex gap-2">
-                              <div className="skeleton h-8 w-8 rounded"></div>
-                              <div className="skeleton h-8 w-8 rounded"></div>
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            <div className="skeleton h-4 w-full rounded"></div>
-                            <div className="skeleton h-4 w-3/4 rounded"></div>
-                            <div className="skeleton h-4 w-2/3 rounded"></div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : totalCount === 0 ? (
-                    // Якщо база порожня - показуємо онбординг
+                  ) : !isInitialLoading && totalCount === 0 ? (
+                    // Якщо база порожня - показуємо онбординг (але НЕ при початковому завантаженні!)
                     <div className="max-w-3xl mx-auto py-12 px-4">
                       {/* Заголовок */}
                       <div className="text-center mb-8">
@@ -2421,12 +2548,12 @@ function ClientDatabase() {
                         </p>
                       </div>
                     </div>
-                  ) : (
+                  ) : !isInitialLoading ? (
                     // Якщо є дані але зараз порожньо (через фільтри які щойно скинули)
                     <div className="text-center py-12 text-gray-500">
                       Немає жодного клієнта. Додайте першого!
                     </div>
-                  )}
+                  ) : null}
                 </div>
               )}
               </div>

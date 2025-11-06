@@ -1546,39 +1546,25 @@ if (needsProxy) {
   // Компонент MultiSelectDropdown
   const MultiSelectDropdown = ({ options, selected, onChange, label, name }) => {
     const isOpen = openDropdown === name;
-    const dropdownRef = useRef(null);
 
-    useEffect(() => {
-      if (!isOpen) return;
-
-      const handleClickOutside = (event) => {
-        if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-          setOpenDropdown(null);
-        }
-      };
-
-      const timer = setTimeout(() => {
-        document.addEventListener('mousedown', handleClickOutside);
-      }, 0);
-
-      return () => {
-        clearTimeout(timer);
-        document.removeEventListener('mousedown', handleClickOutside);
-      };
-    }, [isOpen]);
-
-    const toggleOption = (option) => {
+    const toggleOption = (option, e) => {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
       toggleSelection(selected, onChange, option);
     };
 
     return (
-      <div className="relative w-full sm:w-auto" ref={dropdownRef}>
+      <div className="relative w-full sm:w-auto">
         <button
           type="button"
           onClick={(e) => {
+            e.preventDefault();
             e.stopPropagation();
             setOpenDropdown(isOpen ? null : name);
           }}
+          onMouseDown={(e) => e.preventDefault()}
           className="w-full px-3 sm:px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white text-left flex items-center justify-between min-w-full sm:min-w-[180px] text-sm sm:text-base">
           <span className="truncate">{getFilterLabel(selected, options, label)}</span>
           <svg className={`w-4 h-4 transition-transform flex-shrink-0 ml-2 ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1587,33 +1573,45 @@ if (needsProxy) {
         </button>
         
         {isOpen && (
-          <div 
-            className="absolute z-50 mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto"
-          >
-            {options.length === 0 ? (
-              <div className="px-4 py-2 text-gray-400 text-sm">Немає опцій</div>
-            ) : (
-              options.map(option => (
-                <div
-                  key={option}
-                  className="flex items-center px-3 sm:px-4 py-3 sm:py-2 hover:bg-indigo-50 cursor-pointer active:bg-indigo-100"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleOption(option);
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={selected.includes(option)}
-                    onChange={() => {}}
-                    readOnly
-                    className="w-5 h-5 sm:w-4 sm:h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 flex-shrink-0 pointer-events-none"
-                  />
-                  <span className="ml-3 sm:ml-2 text-sm text-gray-700 select-none">{option}</span>
-                </div>
-              ))
-            )}
-          </div>
+          <>
+            {/* Backdrop для закриття при кліку поза */}
+            <div 
+              className="fixed inset-0 z-40"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setOpenDropdown(null);
+              }}
+            />
+            
+            {/* Dropdown menu */}
+            <div 
+              className="absolute z-50 mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto"
+              onMouseDown={(e) => e.preventDefault()}
+            >
+              {options.length === 0 ? (
+                <div className="px-4 py-2 text-gray-400 text-sm">Немає опцій</div>
+              ) : (
+                options.map(option => (
+                  <div
+                    key={option}
+                    className="flex items-center px-3 sm:px-4 py-3 sm:py-2 hover:bg-indigo-50 cursor-pointer active:bg-indigo-100 user-select-none"
+                    onClick={(e) => toggleOption(option, e)}
+                    onMouseDown={(e) => e.preventDefault()}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selected.includes(option)}
+                      onChange={() => {}}
+                      tabIndex={-1}
+                      className="w-5 h-5 sm:w-4 sm:h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 flex-shrink-0 pointer-events-none"
+                    />
+                    <span className="ml-3 sm:ml-2 text-sm text-gray-700">{option}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </>
         )}
       </div>
     );

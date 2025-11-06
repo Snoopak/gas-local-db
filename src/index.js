@@ -13,4 +13,4 @@ root.render(
 
 reportWebVitals();
 
-console.log('🚀 Додаток запущено без Service Worker');
+console.log('🚀 Додаток запущено без Service Worker'); 

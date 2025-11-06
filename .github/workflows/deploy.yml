@@ -32,8 +32,8 @@ jobs:
       - name: 📦 Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # Завантажуємо ВСЮ папку (тут твій index.html і App.js)
-          path: '.'
+          # Завантажуємо папку public (тут твій index.html і App.js)
+          path: './public'
       
       - name: 🚀 Deploy to GitHub Pages
         id: deployment

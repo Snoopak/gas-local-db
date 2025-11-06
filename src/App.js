@@ -1838,7 +1838,7 @@ function ClientDatabase() {
               {/* Disabled статуси - виглядають як справжні (треба додати CSS стилі окремо!) */}
               <div className="mb-4 opacity-60 pointer-events-none">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-medium text-gray-500">СТАТУСИ >>>:</span>
+                  <span className="text-xs font-medium text-gray-500">Статуси:</span>
                   
                   {/* Disabled статуси - використовуємо інлайн стиль замість класу */}
                   <div className="relative inline-flex items-center gap-2 px-3 py-2 rounded-md bg-gray-100 text-gray-500 border-2 border-transparent cursor-not-allowed">

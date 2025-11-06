@@ -522,6 +522,7 @@ function ClientDatabase() {
   const [filterAbsent, setFilterAbsent] = useState(false);
   // ⭐ Dropdown швидких дій
   const [showQuickActions, setShowQuickActions] = useState(false);
+  const [showImportUrlModal, setShowImportUrlModal] = useState(false);
   const [selectedMeterBrand, setSelectedMeterBrand] = useState([]);
   const [selectedMeterSize, setSelectedMeterSize] = useState([]);
   const [selectedMeterYear, setSelectedMeterYear] = useState([]);
@@ -1164,6 +1165,81 @@ function ClientDatabase() {
     );
   };
 
+  // ⭐ Імпорт за URL (для слабких телефонів)
+  const [importUrl, setImportUrl] = useState('');
+  const [importingFromUrl, setImportingFromUrl] = useState(false);
+
+  const handleImportFromURL = async () => {
+    if (!importUrl.trim()) {
+      showToast('warning', 'Введіть посилання на файл JSON');
+      return;
+    }
+    
+    setImportingFromUrl(true);
+    setLoading(true);
+    
+    try {
+      showToast('info', 'Завантаження файлу...', 2000);
+      
+      const response = await fetch(importUrl);
+      
+      if (!response.ok) {
+        throw new Error(`Помилка завантаження: ${response.status} ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      // Перевірка формату
+      if (!Array.isArray(data) && !data.clients) {
+        throw new Error('Неправильний формат файлу. Очікується масив клієнтів або об\'єкт з полем "clients"');
+      }
+      
+      const clients = Array.isArray(data) ? data : data.clients;
+      
+      if (clients.length === 0) {
+        throw new Error('Файл не містить клієнтів');
+      }
+      
+      // Встановлюємо прогрес
+      setImportProgress({ show: true, current: 0, total: clients.length, fileName: 'import-url.json' });
+      
+      // Очищаємо базу
+      await db.clients.clear();
+      
+      // Додаємо клієнтів
+      let imported = 0;
+      for (let i = 0; i < clients.length; i++) {
+        await addClient(clients[i]);
+        imported++;
+        setImportProgress(prev => ({ ...prev, current: i + 1 }));
+      }
+      
+      // Оновлюємо дані
+      await loadClients();
+      await loadTotalCount();
+      await loadSettlements();
+      await loadStreets();
+      await loadMeterData();
+      await loadStatusCounts();
+      
+      showToast('success', `✅ Імпортовано ${imported} клієнтів з посилання!`);
+      setImportUrl(''); // Очищаємо поле
+      
+      // Закриваємо прогрес через 2 сек
+      setTimeout(() => {
+        setImportProgress({ show: false, current: 0, total: 0, fileName: '' });
+      }, 2000);
+      
+    } catch (error) {
+      console.error('Import from URL error:', error);
+      showToast('error', `Помилка імпорту: ${error.message}`);
+      setImportProgress({ show: false, current: 0, total: 0, fileName: '' });
+    } finally {
+      setImportingFromUrl(false);
+      setLoading(false);
+    }
+  };
+
   const handleImportExcel = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -1549,6 +1625,16 @@ function ClientDatabase() {
                       </div>
                       <input type="file" accept=".xlsx,.xls" onChange={(e) => { handleImportExcel(e); setShowQuickActions(false); }} className="hidden" disabled={loading} />
                     </label>
+                    
+                    <button onClick={() => { setShowImportUrlModal(true); setShowQuickActions(false); }} disabled={loading} className="w-full px-4 py-3 text-left hover:bg-teal-50 rounded-lg flex items-center gap-3 transition-colors disabled:opacity-50">
+                      <svg className="w-5 h-5 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                      </svg>
+                      <div>
+                        <div className="font-semibold text-sm text-gray-900">Імпорт за URL</div>
+                        <div className="text-xs text-gray-500">Для слабких телефонів</div>
+                      </div>
+                    </button>
                     
                     <button onClick={() => { handleExportExcel(); setShowQuickActions(false); }} disabled={totalCount === 0 || loading} className="w-full px-4 py-3 text-left hover:bg-blue-50 rounded-lg flex items-center gap-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                       <Download className="w-5 h-5 text-blue-600" />
@@ -2785,6 +2871,117 @@ function ClientDatabase() {
           </div>
         </div>
       )}
+
+      {/* Модальне вікно імпорту за URL */}
+      {showImportUrlModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                  <svg className="w-6 h-6 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                  </svg>
+                  Імпорт за посиланням
+                </h2>
+                <button 
+                  onClick={() => { setShowImportUrlModal(false); setImportUrl(''); }}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                  disabled={importingFromUrl}
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                {/* Інформаційний блок */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex gap-3">
+                    <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                    <div className="text-sm text-blue-900">
+                      <p className="font-semibold mb-2">💡 Для слабких телефонів</p>
+                      <p className="mb-2">Замість завантаження файлу (що займає багато пам'яті), просто введіть посилання на JSON файл з клієнтами.</p>
+                      <p className="font-semibold mt-3 mb-1">Де розмістити файл:</p>
+                      <ul className="list-disc list-inside space-y-1 ml-2">
+                        <li>GitHub (рекомендовано) - безкоштовно</li>
+                        <li>Google Drive - зробіть публічне посилання</li>
+                        <li>Свій сервер - покладіть на FTP</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Поле вводу URL */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Посилання на файл JSON:
+                  </label>
+                  <input
+                    type="url"
+                    value={importUrl}
+                    onChange={(e) => setImportUrl(e.target.value)}
+                    placeholder="https://raw.githubusercontent.com/your-name/repo/main/backup.json"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm"
+                    disabled={importingFromUrl}
+                  />
+                  <p className="mt-2 text-xs text-gray-500">
+                    Приклад: https://raw.githubusercontent.com/Snoopak/gas-local-db/main/backups/clients.json
+                  </p>
+                </div>
+
+                {/* Приклад формату */}
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <p className="text-sm font-semibold text-gray-900 mb-2">📄 Очікуваний формат файлу:</p>
+                  <pre className="text-xs bg-gray-800 text-green-400 p-3 rounded overflow-x-auto">
+{`[
+  {
+    "fullName": "Іванов Іван",
+    "settlement": "Київ",
+    "street": "Хрещатик",
+    "building": "1",
+    "phone": "+380501234567",
+    ...
+  }
+]`}
+                  </pre>
+                  <p className="text-xs text-gray-600 mt-2">Або об'єкт з полем "clients": {`{ "clients": [...] }`}</p>
+                </div>
+
+                {/* Кнопки */}
+                <div className="flex gap-3 pt-4 border-t">
+                  <button
+                    onClick={handleImportFromURL}
+                    disabled={importingFromUrl || !importUrl.trim()}
+                    className="flex-1 bg-teal-600 hover:bg-teal-700 text-white px-6 py-3 rounded-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {importingFromUrl ? (
+                      <>
+                        <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Завантаження...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-5 h-5" />
+                        Імпортувати
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => { setShowImportUrlModal(false); setImportUrl(''); }}
+                    disabled={importingFromUrl}
+                    className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50"
+                  >
+                    Скасувати
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2796,4 +2993,4 @@ export default function AppWithAlerts() {
       <ClientDatabase />
     </AlertProvider>
   );
-} 
+}

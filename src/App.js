@@ -1206,12 +1206,12 @@ function ClientDatabase() {
                         !finalUrl.includes('cdn.jsdelivr.net') &&
                         !finalUrl.includes('raw.githack.com');
       
-      if (needsProxy) {
-        // 🔥 Використовуємо кілька CORS proxy з fallback
-        // CORS.SH працює краще з Service Worker ніж AllOrigins
-        finalUrl = `https://cors.sh/${finalUrl}`;
-        showToast('info', '🌐 Використовую CORS proxy...', 1500);
-      }
+if (needsProxy) {
+  // 🔥 Використовуємо власний CORS-проксі (на Vercel)
+  finalUrl = `https://my-cors-proxy-jfls.vercel.app/api/proxy?url=${encodeURIComponent(finalUrl)}`;
+  showToast('info', '🌐 Використовую власний CORS proxy...', 1500);
+}
+
       
       console.log('🌐 Final URL:', finalUrl);
       
@@ -1866,7 +1866,7 @@ function ClientDatabase() {
               {/* Disabled статуси - виглядають як справжні (треба додати CSS стилі окремо!) */}
               <div className="mb-4 opacity-60 pointer-events-none">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-medium text-gray-500">СТАТУСИ >>>:</span>
+                  <span className="text-xs font-medium text-gray-500">Статуси:</span>
                   
                   {/* Disabled статуси - використовуємо інлайн стиль замість класу */}
                   <div className="relative inline-flex items-center gap-2 px-3 py-2 rounded-md bg-gray-100 text-gray-500 border-2 border-transparent cursor-not-allowed">

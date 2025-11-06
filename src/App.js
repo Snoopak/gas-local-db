@@ -1207,14 +1207,22 @@ function ClientDatabase() {
                         !finalUrl.includes('raw.githack.com');
       
       if (needsProxy) {
-        // Використовуємо AllOrigins CORS proxy
-        finalUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(finalUrl)}`;
+        // 🔥 Використовуємо кілька CORS proxy з fallback
+        // CORS.SH працює краще з Service Worker ніж AllOrigins
+        finalUrl = `https://cors.sh/${finalUrl}`;
         showToast('info', '🌐 Використовую CORS proxy...', 1500);
       }
       
       console.log('🌐 Final URL:', finalUrl);
       
-      const response = await fetch(finalUrl);
+      // 🔥 Fetch БЕЗ Service Worker (обхід SW кешу)
+      const response = await fetch(finalUrl, {
+        method: 'GET',
+        cache: 'no-store', // Обходимо Service Worker
+        headers: {
+          'Accept': 'application/json',
+        }
+      });
       
       console.log('✅ Response received:', response.status, response.statusText);
       

@@ -2796,4 +2796,4 @@ export default function AppWithAlerts() {
       <ClientDatabase />
     </AlertProvider>
   );
-} 
+}

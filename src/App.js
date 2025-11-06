@@ -1545,19 +1545,29 @@ if (needsProxy) {
     const dropdownRef = useRef(null);
 
     useEffect(() => {
+      if (!isOpen) return;
+
       const handleClickOutside = (event) => {
-        // ⭐ ФІКС: Закривати тільки якщо клік ПОЗА dropdown
+        // Перевіряємо чи клік всередині dropdown
         if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
           setOpenDropdown(null);
         }
       };
-      
-      if (isOpen) {
-        // Додаємо listener тільки коли відкрито
+
+      // Невелика затримка щоб уникнути конфлікту з відкриттям
+      const timer = setTimeout(() => {
         document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-      }
+      }, 0);
+
+      return () => {
+        clearTimeout(timer);
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
     }, [isOpen]);
+
+    const handleOptionClick = (option) => {
+      toggleSelection(selected, onChange, option);
+    };
 
     return (
       <div className="relative w-full sm:w-auto" ref={dropdownRef}>
@@ -1582,30 +1592,23 @@ if (needsProxy) {
               <div className="px-4 py-2 text-gray-400 text-sm">Немає опцій</div>
             ) : (
               options.map(option => (
-                <label
+                <div
                   key={option}
                   className="flex items-center px-3 sm:px-4 py-3 sm:py-2 hover:bg-indigo-50 cursor-pointer active:bg-indigo-100"
                   onClick={(e) => {
-                    // ⭐ НЕ закривати dropdown при кліку на опцію
                     e.stopPropagation();
+                    handleOptionClick(option);
                   }}
                 >
                   <input
                     type="checkbox"
                     checked={selected.includes(option)}
-                    onChange={() => toggleSelection(selected, onChange, option)}
-                    onClick={(e) => e.stopPropagation()}
-                    className="w-5 h-5 sm:w-4 sm:h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 flex-shrink-0"
+                    onChange={() => {}} 
+                    readOnly
+                    className="w-5 h-5 sm:w-4 sm:h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 flex-shrink-0 pointer-events-none"
                   />
-                  <span 
-                    className="ml-3 sm:ml-2 text-sm text-gray-700 select-none cursor-pointer"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      e.preventDefault();
-                      toggleSelection(selected, onChange, option);
-                    }}
-                  >{option}</span>
-                </label>
+                  <span className="ml-3 sm:ml-2 text-sm text-gray-700 select-none">{option}</span>
+                </div>
               ))
             )}
           </div>

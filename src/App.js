@@ -522,6 +522,7 @@ function ClientDatabase() {
   const [filterAbsent, setFilterAbsent] = useState(false);
   // ⭐ Dropdown швидких дій
   const [showQuickActions, setShowQuickActions] = useState(false);
+  const [showImportUrlModal, setShowImportUrlModal] = useState(false);
   const [selectedMeterBrand, setSelectedMeterBrand] = useState([]);
   const [selectedMeterSize, setSelectedMeterSize] = useState([]);
   const [selectedMeterYear, setSelectedMeterYear] = useState([]);
@@ -841,6 +842,13 @@ function ClientDatabase() {
     }
   }, [showQuickActions]);
 
+  // ⭐ Оновлюємо лічильники статусів при зміні фільтрів
+  useEffect(() => {
+    if (!isFirstRender.current) {
+      loadStatusCounts();
+    }
+  }, [selectedSettlement, selectedStreet, selectedMeterGroups, selectedMeterBrand, selectedMeterSize, selectedMeterYear]);
+
 
   const loadClients = async (append = false) => {
     // ⭐ INFINITE SCROLL: Якщо вже завантажуємо або немає більше - виходимо
@@ -887,13 +895,38 @@ function ClientDatabase() {
     setTotalCount(count);
   };
   
-  // ⭐ Підрахунок клієнтів за статусами
+  // ⭐ Підрахунок клієнтів за статусами (враховує фільтри!)
   const loadStatusCounts = async () => {
     const allClients = await getAllClients();
+    
+    // Фільтруємо клієнтів за поточними фільтрами
+    const filteredClients = allClients.filter(client => {
+      // Фільтр по населеному пункту
+      const matchesSettlement = selectedSettlement.length === 0 || selectedSettlement.includes(client.settlement);
+      
+      // Фільтр по вулиці
+      const matchesStreet = selectedStreet.length === 0 || selectedStreet.includes(client.street);
+      
+      // Фільтр по групі лічильника
+      const matchesMeterGroup = selectedMeterGroups.length === 0 || selectedMeterGroups.includes(client.meterGroup);
+      
+      // Фільтр по марці лічильника
+      const matchesMeterBrand = selectedMeterBrand.length === 0 || selectedMeterBrand.includes(client.meterBrand);
+      
+      // Фільтр по розміру лічильника
+      const matchesMeterSize = selectedMeterSize.length === 0 || selectedMeterSize.includes(client.meterSize);
+      
+      // Фільтр по року лічильника
+      const matchesMeterYear = selectedMeterYear.length === 0 || selectedMeterYear.includes(client.meterYear);
+      
+      return matchesSettlement && matchesStreet && matchesMeterGroup && matchesMeterBrand && matchesMeterSize && matchesMeterYear;
+    });
+    
+    // Рахуємо клієнтів з кожним статусом серед відфільтрованих
     const counts = {
-      disconnected: allClients.filter(c => c.gasDisconnected === 'Так').length,
-      dacha: allClients.filter(c => c.dacha === true).length,
-      absent: allClients.filter(c => c.temporaryAbsent === true).length
+      disconnected: filteredClients.filter(c => c.gasDisconnected === 'Так').length,
+      dacha: filteredClients.filter(c => c.dacha === true).length,
+      absent: filteredClients.filter(c => c.temporaryAbsent === true).length
     };
     setStatusCounts(counts);
   };
@@ -1132,6 +1165,141 @@ function ClientDatabase() {
     );
   };
 
+  // ⭐ Імпорт за URL (для слабких телефонів)
+  const [importUrl, setImportUrl] = useState('');
+  const [importingFromUrl, setImportingFromUrl] = useState(false);
+
+  const handleImportFromURL = async () => {
+    if (!importUrl.trim()) {
+      showToast('warning', 'Введіть посилання на файл JSON');
+      return;
+    }
+    
+    setImportingFromUrl(true);
+    setLoading(true);
+    
+    try {
+      showToast('info', 'Завантаження файлу...', 2000);
+      
+      let finalUrl = importUrl.trim();
+      
+      // 🔥 АВТОМАТИЧНА КОНВЕРТАЦІЯ Google Drive URL
+      if (finalUrl.includes('drive.google.com/file')) {
+        const match = finalUrl.match(/\/d\/([^\/]+)/);
+        if (match && match[1]) {
+          const fileId = match[1];
+          finalUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+          showToast('info', '🔄 Конвертую Google Drive URL...', 1000);
+        }
+      }
+      
+      // 🔥 АВТОМАТИЧНА КОНВЕРТАЦІЯ Dropbox URL
+      if (finalUrl.includes('dropbox.com')) {
+        finalUrl = finalUrl.replace('?dl=0', '?dl=1').replace('www.dropbox.com', 'dl.dropboxusercontent.com');
+        showToast('info', '🔄 Конвертую Dropbox URL...', 1000);
+      }
+      
+      // 🔥 CORS PROXY для всіх URL (крім localhost та github.io)
+      const needsProxy = !finalUrl.includes('localhost') && 
+                        !finalUrl.includes('127.0.0.1') &&
+                        !finalUrl.includes('.github.io') &&
+                        !finalUrl.includes('cdn.jsdelivr.net') &&
+                        !finalUrl.includes('raw.githack.com');
+      
+      if (needsProxy) {
+        // 🔥 Використовуємо кілька CORS proxy з fallback
+        // CORS.SH працює краще з Service Worker ніж AllOrigins
+        finalUrl = `https://cors.sh/${finalUrl}`;
+        showToast('info', '🌐 Використовую CORS proxy...', 1500);
+      }
+      
+      console.log('🌐 Final URL:', finalUrl);
+      
+      // 🔥 Fetch БЕЗ Service Worker (обхід SW кешу)
+      const response = await fetch(finalUrl, {
+        method: 'GET',
+        cache: 'no-store', // Обходимо Service Worker
+        headers: {
+          'Accept': 'application/json',
+        }
+      });
+      
+      console.log('✅ Response received:', response.status, response.statusText);
+      
+      if (!response.ok) {
+        throw new Error(`Помилка завантаження: ${response.status} ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      console.log('📦 Data loaded:', {
+        isArray: Array.isArray(data),
+        hasClients: !!data.clients,
+        length: Array.isArray(data) ? data.length : (data.clients ? data.clients.length : 0),
+        firstItem: Array.isArray(data) ? data[0] : (data.clients ? data.clients[0] : null)
+      });
+      
+      // Перевірка формату
+      if (!Array.isArray(data) && !data.clients) {
+        console.error('❌ Invalid format:', data);
+        throw new Error('Неправильний формат файлу. Очікується масив клієнтів або об\'єкт з полем "clients"');
+      }
+      
+      const clients = Array.isArray(data) ? data : data.clients;
+      
+      console.log('👥 Clients to import:', clients.length);
+      
+      if (clients.length === 0) {
+        throw new Error('Файл не містить клієнтів');
+      }
+      
+      // Встановлюємо прогрес
+      setImportProgress({ show: true, current: 0, total: clients.length, fileName: 'import-url.json' });
+      
+      // Очищаємо базу
+      const db = await openDB();
+      const transaction = db.transaction([STORE_NAME], 'readwrite');
+      const store = transaction.objectStore(STORE_NAME);
+      await new Promise((resolve, reject) => {
+        const request = store.clear();
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+      
+      // Додаємо клієнтів
+      let imported = 0;
+      for (let i = 0; i < clients.length; i++) {
+        await addClient(clients[i]);
+        imported++;
+        setImportProgress(prev => ({ ...prev, current: i + 1 }));
+      }
+      
+      // Оновлюємо дані
+      await loadClients();
+      await loadTotalCount();
+      await loadSettlements();
+      await loadStreets();
+      await loadMeterData();
+      await loadStatusCounts();
+      
+      showToast('success', `✅ Імпортовано ${imported} клієнтів з посилання!`);
+      setImportUrl(''); // Очищаємо поле
+      
+      // Закриваємо прогрес через 2 сек
+      setTimeout(() => {
+        setImportProgress({ show: false, current: 0, total: 0, fileName: '' });
+      }, 2000);
+      
+    } catch (error) {
+      console.error('Import from URL error:', error);
+      showToast('error', `Помилка імпорту: ${error.message}`);
+      setImportProgress({ show: false, current: 0, total: 0, fileName: '' });
+    } finally {
+      setImportingFromUrl(false);
+      setLoading(false);
+    }
+  };
+
   const handleImportExcel = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -1267,6 +1435,48 @@ function ClientDatabase() {
     } catch (error) {
       console.error('Export error:', error);
       showToast('error', 'Помилка при експорті');
+    }
+    setLoading(false);
+  };
+
+  // ⭐ Експорт в JSON (для імпорту за URL)
+  const handleExportJSON = async () => {
+    setLoading(true);
+    showToast('info', 'Експорт в JSON...', 2000);
+    
+    try {
+      const allClients = await getAllClients();
+      
+      if (allClients.length === 0) {
+        showToast('warning', 'Немає клієнтів для експорту');
+        setLoading(false);
+        return;
+      }
+      
+      // 🔥 Очищаємо від службових полів IndexedDB (id, createdAt, etc)
+      const cleanClients = allClients.map(client => {
+        const { id, ...cleanData } = client; // Видаляємо id
+        return cleanData;
+      });
+      
+      // Створюємо JSON з форматуванням
+      const jsonData = JSON.stringify(cleanClients, null, 2);
+      
+      // Створюємо і завантажуємо файл
+      const blob = new Blob([jsonData], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `clients_${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      showToast('success', `✅ JSON експортовано! (${allClients.length} клієнтів)`);
+    } catch (error) {
+      console.error('JSON export error:', error);
+      showToast('error', 'Помилка при експорті JSON');
     }
     setLoading(false);
   };
@@ -1518,11 +1728,29 @@ function ClientDatabase() {
                       <input type="file" accept=".xlsx,.xls" onChange={(e) => { handleImportExcel(e); setShowQuickActions(false); }} className="hidden" disabled={loading} />
                     </label>
                     
+                    <button onClick={() => { setShowImportUrlModal(true); setShowQuickActions(false); }} disabled={loading} className="w-full px-4 py-3 text-left hover:bg-teal-50 rounded-lg flex items-center gap-3 transition-colors disabled:opacity-50">
+                      <svg className="w-5 h-5 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                      </svg>
+                      <div>
+                        <div className="font-semibold text-sm text-gray-900">Імпорт за URL</div>
+                        <div className="text-xs text-gray-500">Для слабких телефонів</div>
+                      </div>
+                    </button>
+                    
                     <button onClick={() => { handleExportExcel(); setShowQuickActions(false); }} disabled={totalCount === 0 || loading} className="w-full px-4 py-3 text-left hover:bg-blue-50 rounded-lg flex items-center gap-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                       <Download className="w-5 h-5 text-blue-600" />
                       <div>
-                        <div className="font-semibold text-sm text-gray-900">Експорт</div>
+                        <div className="font-semibold text-sm text-gray-900">Експорт Excel</div>
                         <div className="text-xs text-gray-500">Зберегти в Excel</div>
+                      </div>
+                    </button>
+                    
+                    <button onClick={() => { handleExportJSON(); setShowQuickActions(false); }} disabled={totalCount === 0 || loading} className="w-full px-4 py-3 text-left hover:bg-amber-50 rounded-lg flex items-center gap-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                      <FileText className="w-5 h-5 text-amber-600" />
+                      <div>
+                        <div className="font-semibold text-sm text-gray-900">Експорт JSON</div>
+                        <div className="text-xs text-gray-500">Для імпорту за URL</div>
                       </div>
                     </button>
                     
@@ -1542,7 +1770,8 @@ function ClientDatabase() {
           </div>
           
           {/* 🔥 ГІБРИДНИЙ LOADER: Skeleton пошуку + Disabled фільтри при завантаженні */}
-          {isInitialLoading && (
+          {/* Показується ТІЛЬКИ якщо база не порожня (totalCount !== 0) */}
+          {(loading || isInitialLoading) && clients.length === 0 && totalCount !== 0 && (
             <>
               <style>{`
                 @keyframes shimmer {
@@ -1561,48 +1790,128 @@ function ClientDatabase() {
                 <div className="skeleton h-12 rounded-lg"></div>
               </div>
               
-              {/* Disabled фільтри */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4 opacity-50">
-                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                  <h3 className="text-sm font-semibold text-blue-900 mb-2">🏠 Фільтри адреси</h3>
-                  <select className="w-full px-3 py-2 border rounded-lg mb-2 bg-gray-50 cursor-not-allowed" disabled>
-                    <option>Населений пункт</option>
-                  </select>
-                  <select className="w-full px-3 py-2 border rounded-lg bg-gray-50 cursor-not-allowed" disabled>
-                    <option>Вулиця</option>
-                  </select>
+              {/* Disabled фільтри - виглядають як справжні, але неактивні */}
+              
+              {/* Фільтри для Desktop - 2 колонки (disabled) */}
+              <div className="hidden sm:grid sm:grid-cols-2 gap-4 mb-4 opacity-60 pointer-events-none">
+                {/* Ліва колонка - Фільтри адреси */}
+                <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                  <h3 className="text-sm font-semibold text-blue-900 mb-2 flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                    </svg>
+                    Фільтри адреси
+                  </h3>
+                  <div className="space-y-2">
+                    <select className="w-full px-3 py-3 border border-gray-300 rounded-lg bg-white text-sm cursor-not-allowed" disabled>
+                      <option>Населений пункт</option>
+                    </select>
+                    <select className="w-full px-3 py-3 border border-gray-300 rounded-lg bg-white text-sm cursor-not-allowed" disabled>
+                      <option>Вулиця</option>
+                    </select>
+                  </div>
                 </div>
-                <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
-                  <h3 className="text-sm font-semibold text-purple-900 mb-2">⚙️ Фільтри лічильників</h3>
+                
+                {/* Права колонка - Фільтри лічильників */}
+                <div className="bg-purple-50 p-3 rounded-lg border border-purple-200">
+                  <h3 className="text-sm font-semibold text-purple-900 mb-2 flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"></path>
+                      <path d="M12 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"></path>
+                      <path d="M13 12l6 -6"></path>
+                    </svg>
+                    Фільтри лічильників
+                  </h3>
                   <div className="grid grid-cols-2 gap-2">
-                    <select className="px-3 py-2 border rounded-lg text-sm bg-gray-50 cursor-not-allowed" disabled>
+                    <select className="px-3 py-3 border border-gray-300 rounded-lg bg-white text-sm cursor-not-allowed" disabled>
                       <option>Група</option>
                     </select>
-                    <select className="px-3 py-2 border rounded-lg text-sm bg-gray-50 cursor-not-allowed" disabled>
+                    <select className="px-3 py-3 border border-gray-300 rounded-lg bg-white text-sm cursor-not-allowed" disabled>
                       <option>Марка</option>
                     </select>
-                    <select className="px-3 py-2 border rounded-lg text-sm bg-gray-50 cursor-not-allowed" disabled>
+                    <select className="px-3 py-3 border border-gray-300 rounded-lg bg-white text-sm cursor-not-allowed" disabled>
                       <option>Розмір</option>
                     </select>
-                    <select className="px-3 py-2 border rounded-lg text-sm bg-gray-50 cursor-not-allowed" disabled>
+                    <select className="px-3 py-3 border border-gray-300 rounded-lg bg-white text-sm cursor-not-allowed" disabled>
                       <option>Рік</option>
                     </select>
                   </div>
                 </div>
               </div>
+
+              {/* Кнопки фільтрів для мобільних (disabled) */}
+              <div className="sm:hidden grid grid-cols-2 gap-2 mb-3 opacity-60 pointer-events-none">
+                <button className="px-3 py-3 bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 text-blue-900 rounded-lg flex items-center justify-between shadow-sm cursor-not-allowed">
+                  <span className="flex items-center gap-1 font-medium text-sm">
+                    <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                    </svg>
+                    Адреса
+                  </span>
+                  <span className="text-sm">▼</span>
+                </button>
+                <button className="px-3 py-3 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 text-purple-900 rounded-lg flex items-center justify-between shadow-sm cursor-not-allowed">
+                  <span className="flex items-center gap-1 font-medium text-sm">
+                    <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"></path>
+                      <path d="M12 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"></path>
+                      <path d="M13 12l6 -6"></path>
+                    </svg>
+                    Лічильник
+                  </span>
+                  <span className="text-sm">▼</span>
+                </button>
+              </div>
               
-              {/* Disabled статуси */}
-              <div className="mb-4 opacity-50">
+              {/* Disabled статуси - виглядають як справжні (треба додати CSS стилі окремо!) */}
+              <div className="mb-4 opacity-60 pointer-events-none">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-medium text-gray-500">Статуси:</span>
-                  <div className="px-3 py-2 bg-gray-100 border border-gray-200 rounded-md text-xs text-gray-400 cursor-not-allowed">
-                    ⚠️ Відключений
+                  <span className="text-xs font-medium text-gray-500">СТАТУСИ >>>:</span>
+                  
+                  {/* Disabled статуси - використовуємо інлайн стиль замість класу */}
+                  <div className="relative inline-flex items-center gap-2 px-3 py-2 rounded-md bg-gray-100 text-gray-500 border-2 border-transparent cursor-not-allowed">
+                    <span className="inline-block w-[18px] h-[18px] border-2 border-gray-400 rounded"></span>
+                    {/* Знак заборони */}
+                    <svg className="w-4 h-4 hidden sm:block" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
+                    </svg>
+                    <svg className="w-5 h-5 sm:hidden" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
+                    </svg>
+                    <span className="hidden sm:inline font-medium text-sm">Відключений</span>
                   </div>
-                  <div className="px-3 py-2 bg-gray-100 border border-gray-200 rounded-md text-xs text-gray-400 cursor-not-allowed">
-                    🏠 Дача
+                  
+                  <div className="relative inline-flex items-center gap-2 px-3 py-2 rounded-md bg-gray-100 text-gray-500 border-2 border-transparent cursor-not-allowed">
+                    <span className="inline-block w-[18px] h-[18px] border-2 border-gray-400 rounded"></span>
+                    <svg className="w-4 h-4 hidden sm:block" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
+                    </svg>
+                    <svg className="w-5 h-5 sm:hidden" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
+                    </svg>
+                    <span className="hidden sm:inline font-medium text-sm">Дача</span>
                   </div>
-                  <div className="px-3 py-2 bg-gray-100 border border-gray-200 rounded-md text-xs text-gray-400 cursor-not-allowed">
-                    ⚠️ Не проживає
+                  
+                  <div className="relative inline-flex items-center gap-2 px-3 py-2 rounded-md bg-gray-100 text-gray-500 border-2 border-transparent cursor-not-allowed">
+                    <span className="inline-block w-[18px] h-[18px] border-2 border-gray-400 rounded"></span>
+                    {/* Будинок перекреслений */}
+                    <div className="relative w-4 h-4 hidden sm:block">
+                      <svg className="w-4 h-4 absolute" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/>
+                      </svg>
+                      <svg className="w-4 h-4 absolute" fill="none" stroke="currentColor" viewBox="0 0 20 20" strokeWidth="2.5">
+                        <line x1="2" y1="2" x2="18" y2="18"/>
+                      </svg>
+                    </div>
+                    <div className="relative w-5 h-5 sm:hidden">
+                      <svg className="w-5 h-5 absolute" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/>
+                      </svg>
+                      <svg className="w-5 h-5 absolute" fill="none" stroke="currentColor" viewBox="0 0 20 20" strokeWidth="2.5">
+                        <line x1="2" y1="2" x2="18" y2="18"/>
+                      </svg>
+                    </div>
+                    <span className="hidden sm:inline font-medium text-sm">Не проживає</span>
                   </div>
                 </div>
               </div>
@@ -1909,11 +2218,12 @@ function ClientDatabase() {
                 />
                 <label htmlFor="filter-disconnected" className="status-label">
                   <span className="checkbox-icon"></span>
+                  {/* Знак заборони як у бейджі ⛔ */}
                   <svg className="w-4 h-4 hidden sm:block" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
                   </svg>
                   <svg className="w-5 h-5 sm:hidden" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
                   </svg>
                   <span className="hidden sm:inline font-medium text-sm">Відключений</span>
                   {statusCounts.disconnected > 0 && (
@@ -1961,12 +2271,23 @@ function ClientDatabase() {
                 />
                 <label htmlFor="filter-absent" className="status-label">
                   <span className="checkbox-icon"></span>
-                  <svg className="w-4 h-4 hidden sm:block" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                  </svg>
-                  <svg className="w-5 h-5 sm:hidden" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                  </svg>
+                  {/* Будинок перекреслений 🏠̷ */}
+                  <div className="relative w-4 h-4 hidden sm:block">
+                    <svg className="w-4 h-4 absolute" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/>
+                    </svg>
+                    <svg className="w-4 h-4 absolute" fill="none" stroke="currentColor" viewBox="0 0 20 20" strokeWidth="2.5">
+                      <line x1="2" y1="2" x2="18" y2="18"/>
+                    </svg>
+                  </div>
+                  <div className="relative w-5 h-5 sm:hidden">
+                    <svg className="w-5 h-5 absolute" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/>
+                    </svg>
+                    <svg className="w-5 h-5 absolute" fill="none" stroke="currentColor" viewBox="0 0 20 20" strokeWidth="2.5">
+                      <line x1="2" y1="2" x2="18" y2="18"/>
+                    </svg>
+                  </div>
                   <span className="hidden sm:inline font-medium text-sm">Не проживає</span>
                   {statusCounts.absent > 0 && (
                     <span className="ml-1 px-1.5 py-0.5 bg-black bg-opacity-20 rounded text-xs font-semibold">
@@ -2035,7 +2356,45 @@ function ClientDatabase() {
           </>
           )}
 
-          {loading && <div className="text-center py-8 text-gray-500">Завантаження...</div>}
+          {/* ⭐ Видалено зайвий "Завантаження..." - тепер одразу показуємо дані після скелетону */}
+          
+          {/* 🔥 SKELETON LOADER: Показується ОДРАЗУ при початковому завантаженні (але НЕ для порожньої бази) */}
+          {((isInitialLoading && clients.length === 0 && totalCount !== 0) || (loading && clients.length === 0 && totalCount > 0)) && (
+            <div className="space-y-3">
+              <style>{`
+                @keyframes shimmer {
+                  0% { background-position: -1000px 0; }
+                  100% { background-position: 1000px 0; }
+                }
+                .skeleton {
+                  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+                  background-size: 1000px 100%;
+                  animation: shimmer 2s infinite;
+                }
+              `}</style>
+              
+              {/* Skeleton картки клієнтів */}
+              {[1,2,3].map((i) => (
+                <div key={i} className="border border-gray-200 rounded-lg p-4 bg-white">
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="flex-1">
+                      <div className="skeleton h-6 w-56 mb-2 rounded"></div>
+                      <div className="skeleton h-4 w-32 rounded"></div>
+                    </div>
+                    <div className="flex gap-2">
+                      <div className="skeleton h-8 w-8 rounded"></div>
+                      <div className="skeleton h-8 w-8 rounded"></div>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="skeleton h-4 w-full rounded"></div>
+                    <div className="skeleton h-4 w-3/4 rounded"></div>
+                    <div className="skeleton h-4 w-2/3 rounded"></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {!loading && (
             <>
@@ -2294,7 +2653,7 @@ function ClientDatabase() {
                 </div>
               )}
 
-              {clients.length === 0 && (
+              {clients.length === 0 && !loading && (
                 <div>
                   {searchTerm || selectedSettlement.length > 0 || selectedStreet.length > 0 || 
                    selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || selectedMeterYear.length > 0 || selectedMeterGroups.length > 0 ? (
@@ -2302,44 +2661,8 @@ function ClientDatabase() {
                     <div className="text-center py-12 text-gray-500">
                       Нічого не знайдено
                     </div>
-                  ) : isInitialLoading ? (
-                    // 🔥 ГІБРИДНИЙ ВАРІАНТ: Skeleton + disabled UI
-                    <div className="space-y-3">
-                      <style>{`
-                        @keyframes shimmer {
-                          0% { background-position: -1000px 0; }
-                          100% { background-position: 1000px 0; }
-                        }
-                        .skeleton {
-                          background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-                          background-size: 1000px 100%;
-                          animation: shimmer 2s infinite;
-                        }
-                      `}</style>
-                      
-                      {/* Skeleton картки клієнтів */}
-                      {[1,2,3].map((i) => (
-                        <div key={i} className="border border-gray-200 rounded-lg p-4 bg-white">
-                          <div className="flex justify-between items-start mb-3">
-                            <div className="flex-1">
-                              <div className="skeleton h-6 w-56 mb-2 rounded"></div>
-                              <div className="skeleton h-4 w-32 rounded"></div>
-                            </div>
-                            <div className="flex gap-2">
-                              <div className="skeleton h-8 w-8 rounded"></div>
-                              <div className="skeleton h-8 w-8 rounded"></div>
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            <div className="skeleton h-4 w-full rounded"></div>
-                            <div className="skeleton h-4 w-3/4 rounded"></div>
-                            <div className="skeleton h-4 w-2/3 rounded"></div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : totalCount === 0 ? (
-                    // Якщо база порожня - показуємо онбординг
+                  ) : !isInitialLoading && totalCount === 0 ? (
+                    // Якщо база порожня - показуємо онбординг (але НЕ при початковому завантаженні!)
                     <div className="max-w-3xl mx-auto py-12 px-4">
                       {/* Заголовок */}
                       <div className="text-center mb-8">
@@ -2421,12 +2744,12 @@ function ClientDatabase() {
                         </p>
                       </div>
                     </div>
-                  ) : (
+                  ) : !isInitialLoading ? (
                     // Якщо є дані але зараз порожньо (через фільтри які щойно скинули)
                     <div className="text-center py-12 text-gray-500">
                       Немає жодного клієнта. Додайте першого!
                     </div>
-                  )}
+                  ) : null}
                 </div>
               )}
               </div>
@@ -2653,6 +2976,117 @@ function ClientDatabase() {
                 <button onClick={resetForm} className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100">
                   Скасувати
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Модальне вікно імпорту за URL */}
+      {showImportUrlModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                  <svg className="w-6 h-6 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                  </svg>
+                  Імпорт за посиланням
+                </h2>
+                <button 
+                  onClick={() => { setShowImportUrlModal(false); setImportUrl(''); }}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                  disabled={importingFromUrl}
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                {/* Інформаційний блок */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex gap-3">
+                    <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                    <div className="text-sm text-blue-900">
+                      <p className="font-semibold mb-2">💡 Для слабких телефонів</p>
+                      <p className="mb-2">Замість завантаження файлу (що займає багато пам'яті), просто введіть посилання на JSON файл з клієнтами.</p>
+                      <p className="font-semibold mt-3 mb-1">Де розмістити файл:</p>
+                      <ul className="list-disc list-inside space-y-1 ml-2">
+                        <li>GitHub (рекомендовано) - безкоштовно</li>
+                        <li>Google Drive - зробіть публічне посилання</li>
+                        <li>Свій сервер - покладіть на FTP</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Поле вводу URL */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Посилання на файл JSON:
+                  </label>
+                  <input
+                    type="url"
+                    value={importUrl}
+                    onChange={(e) => setImportUrl(e.target.value)}
+                    placeholder="https://raw.githubusercontent.com/your-name/repo/main/backup.json"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm"
+                    disabled={importingFromUrl}
+                  />
+                  <p className="mt-2 text-xs text-gray-500">
+                    Приклад: https://raw.githubusercontent.com/Snoopak/gas-local-db/main/backups/clients.json
+                  </p>
+                </div>
+
+                {/* Приклад формату */}
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <p className="text-sm font-semibold text-gray-900 mb-2">📄 Очікуваний формат файлу:</p>
+                  <pre className="text-xs bg-gray-800 text-green-400 p-3 rounded overflow-x-auto">
+{`[
+  {
+    "fullName": "Іванов Іван",
+    "settlement": "Київ",
+    "street": "Хрещатик",
+    "building": "1",
+    "phone": "+380501234567",
+    ...
+  }
+]`}
+                  </pre>
+                  <p className="text-xs text-gray-600 mt-2">Або об'єкт з полем "clients": {`{ "clients": [...] }`}</p>
+                </div>
+
+                {/* Кнопки */}
+                <div className="flex gap-3 pt-4 border-t">
+                  <button
+                    onClick={handleImportFromURL}
+                    disabled={importingFromUrl || !importUrl.trim()}
+                    className="flex-1 bg-teal-600 hover:bg-teal-700 text-white px-6 py-3 rounded-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {importingFromUrl ? (
+                      <>
+                        <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Завантаження...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-5 h-5" />
+                        Імпортувати
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => { setShowImportUrlModal(false); setImportUrl(''); }}
+                    disabled={importingFromUrl}
+                    className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50"
+                  >
+                    Скасувати
+                  </button>
+                </div>
               </div>
             </div>
           </div>

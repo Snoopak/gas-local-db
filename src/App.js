@@ -1204,7 +1204,14 @@ function ClientDatabase() {
       setImportProgress({ show: true, current: 0, total: clients.length, fileName: 'import-url.json' });
       
       // Очищаємо базу
-      await db.clients.clear();
+      const db = await openDB();
+      const transaction = db.transaction([STORE_NAME], 'readwrite');
+      const store = transaction.objectStore(STORE_NAME);
+      await new Promise((resolve, reject) => {
+        const request = store.clear();
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
       
       // Додаємо клієнтів
       let imported = 0;

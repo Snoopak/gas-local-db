@@ -1181,7 +1181,38 @@ function ClientDatabase() {
     try {
       showToast('info', 'Завантаження файлу...', 2000);
       
-      const response = await fetch(importUrl);
+      let finalUrl = importUrl.trim();
+      
+      // 🔥 АВТОМАТИЧНА КОНВЕРТАЦІЯ Google Drive URL
+      if (finalUrl.includes('drive.google.com/file')) {
+        const match = finalUrl.match(/\/d\/([^\/]+)/);
+        if (match && match[1]) {
+          const fileId = match[1];
+          finalUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+          showToast('info', '🔄 Конвертую Google Drive URL...', 1000);
+        }
+      }
+      
+      // 🔥 АВТОМАТИЧНА КОНВЕРТАЦІЯ Dropbox URL
+      if (finalUrl.includes('dropbox.com')) {
+        finalUrl = finalUrl.replace('?dl=0', '?dl=1').replace('www.dropbox.com', 'dl.dropboxusercontent.com');
+        showToast('info', '🔄 Конвертую Dropbox URL...', 1000);
+      }
+      
+      // 🔥 CORS PROXY для всіх URL (крім localhost та github.io)
+      const needsProxy = !finalUrl.includes('localhost') && 
+                        !finalUrl.includes('127.0.0.1') &&
+                        !finalUrl.includes('.github.io') &&
+                        !finalUrl.includes('cdn.jsdelivr.net') &&
+                        !finalUrl.includes('raw.githack.com');
+      
+      if (needsProxy) {
+        // Використовуємо AllOrigins CORS proxy
+        finalUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(finalUrl)}`;
+        showToast('info', '🌐 Використовую CORS proxy...', 1500);
+      }
+      
+      const response = await fetch(finalUrl);
       
       if (!response.ok) {
         throw new Error(`Помилка завантаження: ${response.status} ${response.statusText}`);

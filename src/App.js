@@ -1212,7 +1212,11 @@ function ClientDatabase() {
         showToast('info', '🌐 Використовую CORS proxy...', 1500);
       }
       
+      console.log('🌐 Final URL:', finalUrl);
+      
       const response = await fetch(finalUrl);
+      
+      console.log('✅ Response received:', response.status, response.statusText);
       
       if (!response.ok) {
         throw new Error(`Помилка завантаження: ${response.status} ${response.statusText}`);
@@ -1220,12 +1224,22 @@ function ClientDatabase() {
       
       const data = await response.json();
       
+      console.log('📦 Data loaded:', {
+        isArray: Array.isArray(data),
+        hasClients: !!data.clients,
+        length: Array.isArray(data) ? data.length : (data.clients ? data.clients.length : 0),
+        firstItem: Array.isArray(data) ? data[0] : (data.clients ? data.clients[0] : null)
+      });
+      
       // Перевірка формату
       if (!Array.isArray(data) && !data.clients) {
+        console.error('❌ Invalid format:', data);
         throw new Error('Неправильний формат файлу. Очікується масив клієнтів або об\'єкт з полем "clients"');
       }
       
       const clients = Array.isArray(data) ? data : data.clients;
+      
+      console.log('👥 Clients to import:', clients.length);
       
       if (clients.length === 0) {
         throw new Error('Файл не містить клієнтів');
@@ -1431,8 +1445,14 @@ function ClientDatabase() {
         return;
       }
       
+      // 🔥 Очищаємо від службових полів IndexedDB (id, createdAt, etc)
+      const cleanClients = allClients.map(client => {
+        const { id, ...cleanData } = client; // Видаляємо id
+        return cleanData;
+      });
+      
       // Створюємо JSON з форматуванням
-      const jsonData = JSON.stringify(allClients, null, 2);
+      const jsonData = JSON.stringify(cleanClients, null, 2);
       
       // Створюємо і завантажуємо файл
       const blob = new Blob([jsonData], { type: 'application/json;charset=utf-8' });
@@ -1838,7 +1858,7 @@ function ClientDatabase() {
               {/* Disabled статуси - виглядають як справжні (треба додати CSS стилі окремо!) */}
               <div className="mb-4 opacity-60 pointer-events-none">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-medium text-gray-500">Статуси:</span>
+                  <span className="text-xs font-medium text-gray-500">СТАТУСИ >>>:</span>
                   
                   {/* Disabled статуси - використовуємо інлайн стиль замість класу */}
                   <div className="relative inline-flex items-center gap-2 px-3 py-2 rounded-md bg-gray-100 text-gray-500 border-2 border-transparent cursor-not-allowed">

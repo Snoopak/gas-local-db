@@ -1211,7 +1211,6 @@ if (needsProxy) {
   finalUrl = `https://my-cors-proxy-jfls.vercel.app/api/proxy?url=${encodeURIComponent(finalUrl)}`;
   showToast('info', '🌐 Використовую власний CORS proxy...', 1500);
 }
-
       
       console.log('🌐 Final URL:', finalUrl);
       
@@ -1547,16 +1546,16 @@ if (needsProxy) {
 
     useEffect(() => {
       const handleClickOutside = (event) => {
+        // ⭐ ФІКС: Закривати тільки якщо клік ПОЗА dropdown
         if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
           setOpenDropdown(null);
         }
       };
+      
       if (isOpen) {
-        // Невелика затримка щоб клік на кнопку встиг спрацювати
-        setTimeout(() => {
-          document.addEventListener('click', handleClickOutside);
-        }, 0);
-        return () => document.removeEventListener('click', handleClickOutside);
+        // Додаємо listener тільки коли відкрито
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
       }
     }, [isOpen]);
 
@@ -1587,20 +1586,14 @@ if (needsProxy) {
                   key={option}
                   className="flex items-center px-3 sm:px-4 py-3 sm:py-2 hover:bg-indigo-50 cursor-pointer active:bg-indigo-100"
                   onClick={(e) => {
-                    // ⭐ ФІКС: Зупиняємо propagation щоб dropdown не закривався
+                    // ⭐ НЕ закривати dropdown при кліку на опцію
                     e.stopPropagation();
-                    // Якщо клікнули не на сам checkbox, то тоглимо вручну
-                    if (e.target.tagName !== 'INPUT') {
-                      e.preventDefault();
-                      toggleSelection(selected, onChange, option);
-                    }
                   }}
                 >
                   <input
                     type="checkbox"
                     checked={selected.includes(option)}
                     onChange={(e) => {
-                      // ⭐ ФІКС: Зупиняємо propagation щоб dropdown не закривався
                       e.stopPropagation();
                       toggleSelection(selected, onChange, option);
                     }}
@@ -1866,7 +1859,7 @@ if (needsProxy) {
               {/* Disabled статуси - виглядають як справжні (треба додати CSS стилі окремо!) */}
               <div className="mb-4 opacity-60 pointer-events-none">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-medium text-gray-500">Статуси:</span>
+                  <span className="text-xs font-medium text-gray-500">статуси:</span>
                   
                   {/* Disabled статуси - використовуємо інлайн стиль замість класу */}
                   <div className="relative inline-flex items-center gap-2 px-3 py-2 rounded-md bg-gray-100 text-gray-500 border-2 border-transparent cursor-not-allowed">

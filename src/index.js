@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
+import * as serviceWorkerRegistration from './serviceWorkerRegistration';
 import reportWebVitals from './reportWebVitals';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
@@ -16,16 +17,11 @@ root.render(
 // or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
 reportWebVitals();
 
-// ✅ ДОДАЙТЕ ЦЕ - Реєстрація Service Worker
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker
-      .unregister('service-worker.js')
-      .then(registration => {
-        console.log('✅ SW зареєстровано:', registration.scope);
-      })
-      .catch(error => {
-        console.log('❌ SW помилка:', error);
-      });
-  });
-}
+// 🔥 ТИМЧАСОВО ВІДКЛЮЧЕНО Service Worker через конфлікт з CORS proxy
+// Після переходу на GitHub CDN можна увімкнути назад
+// serviceWorkerRegistration.register();
+
+// Відключаємо Service Worker
+serviceWorkerRegistration.unregister();
+
+console.log('✅ Service Worker відключено - імпорт за URL має працювати');

@@ -1386,6 +1386,42 @@ function ClientDatabase() {
     setLoading(false);
   };
 
+  // ⭐ Експорт в JSON (для імпорту за URL)
+  const handleExportJSON = async () => {
+    setLoading(true);
+    showToast('info', 'Експорт в JSON...', 2000);
+    
+    try {
+      const allClients = await getAllClients();
+      
+      if (allClients.length === 0) {
+        showToast('warning', 'Немає клієнтів для експорту');
+        setLoading(false);
+        return;
+      }
+      
+      // Створюємо JSON з форматуванням
+      const jsonData = JSON.stringify(allClients, null, 2);
+      
+      // Створюємо і завантажуємо файл
+      const blob = new Blob([jsonData], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `clients_${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      showToast('success', `✅ JSON експортовано! (${allClients.length} клієнтів)`);
+    } catch (error) {
+      console.error('JSON export error:', error);
+      showToast('error', 'Помилка при експорті JSON');
+    }
+    setLoading(false);
+  };
+
   const handleDownloadTemplate = () => {
     const template = [{
       'ПІБ': 'Іванов Іван Іванович', 'Населений пункт': 'Київ', 'Тип вулиці': 'вул.',
@@ -1646,8 +1682,16 @@ function ClientDatabase() {
                     <button onClick={() => { handleExportExcel(); setShowQuickActions(false); }} disabled={totalCount === 0 || loading} className="w-full px-4 py-3 text-left hover:bg-blue-50 rounded-lg flex items-center gap-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                       <Download className="w-5 h-5 text-blue-600" />
                       <div>
-                        <div className="font-semibold text-sm text-gray-900">Експорт</div>
+                        <div className="font-semibold text-sm text-gray-900">Експорт Excel</div>
                         <div className="text-xs text-gray-500">Зберегти в Excel</div>
+                      </div>
+                    </button>
+                    
+                    <button onClick={() => { handleExportJSON(); setShowQuickActions(false); }} disabled={totalCount === 0 || loading} className="w-full px-4 py-3 text-left hover:bg-amber-50 rounded-lg flex items-center gap-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                      <FileText className="w-5 h-5 text-amber-600" />
+                      <div>
+                        <div className="font-semibold text-sm text-gray-900">Експорт JSON</div>
+                        <div className="text-xs text-gray-500">Для імпорту за URL</div>
                       </div>
                     </button>
                     

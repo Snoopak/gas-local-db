@@ -838,14 +838,31 @@ function ClientDatabase() {
       const quickActionsButton = event.target.closest('button[title="Швидкі дії"]');
       const quickActionsMenu = event.target.closest('.absolute.right-0.mt-2.w-80');
       
+      console.log('🟠 showQuickActions mousedown:', {
+        hasButton: !!quickActionsButton,
+        hasMenu: !!quickActionsMenu,
+        target: event.target.tagName,
+        className: event.target.className
+      });
+      
+      // НЕ закривати якщо клік всередині меню
       if (showQuickActions && !quickActionsButton && !quickActionsMenu) {
+        console.log('🔴 Closing showQuickActions');
         setShowQuickActions(false);
       }
     };
 
     if (showQuickActions) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
+      console.log('✅ showQuickActions listener added');
+      // Використовуємо затримку як у dropdown
+      const timer = setTimeout(() => {
+        document.addEventListener('mousedown', handleClickOutside);
+      }, 150);
+      return () => {
+        clearTimeout(timer);
+        console.log('🧹 showQuickActions listener removed');
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
     }
   }, [showQuickActions]);
 
@@ -1754,14 +1771,27 @@ if (needsProxy) {
                       <input type="file" accept=".xlsx,.xls" onChange={(e) => { handleImportExcel(e); setShowQuickActions(false); }} className="hidden" disabled={loading} />
                     </label>
                     
-                    <button onClick={() => { 
-                      console.log('🟣 Import URL Modal button clicked'); 
+                    <button 
+                    className="md-imp w-full px-4 py-3 text-left hover:bg-teal-50 rounded-lg flex items-center gap-3 transition-colors disabled:opacity-50"
+                    onClick={(e) => { 
+                      e.preventDefault();
+                      e.stopPropagation();
+                      console.log('🟣 Import URL Modal button CLICKED'); 
                       setShowImportUrlModal(true); 
                       setShowQuickActions(false); 
                     }} 
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      console.log('🟣 Button MOUSEDOWN');
+                    }}
+                    onPointerDown={(e) => {
+                      e.stopPropagation();
+                      console.log('🟣 Button POINTERDOWN');
+                    }}
                     disabled={loading} 
                     onMouseEnter={() => console.log('🟣 Button hover, disabled:', loading)}
-                    className="w-full px-4 py-3 text-left hover:bg-teal-50 rounded-lg flex items-center gap-3 transition-colors disabled:opacity-50">
+                    >
                       <svg className="w-5 h-5 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                       </svg>

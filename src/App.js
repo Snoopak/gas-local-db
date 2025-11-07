@@ -679,16 +679,18 @@ function ClientDatabase() {
         });
       }
       
-      // Оновлюємо список вулиць (фільтрується по населеному пункту)
+      // ⭐ ВИПРАВЛЕННЯ: Список вулиць фільтрується ТІЛЬКИ по населеному пункту, БЕЗ selectedStreet
+      let clientsForStreets = allClients;
       if (selectedSettlement.length > 0) {
-        const uniqueStreets = [...new Set(filteredByAddress.map(c => {
-          const streetName = [c.streetType, c.street].filter(s => s).join(' ');
-          return streetName;
-        }).filter(s => s))].sort();
-        setStreets(uniqueStreets);
-      } else {
-        await loadStreets();
+        clientsForStreets = allClients.filter(c => selectedSettlement.includes(c.settlement));
       }
+      
+      const uniqueStreets = [...new Set(clientsForStreets.map(c => {
+        const streetName = [c.streetType, c.street].filter(s => s).join(' ');
+        return streetName;
+      }).filter(s => s))].sort();
+      
+      setStreets(uniqueStreets);
       
       // ⭐ КЛЮЧОВЕ ВИПРАВЛЕННЯ: Фільтри лічильників беруть дані по адресі,
       // але НЕ фільтруються між собою (не залежать від selectedMeterBrand, selectedMeterSize і т.д.)

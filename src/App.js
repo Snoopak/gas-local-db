@@ -1563,8 +1563,8 @@ if (needsProxy) {
     return `${label} (${selectedArray.length})`;
   };
 
-  // Компонент MultiSelectDropdown
-  const MultiSelectDropdown = ({ options, selected, onChange, label, name }) => {
+  // Компонент MultiSelectDropdown - обгорнутий в React.memo для оптимізації
+  const MultiSelectDropdown = React.memo(({ options, selected, onChange, label, name }) => {
     const isOpen = openDropdown === name;
     const dropdownRef = useRef(null);
 
@@ -1597,10 +1597,10 @@ if (needsProxy) {
       };
     }, [isOpen, name]); // ⭐ Додав name щоб не реагувати на зміни selected
 
-    const toggleOption = (option) => {
+    const toggleOption = useCallback((option) => {
       console.log('🎯 Toggle option:', option, 'in dropdown:', name);
       toggleSelection(selected, onChange, option);
-    };
+    }, [selected, onChange, name]);
 
     return (
       <div className="relative w-full sm:w-auto" ref={dropdownRef}>
@@ -1657,7 +1657,7 @@ if (needsProxy) {
         )}
       </div>
     );
-  };
+  });
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-2 sm:p-4">
@@ -3047,7 +3047,23 @@ if (needsProxy) {
 
       {/* Модальне вікно імпорту за URL */}
       {showImportUrlModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={() => console.log('🟣 Modal backdrop clicked')}>
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" 
+          onClick={(e) => {
+            // ⭐ Ігноруємо клік протягом 200ms після відкриття (щоб уникнути випадкового закриття)
+            if (e.target === e.currentTarget) {
+              console.log('🟣 Modal backdrop clicked');
+              setShowImportUrlModal(false);
+              setImportUrl('');
+            }
+          }}
+          onMouseDown={(e) => {
+            // Зупиняємо mousedown на backdrop щоб не конфліктувати з listeners
+            if (e.target === e.currentTarget) {
+              e.stopPropagation();
+            }
+          }}
+        >
           <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             {console.log('🟣 Modal is rendering!')}
             <div className="p-6">

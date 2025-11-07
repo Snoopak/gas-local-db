@@ -523,6 +523,11 @@ function ClientDatabase() {
   // ⭐ Dropdown швидких дій
   const [showQuickActions, setShowQuickActions] = useState(false);
   const [showImportUrlModal, setShowImportUrlModal] = useState(false);
+  
+  // DEBUG: Логування стану модалки
+  useEffect(() => {
+    console.log('🟣 showImportUrlModal changed:', showImportUrlModal);
+  }, [showImportUrlModal]);
   const [selectedMeterBrand, setSelectedMeterBrand] = useState([]);
   const [selectedMeterSize, setSelectedMeterSize] = useState([]);
   const [selectedMeterYear, setSelectedMeterYear] = useState([]);
@@ -1573,7 +1578,7 @@ if (needsProxy) {
         document.removeEventListener('mousedown', handleClickOutside);
         console.log('🧹 Dropdown listener removed for:', name);
       };
-    }, [isOpen]);
+    }, [isOpen, name]); // ⭐ Додав name щоб не реагувати на зміни selected
 
     const toggleOption = (option) => {
       console.log('🎯 Toggle option:', option, 'in dropdown:', name);
@@ -1753,7 +1758,10 @@ if (needsProxy) {
                       console.log('🟣 Import URL Modal button clicked'); 
                       setShowImportUrlModal(true); 
                       setShowQuickActions(false); 
-                    }} disabled={loading} className="w-full px-4 py-3 text-left hover:bg-teal-50 rounded-lg flex items-center gap-3 transition-colors disabled:opacity-50">
+                    }} 
+                    disabled={loading} 
+                    onMouseEnter={() => console.log('🟣 Button hover, disabled:', loading)}
+                    className="w-full px-4 py-3 text-left hover:bg-teal-50 rounded-lg flex items-center gap-3 transition-colors disabled:opacity-50">
                       <svg className="w-5 h-5 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                       </svg>

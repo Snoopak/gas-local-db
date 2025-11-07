@@ -1616,6 +1616,7 @@ if (needsProxy) {
                   }}
                   onMouseDown={(e) => {
                     e.preventDefault();
+                    e.stopPropagation(); // ⭐ КРИТИЧНО!
                     console.log('🟡 Option mousedown:', option);
                   }}
                 >

@@ -692,9 +692,6 @@ function ClientDatabase() {
       
       setStreets(uniqueStreets);
       
-      // ⭐ КЛЮЧОВЕ ВИПРАВЛЕННЯ: Фільтри лічильників беруть дані по адресі,
-      // але НЕ фільтруються між собою (не залежать від selectedMeterBrand, selectedMeterSize і т.д.)
-      
       // Оновлюємо список марок лічильників (по адресі, але НЕ по іншим фільтрам лічильників)
       const uniqueBrands = [...new Set(filteredByAddress.map(c => c.meterBrand).filter(b => b))].sort();
       setMeterBrands(uniqueBrands);
@@ -833,7 +830,6 @@ function ClientDatabase() {
   // ⭐ Закриття dropdown швидких дій при кліку поза ним
   useEffect(() => {
     const handleClickOutside = (event) => {
-      // Перевіряємо чи клік поза кнопкою швидких дій та його меню
       const quickActionsButton = event.target.closest('button[title="Швидкі дії"]');
       const quickActionsMenu = event.target.closest('.absolute.right-0.mt-2.w-80');
       
@@ -1554,9 +1550,8 @@ if (needsProxy) {
       if (!isOpen) return;
 
       const handleClickOutside = (event) => {
-        // Ігноруємо кліки на модалках (z-index >= 100)
-        const target = event.target;
-        const modal = target.closest('[class*="z-50"][class*="fixed"]');
+        // Ігноруємо кліки на модалках
+        const modal = event.target.closest('[class*="fixed"][class*="z-50"]');
         if (modal) return;
 
         if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -1564,7 +1559,6 @@ if (needsProxy) {
         }
       };
 
-      // Збільшую затримку до 150ms
       const timer = setTimeout(() => {
         document.addEventListener('mousedown', handleClickOutside);
       }, 150);
@@ -1575,11 +1569,7 @@ if (needsProxy) {
       };
     }, [isOpen]);
 
-    const handleOptionClick = (option, e) => {
-      if (e) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
+    const toggleOption = (option) => {
       toggleSelection(selected, onChange, option);
     };
 
@@ -1610,7 +1600,11 @@ if (needsProxy) {
                 <div
                   key={option}
                   className="flex items-center px-3 sm:px-4 py-3 sm:py-2 hover:bg-indigo-50 cursor-pointer active:bg-indigo-100"
-                  onClick={(e) => handleOptionClick(option, e)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toggleOption(option);
+                  }}
                   onMouseDown={(e) => e.preventDefault()}
                 >
                   <input

@@ -1554,19 +1554,24 @@ if (needsProxy) {
       if (!isOpen) return;
 
       const handleClickOutside = (event) => {
+        // Ігноруємо кліки на модалках (z-index >= 100)
+        const target = event.target;
+        const modal = target.closest('[class*="z-50"][class*="fixed"]');
+        if (modal) return;
+
         if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
           setOpenDropdown(null);
         }
       };
 
-      // Затримка 100ms щоб уникнути конфлікту з відкриттям
+      // Збільшую затримку до 150ms
       const timer = setTimeout(() => {
-        document.addEventListener('mousedown', handleClickOutside, true); // true = capture phase
-      }, 100);
+        document.addEventListener('mousedown', handleClickOutside);
+      }, 150);
 
       return () => {
         clearTimeout(timer);
-        document.removeEventListener('mousedown', handleClickOutside, true);
+        document.removeEventListener('mousedown', handleClickOutside);
       };
     }, [isOpen]);
 

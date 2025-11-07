@@ -1552,24 +1552,31 @@ if (needsProxy) {
       const handleClickOutside = (event) => {
         // Ігноруємо кліки на модалках
         const modal = event.target.closest('[class*="fixed"][class*="z-50"]');
-        if (modal) return;
+        if (modal) {
+          console.log('🔵 Ignoring click - modal detected');
+          return;
+        }
 
         if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+          console.log('🔴 Closing dropdown - click outside');
           setOpenDropdown(null);
         }
       };
 
       const timer = setTimeout(() => {
+        console.log('✅ Dropdown listener added for:', name);
         document.addEventListener('mousedown', handleClickOutside);
       }, 150);
 
       return () => {
         clearTimeout(timer);
         document.removeEventListener('mousedown', handleClickOutside);
+        console.log('🧹 Dropdown listener removed for:', name);
       };
     }, [isOpen]);
 
     const toggleOption = (option) => {
+      console.log('🎯 Toggle option:', option, 'in dropdown:', name);
       toggleSelection(selected, onChange, option);
     };
 
@@ -1580,6 +1587,7 @@ if (needsProxy) {
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
+            console.log('🔵 Dropdown button clicked:', name, 'isOpen:', isOpen);
             setOpenDropdown(isOpen ? null : name);
           }}
           className="w-full px-3 sm:px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white text-left flex items-center justify-between min-w-full sm:min-w-[180px] text-sm sm:text-base">
@@ -1603,9 +1611,13 @@ if (needsProxy) {
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
+                    console.log('🟢 Option div clicked:', option);
                     toggleOption(option);
                   }}
-                  onMouseDown={(e) => e.preventDefault()}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    console.log('🟡 Option mousedown:', option);
+                  }}
                 >
                   <input
                     type="checkbox"
@@ -1736,7 +1748,11 @@ if (needsProxy) {
                       <input type="file" accept=".xlsx,.xls" onChange={(e) => { handleImportExcel(e); setShowQuickActions(false); }} className="hidden" disabled={loading} />
                     </label>
                     
-                    <button onClick={() => { setShowImportUrlModal(true); setShowQuickActions(false); }} disabled={loading} className="w-full px-4 py-3 text-left hover:bg-teal-50 rounded-lg flex items-center gap-3 transition-colors disabled:opacity-50">
+                    <button onClick={() => { 
+                      console.log('🟣 Import URL Modal button clicked'); 
+                      setShowImportUrlModal(true); 
+                      setShowQuickActions(false); 
+                    }} disabled={loading} className="w-full px-4 py-3 text-left hover:bg-teal-50 rounded-lg flex items-center gap-3 transition-colors disabled:opacity-50">
                       <svg className="w-5 h-5 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                       </svg>
@@ -2992,8 +3008,9 @@ if (needsProxy) {
 
       {/* Модальне вікно імпорту за URL */}
       {showImportUrlModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={() => console.log('🟣 Modal backdrop clicked')}>
+          <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            {console.log('🟣 Modal is rendering!')}
             <div className="p-6">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">

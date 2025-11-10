@@ -1754,7 +1754,18 @@ if (needsProxy) {
               {showQuickActions && (
                 <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-2xl border-2 border-gray-200 z-50">
                   <div className="p-2">
-                    <button onClick={() => { handleDownloadTemplate(); setShowQuickActions(false); }} className="w-full px-4 py-3 text-left hover:bg-purple-50 rounded-lg flex items-center gap-3 transition-colors">
+                    <button 
+                      onClick={(e) => { 
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleDownloadTemplate(); 
+                        setShowQuickActions(false); 
+                      }}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
+                      className="w-full px-4 py-3 text-left hover:bg-purple-50 rounded-lg flex items-center gap-3 transition-colors">
                       <FileText className="w-5 h-5 text-purple-600" />
                       <div>
                         <div className="font-semibold text-sm text-gray-900">Шаблон</div>
@@ -1762,7 +1773,12 @@ if (needsProxy) {
                       </div>
                     </button>
                     
-                    <label className="w-full px-4 py-3 hover:bg-green-50 rounded-lg flex items-center gap-3 transition-colors cursor-pointer">
+                    <label 
+                      className="w-full px-4 py-3 hover:bg-green-50 rounded-lg flex items-center gap-3 transition-colors cursor-pointer"
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                      }}
+                    >
                       <Upload className="w-5 h-5 text-green-600" />
                       <div>
                         <div className="font-semibold text-sm text-gray-900">Імпорт</div>
@@ -1776,21 +1792,14 @@ if (needsProxy) {
                     onClick={(e) => { 
                       e.preventDefault();
                       e.stopPropagation();
-                      console.log('🟣 Import URL Modal button CLICKED'); 
                       setShowImportUrlModal(true); 
                       setShowQuickActions(false); 
                     }} 
                     onMouseDown={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      console.log('🟣 Button MOUSEDOWN');
                     }}
-                    onPointerDown={(e) => {
-                      e.stopPropagation();
-                      console.log('🟣 Button POINTERDOWN');
-                    }}
-                    disabled={loading} 
-                    onMouseEnter={() => console.log('🟣 Button hover, disabled:', loading)}
+                    disabled={loading}
                     >
                       <svg className="w-5 h-5 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
@@ -1801,7 +1810,19 @@ if (needsProxy) {
                       </div>
                     </button>
                     
-                    <button onClick={() => { handleExportExcel(); setShowQuickActions(false); }} disabled={totalCount === 0 || loading} className="w-full px-4 py-3 text-left hover:bg-blue-50 rounded-lg flex items-center gap-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                    <button 
+                      onClick={(e) => { 
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleExportExcel(); 
+                        setShowQuickActions(false); 
+                      }}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
+                      disabled={totalCount === 0 || loading} 
+                      className="w-full px-4 py-3 text-left hover:bg-blue-50 rounded-lg flex items-center gap-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                       <Download className="w-5 h-5 text-blue-600" />
                       <div>
                         <div className="font-semibold text-sm text-gray-900">Експорт Excel</div>
@@ -1809,7 +1830,19 @@ if (needsProxy) {
                       </div>
                     </button>
                     
-                    <button onClick={() => { handleExportJSON(); setShowQuickActions(false); }} disabled={totalCount === 0 || loading} className="w-full px-4 py-3 text-left hover:bg-amber-50 rounded-lg flex items-center gap-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                    <button 
+                      onClick={(e) => { 
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleExportJSON(); 
+                        setShowQuickActions(false); 
+                      }}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
+                      disabled={totalCount === 0 || loading} 
+                      className="w-full px-4 py-3 text-left hover:bg-amber-50 rounded-lg flex items-center gap-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                       <FileText className="w-5 h-5 text-amber-600" />
                       <div>
                         <div className="font-semibold text-sm text-gray-900">Експорт JSON</div>
@@ -1819,7 +1852,19 @@ if (needsProxy) {
                     
                     <div className="border-t my-2"></div>
                     
-                    <button onClick={() => { setIsModalOpen(true); setShowQuickActions(false); }} disabled={loading} className="w-full px-4 py-3 text-left hover:bg-indigo-50 rounded-lg flex items-center gap-3 transition-colors">
+                    <button 
+                      onClick={(e) => { 
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setIsModalOpen(true); 
+                        setShowQuickActions(false); 
+                      }}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
+                      disabled={loading} 
+                      className="w-full px-4 py-3 text-left hover:bg-indigo-50 rounded-lg flex items-center gap-3 transition-colors">
                       <Plus className="w-5 h-5 text-indigo-600" />
                       <div>
                         <div className="font-semibold text-sm text-gray-900">Додати клієнта</div>

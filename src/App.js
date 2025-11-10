@@ -702,7 +702,7 @@ function ClientDatabase() {
       setMeterBrands(uniqueBrands);
       
       // Оновлюємо список типорозмірів (по адресі, але НЕ по іншим фільтрам лічильників)
-      const uniqueSizes = [...new Set(filteredByAddress.map(c => c.meterSize).filter(s => s))].sort((a, b) => a.localeCompare(b, 'uk', { sensitivity: 'base' }));
+      const uniqueSizes = [...new Set(filteredByAddress.map(c => c.meterSize).filter(s => s))].sort((a, b) => a.localeCompare(b, 'uk', { numeric: true, sensitivity: 'base' }));
       setMeterSizes(uniqueSizes);
       
       // Оновлюємо список років (по адресі, але НЕ по іншим фільтрам лічильників)
@@ -976,7 +976,7 @@ function ClientDatabase() {
     const uniqueBrands = [...new Set(allClients.map(c => c.meterBrand).filter(b => b))].sort((a, b) => a.localeCompare(b, 'uk', { sensitivity: 'base' }));
     setMeterBrands(uniqueBrands);
     
-    const uniqueSizes = [...new Set(allClients.map(c => c.meterSize).filter(s => s))].sort((a, b) => a.localeCompare(b, 'uk', { sensitivity: 'base' }));
+    const uniqueSizes = [...new Set(allClients.map(c => c.meterSize).filter(s => s))].sort((a, b) => a.localeCompare(b, 'uk', { numeric: true, sensitivity: 'base' }));
     setMeterSizes(uniqueSizes);
     
     const uniqueYears = [...new Set(allClients.map(c => c.meterYear).filter(y => y))].sort((a, b) => a - b);

@@ -693,24 +693,24 @@ function ClientDatabase() {
       const uniqueStreets = [...new Set(clientsForStreets.map(c => {
         const streetName = [c.streetType, c.street].filter(s => s).join(' ');
         return streetName;
-      }).filter(s => s))].sort((a, b) => a.localeCompare(b, 'uk'));
+      }).filter(s => s))].sort((a, b) => a.localeCompare(b, 'uk', { sensitivity: 'base' }));
       
       setStreets(uniqueStreets);
       
       // Оновлюємо список марок лічильників (по адресі, але НЕ по іншим фільтрам лічильників)
-      const uniqueBrands = [...new Set(filteredByAddress.map(c => c.meterBrand).filter(b => b))].sort((a, b) => a.localeCompare(b, 'uk'));
+      const uniqueBrands = [...new Set(filteredByAddress.map(c => c.meterBrand).filter(b => b))].sort((a, b) => a.localeCompare(b, 'uk', { sensitivity: 'base' }));
       setMeterBrands(uniqueBrands);
       
       // Оновлюємо список типорозмірів (по адресі, але НЕ по іншим фільтрам лічильників)
-      const uniqueSizes = [...new Set(filteredByAddress.map(c => c.meterSize).filter(s => s))].sort((a, b) => a.localeCompare(b, 'uk'));
+      const uniqueSizes = [...new Set(filteredByAddress.map(c => c.meterSize).filter(s => s))].sort((a, b) => a.localeCompare(b, 'uk', { sensitivity: 'base' }));
       setMeterSizes(uniqueSizes);
       
       // Оновлюємо список років (по адресі, але НЕ по іншим фільтрам лічильників)
-      const uniqueYears = [...new Set(filteredByAddress.map(c => c.meterYear).filter(y => y))].sort((a, b) => b - a);
+      const uniqueYears = [...new Set(filteredByAddress.map(c => c.meterYear).filter(y => y))].sort((a, b) => a - b);
       setMeterYears(uniqueYears);
       
       // Оновлюємо список груп лічильників (по адресі, але НЕ по іншим фільтрам лічильників)
-      const uniqueGroups = [...new Set(filteredByAddress.map(c => c.meterGroup).filter(g => g))].sort((a, b) => a.localeCompare(b, 'uk'));
+      const uniqueGroups = [...new Set(filteredByAddress.map(c => c.meterGroup).filter(g => g))].sort((a, b) => a.localeCompare(b, 'uk', { sensitivity: 'base' }));
       setMeterGroups(uniqueGroups);
     };
     
@@ -957,7 +957,7 @@ function ClientDatabase() {
 
   const loadSettlements = async () => {
     const allClients = await getAllClients();
-    const uniqueSettlements = [...new Set(allClients.map(c => c.settlement).filter(s => s))].sort((a, b) => a.localeCompare(b, 'uk'));
+    const uniqueSettlements = [...new Set(allClients.map(c => c.settlement).filter(s => s))].sort((a, b) => a.localeCompare(b, 'uk', { sensitivity: 'base' }));
     setSettlements(uniqueSettlements);
   };
 
@@ -966,23 +966,23 @@ function ClientDatabase() {
     const uniqueStreets = [...new Set(allClients.map(c => {
       const streetName = [c.streetType, c.street].filter(s => s).join(' ');
       return streetName;
-    }).filter(s => s))].sort((a, b) => a.localeCompare(b, 'uk'));
+    }).filter(s => s))].sort((a, b) => a.localeCompare(b, 'uk', { sensitivity: 'base' }));
     setStreets(uniqueStreets);
   };
 
   const loadMeterData = async () => {
     const allClients = await getAllClients();
     
-    const uniqueBrands = [...new Set(allClients.map(c => c.meterBrand).filter(b => b))].sort((a, b) => a.localeCompare(b, 'uk'));
+    const uniqueBrands = [...new Set(allClients.map(c => c.meterBrand).filter(b => b))].sort((a, b) => a.localeCompare(b, 'uk', { sensitivity: 'base' }));
     setMeterBrands(uniqueBrands);
     
-    const uniqueSizes = [...new Set(allClients.map(c => c.meterSize).filter(s => s))].sort((a, b) => a.localeCompare(b, 'uk'));
+    const uniqueSizes = [...new Set(allClients.map(c => c.meterSize).filter(s => s))].sort((a, b) => a.localeCompare(b, 'uk', { sensitivity: 'base' }));
     setMeterSizes(uniqueSizes);
     
-    const uniqueYears = [...new Set(allClients.map(c => c.meterYear).filter(y => y))].sort((a, b) => b - a);
+    const uniqueYears = [...new Set(allClients.map(c => c.meterYear).filter(y => y))].sort((a, b) => a - b);
     setMeterYears(uniqueYears);
     
-    const uniqueGroups = [...new Set(allClients.map(c => c.meterGroup).filter(g => g))].sort((a, b) => a.localeCompare(b, 'uk'));
+    const uniqueGroups = [...new Set(allClients.map(c => c.meterGroup).filter(g => g))].sort((a, b) => a.localeCompare(b, 'uk', { sensitivity: 'base' }));
     setMeterGroups(uniqueGroups);
   };
 
@@ -1938,7 +1938,7 @@ if (needsProxy) {
                       <option>Марка</option>
                     </select>
                     <select className="px-3 py-3 border border-gray-300 rounded-lg bg-white text-sm cursor-not-allowed" disabled>
-                      <option>Розмір</option>
+                      <option>Типорозмір</option>
                     </select>
                     <select className="px-3 py-3 border border-gray-300 rounded-lg bg-white text-sm cursor-not-allowed" disabled>
                       <option>Рік</option>
@@ -2157,7 +2157,7 @@ if (needsProxy) {
                   options={meterSizes}
                   selected={selectedMeterSize}
                   onChange={setSelectedMeterSize}
-                  label="Розмір"
+                  label="Типорозмір"
                   name="meterSize"
                 />
                 <MultiSelectDropdown

@@ -1294,7 +1294,10 @@ if (needsProxy) {
       for (let i = 0; i < clients.length; i++) {
         await addClient(clients[i]);
         imported++;
-        setImportProgress(prev => ({ ...prev, current: i + 1 }));
+        // Оновлюємо прогрес кожні 50 записів або на останньому
+        if ((i + 1) % 50 === 0 || i === clients.length - 1) {
+          setImportProgress(prev => ({ ...prev, current: i + 1 }));
+        }
       }
       
       // Оновлюємо дані
@@ -1527,8 +1530,10 @@ if (needsProxy) {
           await addClient(client);
           imported++;
           
-          // Оновлюємо прогрес
-          setImportProgress(prev => ({ ...prev, current: i + 1 }));
+          // Оновлюємо прогрес кожні 50 записів або на останньому
+          if ((i + 1) % 50 === 0 || i === jsonData.length - 1) {
+            setImportProgress(prev => ({ ...prev, current: i + 1 }));
+          }
         }
         
         await loadClients();
@@ -1842,7 +1847,7 @@ if (needsProxy) {
               </div>
               <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
                 <div 
-                  className="h-full bg-gradient-to-r from-indigo-500 to-blue-500 rounded-full transition-all duration-100 ease-linear"
+                  className="h-full bg-gradient-to-r from-indigo-500 to-blue-500 rounded-full"
                   style={{ width: `${importProgress.total > 0 ? (importProgress.current / importProgress.total) * 100 : 0}%` }}
                 ></div>
               </div>

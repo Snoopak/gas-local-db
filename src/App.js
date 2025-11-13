@@ -1433,7 +1433,7 @@ if (needsProxy) {
     if (!file) return;
     
     setLoading(true);
-    setImportProgress({ show: true, current: 0, total: 0, fileName: file.name });
+    // ⭐ НЕ показуємо модалку одразу - спочатку парсимо файл!
     
     const reader = new FileReader();
     reader.onload = async (event) => {
@@ -1443,8 +1443,8 @@ if (needsProxy) {
         const worksheet = workbook.Sheets[workbook.SheetNames[0]];
         const jsonData = XLSX.utils.sheet_to_json(worksheet);
         
-        // Встановлюємо загальну кількість
-        setImportProgress(prev => ({ ...prev, total: jsonData.length }));
+        // ⭐ ТЕПЕР показуємо модалку - коли вже знаємо total!
+        setImportProgress({ show: true, current: 0, total: jsonData.length, fileName: file.name });
         
         let imported = 0;
         for (let i = 0; i < jsonData.length; i++) {
@@ -1842,7 +1842,7 @@ if (needsProxy) {
               </div>
               <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
                 <div 
-                  className="h-full bg-gradient-to-r from-indigo-500 to-blue-500 rounded-full transition-all duration-300 ease-out"
+                  className="h-full bg-gradient-to-r from-indigo-500 to-blue-500 rounded-full transition-all duration-100 ease-linear"
                   style={{ width: `${importProgress.total > 0 ? (importProgress.current / importProgress.total) * 100 : 0}%` }}
                 ></div>
               </div>

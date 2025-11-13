@@ -1339,18 +1339,23 @@ if (needsProxy) {
     // Розбиваємо на окремі прилади
     const items = text.split(';').map(s => s.trim()).filter(s => s);
 
+    const boilers = [];
+    const stoves = [];
+    const columns = [];
+
     items.forEach(item => {
       // Котел: (Котел) АОГВ-16 - 1шт.
       if (item.includes('(Котел)') || item.includes('(котел)')) {
         const match = item.match(/\((?:Котел|котел)\)\s*(.+?)(?:\s*-\s*\d+\s*шт\.?)?$/i);
         if (match && match[1]) {
           const boilerInfo = match[1].trim();
-          // Витягуємо потужність якщо є (наприклад "АОГВ-16" -> марка "АОГВ", потужність "16")
-          const powerMatch = boilerInfo.match(/(\d+(?:[.,]\d+)?)\s*(?:кВт|квт)?/i);
-          result.boilerBrand = boilerInfo;
-          if (powerMatch) {
-            result.boilerPower = powerMatch[1].replace(',', '.');
-          }
+          // Витягуємо потужність якщо є
+          const powerMatch = boilerInfo.match(/(\d+(?:[.,]\d+)?)\s*(?:кВт|квт|С|с)?/i);
+          
+          boilers.push({
+            name: boilerInfo,
+            power: powerMatch ? powerMatch[1].replace(',', '.') : ''
+          });
         }
       }
       
@@ -1358,18 +1363,15 @@ if (needsProxy) {
       if (item.includes('(Плита') || item.includes('(плита)') || item.includes('ПГ')) {
         const match = item.match(/\((?:Плита.*?|плита.*?)\)\s*(.+?)(?:\s*-\s*(\d+)\s*шт\.?)?$/i);
         if (match && match[1]) {
-          result.stoveType = match[1].trim();
-          if (match[2]) {
-            result.stoveCount = match[2];
-          } else {
-            result.stoveCount = '1';
+          const count = match[2] ? parseInt(match[2]) : 1;
+          for (let i = 0; i < count; i++) {
+            stoves.push(match[1].trim());
           }
         } else {
           // Якщо формат інший, пробуємо знайти ПГ-X
           const pgMatch = item.match(/ПГ[- ]?(\d+)/i);
           if (pgMatch) {
-            result.stoveType = 'ПГ-' + pgMatch[1];
-            result.stoveCount = '1';
+            stoves.push('ПГ-' + pgMatch[1]);
           }
         }
       }
@@ -1378,15 +1380,58 @@ if (needsProxy) {
       if (item.includes('(Колонка)') || item.includes('(колонка)') || item.includes('(ВПГ)') || item.includes('(впг)')) {
         const match = item.match(/\((?:Колонка|колонка|ВПГ|впг)\)\s*(.+?)(?:\s*-\s*(\d+)\s*шт\.?)?$/i);
         if (match && match[1]) {
-          result.columnType = match[1].trim();
-          if (match[2]) {
-            result.columnCount = match[2];
-          } else {
-            result.columnCount = '1';
+          const count = match[2] ? parseInt(match[2]) : 1;
+          for (let i = 0; i < count; i++) {
+            columns.push(match[1].trim());
           }
         }
       }
     });
+
+    // Об'єднуємо котли (якщо кілька)
+    if (boilers.length > 0) {
+      result.boilerBrand = boilers.map(b => b.name).join('; ');
+      // Потужність беремо з першого котла
+      result.boilerPower = boilers[0].power;
+    }
+
+    // Об'єднуємо плити
+    if (stoves.length > 0) {
+      // Групуємо однакові плити
+      const stoveCounts = {};
+      stoves.forEach(s => {
+        stoveCounts[s] = (stoveCounts[s] || 0) + 1;
+      });
+      
+      // Формуємо рядок: якщо всі однакові - просто назва, якщо різні - перелік
+      const uniqueStoves = Object.keys(stoveCounts);
+      if (uniqueStoves.length === 1) {
+        result.stoveType = uniqueStoves[0];
+      } else {
+        result.stoveType = uniqueStoves.map(s => 
+          stoveCounts[s] > 1 ? `${s} (${stoveCounts[s]}шт)` : s
+        ).join('; ');
+      }
+      result.stoveCount = stoves.length.toString();
+    }
+
+    // Об'єднуємо колонки
+    if (columns.length > 0) {
+      const columnCounts = {};
+      columns.forEach(c => {
+        columnCounts[c] = (columnCounts[c] || 0) + 1;
+      });
+      
+      const uniqueColumns = Object.keys(columnCounts);
+      if (uniqueColumns.length === 1) {
+        result.columnType = uniqueColumns[0];
+      } else {
+        result.columnType = uniqueColumns.map(c => 
+          columnCounts[c] > 1 ? `${c} (${columnCounts[c]}шт)` : c
+        ).join('; ');
+      }
+      result.columnCount = columns.length.toString();
+    }
 
     return result;
   };
@@ -1446,12 +1491,13 @@ if (needsProxy) {
             rsp: (row['РСП'] || '').toString().trim(),
             seal: (row['Пломба'] || '').toString().trim(),
             stickerSeal: (row['Стікерна пломба'] || '').toString().trim(),
-            boilerBrand: (row['Котел марка'] || '').toString().trim(),
-            boilerPower: (row['Котел потужність'] || '').toString().trim(),
-            stoveType: (row['Газова плита тип'] || '').toString().trim(),
-            stoveCount: (row['Кількість плит'] || '').toString().trim(),
-            columnType: (row['ВПГ тип'] || '').toString().trim(),
-            columnCount: (row['Кількість ВПГ'] || '').toString().trim(),
+            // ⚠️ НЕ читаємо окремі стовпці приладів - вони будуть заповнені парсером нижче
+            boilerBrand: '',
+            boilerPower: '',
+            stoveType: '',
+            stoveCount: '',
+            columnType: '',
+            columnCount: '',
             area: (row['Площа'] || '').toString().trim(),
             utilityType: (row['Комун. гос-во'] || '').toString().trim(),
             utilityGroup: (row['Група'] || '').toString().trim(),
@@ -1465,17 +1511,25 @@ if (needsProxy) {
             temporaryAbsent: row['Тимчасово відсутній'] === 'Так' || row['Тимчасово відсутній'] === true
           };
           
-          // ⭐ АВТОПАРСИНГ: Якщо є стовпець "Прилади" і він не порожній - парсимо його
+          // ⭐ АВТОПАРСИНГ: Якщо є стовпець "Прилади" - парсимо його
           const appliancesText = row['Прилади'] || row['прилади'] || row['Обладнання'] || row['обладнання'] || '';
           if (appliancesText && appliancesText.toString().trim()) {
             const parsed = parseAppliances(appliancesText.toString());
-            // Заповнюємо тільки ті поля які порожні (не перезаписуємо якщо вже є окремі стовпці)
-            if (!client.boilerBrand && parsed.boilerBrand) client.boilerBrand = parsed.boilerBrand;
-            if (!client.boilerPower && parsed.boilerPower) client.boilerPower = parsed.boilerPower;
-            if (!client.stoveType && parsed.stoveType) client.stoveType = parsed.stoveType;
-            if (!client.stoveCount && parsed.stoveCount) client.stoveCount = parsed.stoveCount;
-            if (!client.columnType && parsed.columnType) client.columnType = parsed.columnType;
-            if (!client.columnCount && parsed.columnCount) client.columnCount = parsed.columnCount;
+            // Заповнюємо з парсера
+            client.boilerBrand = parsed.boilerBrand;
+            client.boilerPower = parsed.boilerPower;
+            client.stoveType = parsed.stoveType;
+            client.stoveCount = parsed.stoveCount;
+            client.columnType = parsed.columnType;
+            client.columnCount = parsed.columnCount;
+          } else {
+            // Якщо немає стовпця "Прилади" - читаємо з окремих стовпців (для сумісності зі старим шаблоном)
+            client.boilerBrand = (row['Котел марка'] || '').toString().trim();
+            client.boilerPower = (row['Котел потужність'] || '').toString().trim();
+            client.stoveType = (row['Газова плита тип'] || '').toString().trim();
+            client.stoveCount = (row['Кількість плит'] || '').toString().trim();
+            client.columnType = (row['ВПГ тип'] || '').toString().trim();
+            client.columnCount = (row['Кількість ВПГ'] || '').toString().trim();
           }
           
           await addClient(client);

@@ -1403,15 +1403,11 @@ if (needsProxy) {
         stoveCounts[s] = (stoveCounts[s] || 0) + 1;
       });
       
-      // Формуємо рядок: якщо всі однакові - просто назва, якщо різні - перелік
+      // Формуємо рядок з кількістю для кожного типу
       const uniqueStoves = Object.keys(stoveCounts);
-      if (uniqueStoves.length === 1) {
-        result.stoveType = uniqueStoves[0];
-      } else {
-        result.stoveType = uniqueStoves.map(s => 
-          stoveCounts[s] > 1 ? `${s} (${stoveCounts[s]}шт)` : s
-        ).join('; ');
-      }
+      result.stoveType = uniqueStoves.map(s => 
+        stoveCounts[s] > 1 ? `${s} (${stoveCounts[s]}шт)` : s
+      ).join(', ');
       result.stoveCount = stoves.length.toString();
     }
 
@@ -1423,13 +1419,9 @@ if (needsProxy) {
       });
       
       const uniqueColumns = Object.keys(columnCounts);
-      if (uniqueColumns.length === 1) {
-        result.columnType = uniqueColumns[0];
-      } else {
-        result.columnType = uniqueColumns.map(c => 
-          columnCounts[c] > 1 ? `${c} (${columnCounts[c]}шт)` : c
-        ).join('; ');
-      }
+      result.columnType = uniqueColumns.map(c => 
+        columnCounts[c] > 1 ? `${c} (${columnCounts[c]}шт)` : c
+      ).join(', ');
       result.columnCount = columns.length.toString();
     }
 
@@ -1560,6 +1552,33 @@ if (needsProxy) {
     e.target.value = '';
   };
 
+  // ⭐ ФОРМАТУВАННЯ ПРИЛАДІВ для експорту: об'єднує окремі поля назад в текст
+  const formatAppliances = (client) => {
+    const parts = [];
+    
+    if (client.boilerBrand) {
+      const power = client.boilerPower ? ` ${client.boilerPower}` : '';
+      parts.push(`(Котел) ${client.boilerBrand}${power} - 1шт.`);
+    }
+    
+    if (client.stoveType) {
+      // Якщо в назві вже є кількість - використовуємо як є
+      if (client.stoveType.includes('(') && client.stoveType.includes('шт)')) {
+        parts.push(`(Плита газова) ${client.stoveType};`);
+      } else {
+        const count = client.stoveCount || '1';
+        parts.push(`(Плита газова) ${client.stoveType} - ${count}шт.`);
+      }
+    }
+    
+    if (client.columnType) {
+      const count = client.columnCount || '1';
+      parts.push(`(ВПГ) ${client.columnType} - ${count}шт.`);
+    }
+    
+    return parts.join(' ');
+  };
+
   const handleExportExcel = async () => {
     setLoading(true);
     showToast('info', 'Експорт в Excel...', 3000);
@@ -1576,9 +1595,7 @@ if (needsProxy) {
         'Група ліч.': c.meterGroup, 'Підтип': c.meterSubtype, 'Тип ліч.': c.meterType,
         'Належність': c.meterOwnership, 'Серв.орган.': c.serviceOrg, 'МВНСШ': c.mvnssh,
         'РСП': c.rsp, 'Пломба': c.seal, 'Стікерна пломба': c.stickerSeal,
-        'Котел марка': c.boilerBrand, 'Котел потужність': c.boilerPower, 
-        'Газова плита тип': c.stoveType, 'Кількість плит': c.stoveCount,
-        'ВПГ тип': c.columnType, 'Кількість ВПГ': c.columnCount, 
+        'Прилади': formatAppliances(c),
         'Площа': c.area, 'Комун. гос-во': c.utilityType, 'Група': c.utilityGroup, 'ГРС': c.grs,
         'Газ вимкнено': c.gasDisconnected, 'Метод відключення': c.disconnectMethod,
         'Пломба відкл.': c.disconnectSeal, 'Дата відкл.': c.disconnectDate, 'Дата підкл.': c.connectDate,
@@ -1651,15 +1668,13 @@ if (needsProxy) {
       'Група ліч.': 'Група 1', 'Підтип': 'Мембранний', 'Тип ліч.': 'Побутовий',
       'Належність': 'Абонент', 'Серв.орган.': 'Сервіс-1', 'МВНСШ': '10', 'РСП': 'РСП-1',
       'Пломба': '№123456', 'Стікерна пломба': '№789012',
-      'Котел марка': 'Ariston', 'Котел потужність': '24 кВт',
-      'Газова плита тип': 'ПГ-4', 'Кількість плит': '1',
-      'ВПГ тип': 'ВПГ-10', 'Кількість ВПГ': '1',
+      'Прилади': '(Котел) Ariston 24 - 1шт.; (Плита газова) ПГ-4 - 1шт.; (ВПГ) ВПГ-10 - 1шт.;',
       'Площа': '65.5', 'Комун. гос-во': 'Квартира', 'Група': 'Багатоквартирний', 'ГРС': 'ГРС-1',
       'Газ вимкнено': 'Ні', 'Метод відключення': '', 'Пломба відкл.': '',
       'Дата відкл.': '', 'Дата підкл.': '', 'Дача': 'Ні', 'Тимчасово відсутній': 'Ні'
     }];
     const ws = XLSX.utils.json_to_sheet(template);
-    ws['!cols'] = Array(45).fill({ wch: 15 });
+    ws['!cols'] = Array(41).fill({ wch: 15 }); // Зменшено з 45 до 41 (видалено 5 стовпців, додано 1)
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Шаблон');
     XLSX.writeFile(wb, 'Шаблон_Абоненти.xlsx');
@@ -2820,8 +2835,8 @@ if (needsProxy) {
                           <p className="text-xs font-semibold text-orange-900 mb-2">ПРИЛАДИ</p>
                           <div className="space-y-1 text-sm">
                             {c.boilerBrand && <p className="text-gray-700"><span className="font-medium">Котел:</span> {c.boilerBrand}{c.boilerPower && ` (${c.boilerPower})`}</p>}
-                            {c.stoveType && <p className="text-gray-700"><span className="font-medium">Плита:</span> {c.stoveType}{c.stoveCount && ` × ${c.stoveCount} шт`}</p>}
-                            {c.columnType && <p className="text-gray-700"><span className="font-medium">ВПГ:</span> {c.columnType}{c.columnCount && ` × ${c.columnCount} шт`}</p>}
+                            {c.stoveType && <p className="text-gray-700"><span className="font-medium">Плита:</span> {c.stoveType}</p>}
+                            {c.columnType && <p className="text-gray-700"><span className="font-medium">ВПГ:</span> {c.columnType}</p>}
                             {!c.boilerBrand && !c.stoveType && !c.columnType && <p className="text-gray-400 text-sm">Немає даних</p>}
                           </div>
                         </div>

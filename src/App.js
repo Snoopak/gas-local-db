@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, createContext, useContext, useCallback } from 'react';
-import { Search, Plus, Edit2, Trash2, X, Save, Phone, Home, Gauge, Upload, Download, FileText, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
+import { Search, Plus, Edit2, Trash2, X, Save, Phone, Home, Gauge, Upload, Download, FileText, CheckCircle, AlertCircle, Info, AlertTriangle, Database, Activity, Flame, MapPin, ChevronUp, ChevronDown, Users } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import './App.css';
+import {METER_CATALOG, METER_SIZES, METER_SUBTYPE, METER_LOCATION, METER_OWNERSHIP, SERVICE_ORG, METER_GROUP, METER_MANUFACTURER} from './data';
 
 // ==================== ALERT SYSTEM ====================
 // Context для Alert System
@@ -431,7 +433,7 @@ const countClients = async () => {
   });
 };
 
-const searchClients = async (searchTerm, settlements, streets, meterBrands, meterSizes, meterYears, meterGroups, filterDisconnected, filterDacha, filterAbsent) => {
+const searchClients = async (searchTerm, settlements, streets, meterBrands, meterSizes, meterYears, meterGroups, filterDisconnected, filterDacha, filterAbsent, filterConnected, filterBuilding, filterApartment) => {
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction([STORE_NAME], 'readonly');
@@ -444,16 +446,24 @@ const searchClients = async (searchTerm, settlements, streets, meterBrands, mete
       if (cursor) {
         const client = cursor.value;
         const matchesSearch = !searchTerm || 
-          client.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          client.accountNumber.includes(searchTerm) ||
-          client.phone.includes(searchTerm) ||
-          client.street.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          client.meterNumber.toLowerCase().includes(searchTerm.toLowerCase());
+          client.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          client.accountNumber?.includes(searchTerm) ||
+          client.phone?.includes(searchTerm) ||
+          client.street?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          client.meterNumber?.toLowerCase().includes(searchTerm.toLowerCase());
         
         const matchesSettlement = settlements.length === 0 || settlements.includes(client.settlement);
         
         const clientStreetName = [client.streetType, client.street].filter(s => s).join(' ');
         const matchesStreet = streets.length === 0 || streets.includes(clientStreetName);
+
+        // ⭐ ФІЛЬТР: будинок
+        const matchesBuilding = !filterBuilding ||
+          (String(client.building || '') + String(client.buildingLetter || '')).toLowerCase() === filterBuilding.toLowerCase();
+
+        // ⭐ ФІЛЬТР: квартира
+        const matchesApartment = !filterApartment ||
+          (String(client.apartment || '') + String(client.apartmentLetter || '')).toLowerCase() === filterApartment.toLowerCase();
         
         const matchesMeterBrand = meterBrands.length === 0 || meterBrands.includes(client.meterBrand);
         const matchesMeterSize = meterSizes.length === 0 || meterSizes.includes(client.meterSize);
@@ -464,13 +474,18 @@ const searchClients = async (searchTerm, settlements, streets, meterBrands, mete
         let matchesStatus = true;
         if (filterDisconnected || filterDacha || filterAbsent) {
           matchesStatus = 
-            (filterDisconnected && client.gasDisconnected === 'Так') ||
+            (filterDisconnected && client.gasDisconnected === true) ||
             (filterDacha && client.dacha === true) ||
             (filterAbsent && client.temporaryAbsent === true);
         }
+
+        // ⭐ ФІЛЬТР: газ включений (виключає відключених)
+        const matchesConnected = !filterConnected || client.gasDisconnected !== true;
         
-        if (matchesSearch && matchesSettlement && matchesStreet && 
-            matchesMeterBrand && matchesMeterSize && matchesMeterYear && matchesMeterGroup && matchesStatus) {
+        if (matchesSearch && matchesSettlement && matchesStreet &&
+            matchesBuilding && matchesApartment &&
+            matchesMeterBrand && matchesMeterSize && matchesMeterYear && matchesMeterGroup &&
+            matchesStatus && matchesConnected) {
           results.push(client);
         }
         cursor.continue();
@@ -483,9 +498,9 @@ const searchClients = async (searchTerm, settlements, streets, meterBrands, mete
 };
 
 // ⭐ НОВА ФУНКЦІЯ: Пошук з пагінацією для infinite scroll
-const searchClientsPaginated = async (searchTerm, settlements, streets, meterBrands, meterSizes, meterYears, meterGroups, filterDisconnected, filterDacha, filterAbsent, page, pageSize) => {
+const searchClientsPaginated = async (searchTerm, settlements, streets, meterBrands, meterSizes, meterYears, meterGroups, filterDisconnected, filterDacha, filterAbsent, filterConnected, filterBuilding, filterApartment, page, pageSize) => {
   // Спочатку отримуємо ВСІ результати
-  const allResults = await searchClients(searchTerm, settlements, streets, meterBrands, meterSizes, meterYears, meterGroups, filterDisconnected, filterDacha, filterAbsent);
+  const allResults = await searchClients(searchTerm, settlements, streets, meterBrands, meterSizes, meterYears, meterGroups, filterDisconnected, filterDacha, filterAbsent, filterConnected, filterBuilding, filterApartment);
   
   // Повертаємо тільки потрібну сторінку
   const start = page * pageSize;
@@ -520,6 +535,10 @@ function ClientDatabase() {
   const [filterDisconnected, setFilterDisconnected] = useState(false);
   const [filterDacha, setFilterDacha] = useState(false);
   const [filterAbsent, setFilterAbsent] = useState(false);
+  const [filterConnected, setFilterConnected] = useState(false);
+  // ⭐ ФІЛЬТРИ АДРЕСИ: будинок і квартира
+  const [filterBuilding, setFilterBuilding] = useState('');
+  const [filterApartment, setFilterApartment] = useState('');
   // ⭐ Dropdown швидких дій
   const [showQuickActions, setShowQuickActions] = useState(false);
   const [showImportUrlModal, setShowImportUrlModal] = useState(false);
@@ -570,6 +589,10 @@ function ClientDatabase() {
   // Додаємо ref для debounce таймера та debouncedSearchTerm
   const searchTimeoutRef = useRef(null);
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const buildingTimeoutRef = useRef(null);
+  const [debouncedBuilding, setDebouncedBuilding] = useState('');
+  const apartmentTimeoutRef = useRef(null);
+  const [debouncedApartment, setDebouncedApartment] = useState('');
   
   // State для відкритих dropdown
   const [openDropdown, setOpenDropdown] = useState(null);
@@ -592,24 +615,28 @@ function ClientDatabase() {
       document.addEventListener('keydown', handleEscape);
       // Блокуємо scroll body коли модалка відкрита
       document.body.style.overflow = 'hidden';
+      document.documentElement.style.overflow = 'hidden';
     }
 
     return () => {
       document.removeEventListener('keydown', handleEscape);
       document.body.style.overflow = 'unset';
+      document.documentElement.style.overflow = '';
     };
   }, [isModalOpen]);
+
+  
 
   const [formData, setFormData] = useState({
     fullName: '', settlement: '', streetType: '', street: '', building: '', buildingLetter: '',
     apartment: '', apartmentLetter: '', accountNumber: '', eic: '', phone: '',
     meterBrand: '', meterSize: '', meterNumber: '', meterYear: '', verificationDate: '',
     nextVerificationDate: '', installationDate: '', meterLocation: '', meterGroup: '', 
-    meterSubtype: '', meterType: '', meterOwnership: '', serviceOrg: '', mvnssh: '', 
-    rsp: '', seal: '', stickerSeal: '',
+    meterSubtype: '', meterOwnership: '', serviceOrg: '', mvnssh: '', 
+    rsp: '', seal: '', stickerSeal: '', meterManufacturer: '',
     boilerBrand: '', boilerPower: '', stoveType: '', stoveCount: '', columnType: '', columnCount: '',
     area: '', utilityType: '', utilityGroup: '', grs: '',
-    gasDisconnected: '', disconnectMethod: '', disconnectSeal: '', disconnectDate: '',
+    gasDisconnected: false, disconnectMethod: '', disconnectSeal: '', disconnectDate: '',
     connectDate: '', dacha: false, temporaryAbsent: false
   });
 
@@ -633,6 +660,24 @@ function ClientDatabase() {
     };
   }, [searchTerm]);
 
+  // Debounce для будинку
+  useEffect(() => {
+    if (buildingTimeoutRef.current) clearTimeout(buildingTimeoutRef.current);
+    buildingTimeoutRef.current = setTimeout(() => {
+      setDebouncedBuilding(filterBuilding);
+    }, CONFIG.DEBOUNCE_DELAY);
+    return () => clearTimeout(buildingTimeoutRef.current);
+  }, [filterBuilding]);
+
+  // Debounce для квартири
+  useEffect(() => {
+    if (apartmentTimeoutRef.current) clearTimeout(apartmentTimeoutRef.current);
+    apartmentTimeoutRef.current = setTimeout(() => {
+      setDebouncedApartment(filterApartment);
+    }, CONFIG.DEBOUNCE_DELAY);
+    return () => clearTimeout(apartmentTimeoutRef.current);
+  }, [filterApartment]);
+
   // ⭐ СТАРИЙ useEffect ВИДАЛЕНО - тепер є правильний нижче!
 
   useEffect(() => {
@@ -649,7 +694,7 @@ function ClientDatabase() {
 
     if (debouncedSearchTerm || selectedSettlement.length > 0 || selectedStreet.length > 0 || 
         selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || selectedMeterYear.length > 0 || selectedMeterGroups.length > 0 ||
-        filterDisconnected || filterDacha || filterAbsent) {
+        filterDisconnected || filterDacha || filterAbsent || filterConnected || debouncedBuilding || debouncedApartment) {
       // ⭐ При фільтрації ТЕОЖ використовуємо infinite scroll!
       clearScrollState();
       setCurrentPage(0);
@@ -663,59 +708,72 @@ function ClientDatabase() {
       loadClients();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearchTerm, selectedSettlement, selectedStreet, selectedMeterBrand, selectedMeterSize, selectedMeterYear, selectedMeterGroups, filterDisconnected, filterDacha, filterAbsent]);
+  }, [debouncedSearchTerm, selectedSettlement, selectedStreet, selectedMeterBrand, selectedMeterSize, selectedMeterYear, selectedMeterGroups, filterDisconnected, filterDacha, filterAbsent, filterConnected, debouncedBuilding, debouncedApartment]);
 
-  // Динамічне оновлення фільтрів на основі вибраних значень
+  // Динамічне оновлення фільтрів — каскадна логіка
   useEffect(() => {
     const updateDynamicFilters = async () => {
       const allClients = await getAllClients();
-      
-      // Фільтруємо клієнтів ТІЛЬКИ по адресі (для оновлення списків лічильників)
-      let filteredByAddress = allClients;
-      
+
+      // Базовий фільтр по адресі
+      let byAddress = allClients;
       if (selectedSettlement.length > 0) {
-        filteredByAddress = filteredByAddress.filter(c => selectedSettlement.includes(c.settlement));
+        byAddress = byAddress.filter(c => selectedSettlement.includes(c.settlement));
       }
-      
       if (selectedStreet.length > 0) {
-        filteredByAddress = filteredByAddress.filter(c => {
+        byAddress = byAddress.filter(c => {
           const clientStreetName = [c.streetType, c.street].filter(s => s).join(' ');
           return selectedStreet.includes(clientStreetName);
         });
       }
-      
-      // ⭐ ВИПРАВЛЕННЯ: Список вулиць фільтрується ТІЛЬКИ по населеному пункту, БЕЗ selectedStreet
+
+      // Вулиці — тільки по населеному пункту
       let clientsForStreets = allClients;
       if (selectedSettlement.length > 0) {
         clientsForStreets = allClients.filter(c => selectedSettlement.includes(c.settlement));
       }
-      
-      const uniqueStreets = [...new Set(clientsForStreets.map(c => {
-        const streetName = [c.streetType, c.street].filter(s => s).join(' ');
-        return streetName;
-      }).filter(s => s))].sort((a, b) => a.localeCompare(b, 'uk', { sensitivity: 'base' }));
-      
+      const uniqueStreets = [...new Set(clientsForStreets.map(c =>
+        [c.streetType, c.street].filter(s => s).join(' ')
+      ).filter(s => s))].sort((a, b) => a.localeCompare(b, 'uk', { sensitivity: 'base' }));
       setStreets(uniqueStreets);
-      
-      // Оновлюємо список марок лічильників (по адресі, але НЕ по іншим фільтрам лічильників)
-      const uniqueBrands = [...new Set(filteredByAddress.map(c => c.meterBrand).filter(b => b))].sort((a, b) => a.localeCompare(b, 'uk', { sensitivity: 'base' }));
-      setMeterBrands(uniqueBrands);
-      
-      // Оновлюємо список типорозмірів (по адресі, але НЕ по іншим фільтрам лічильників)
-      const uniqueSizes = [...new Set(filteredByAddress.map(c => c.meterSize).filter(s => s))].sort((a, b) => a.localeCompare(b, 'uk', { numeric: true, sensitivity: 'base' }));
-      setMeterSizes(uniqueSizes);
-      
-      // Оновлюємо список років (по адресі, але НЕ по іншим фільтрам лічильників)
-      const uniqueYears = [...new Set(filteredByAddress.map(c => c.meterYear).filter(y => y))].sort((a, b) => a - b);
-      setMeterYears(uniqueYears);
-      
-      // Оновлюємо список груп лічильників (по адресі, але НЕ по іншим фільтрам лічильників)
-      const uniqueGroups = [...new Set(filteredByAddress.map(c => c.meterGroup).filter(g => g))].sort((a, b) => a.localeCompare(b, 'uk', { sensitivity: 'base' }));
+
+      // ⭐ КАСКАД лічильників: адреса → група → марка → типорозмір → рік
+
+      // Групи — по адресі
+      const uniqueGroups = [...new Set(byAddress.map(c => c.meterGroup).filter(g => g))]
+        .sort((a, b) => a.localeCompare(b, 'uk', { sensitivity: 'base' }));
       setMeterGroups(uniqueGroups);
+
+      // Марки — по адресі + обрана група
+      let byGroup = byAddress;
+      if (selectedMeterGroups.length > 0) {
+        byGroup = byGroup.filter(c => selectedMeterGroups.includes(c.meterGroup));
+      }
+      const uniqueBrands = [...new Set(byGroup.map(c => c.meterBrand).filter(b => b))]
+        .sort((a, b) => a.localeCompare(b, 'uk', { sensitivity: 'base' }));
+      setMeterBrands(uniqueBrands);
+
+      // Типорозміри — по адресі + група + марка
+      let byBrand = byGroup;
+      if (selectedMeterBrand.length > 0) {
+        byBrand = byBrand.filter(c => selectedMeterBrand.includes(c.meterBrand));
+      }
+      const uniqueSizes = [...new Set(byBrand.map(c => c.meterSize).filter(s => s))]
+        .sort((a, b) => a.localeCompare(b, 'uk', { numeric: true, sensitivity: 'base' }));
+      setMeterSizes(uniqueSizes);
+
+      // Роки — по адресі + група + марка + типорозмір
+      let bySize = byBrand;
+      if (selectedMeterSize.length > 0) {
+        bySize = bySize.filter(c => selectedMeterSize.includes(c.meterSize));
+      }
+      const uniqueYears = [...new Set(bySize.map(c => c.meterYear).filter(y => y))]
+        .sort((a, b) => a - b);
+      setMeterYears(uniqueYears);
     };
-    
+
     updateDynamicFilters();
-  }, [selectedSettlement, selectedStreet]); // ⭐ ВАЖЛИВО: Тільки адреса, БЕЗ фільтрів лічильників!
+  }, [selectedSettlement, selectedStreet, selectedMeterGroups, selectedMeterBrand, selectedMeterSize]);
 
   // ⭐ INFINITE SCROLL: Слухач скролу
   useEffect(() => {
@@ -755,7 +813,7 @@ function ClientDatabase() {
       const hasFilters = debouncedSearchTerm || selectedSettlement.length > 0 || selectedStreet.length > 0 || 
                         selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || 
                         selectedMeterYear.length > 0 || selectedMeterGroups.length > 0 ||
-                        filterDisconnected || filterDacha || filterAbsent;
+                        filterDisconnected || filterDacha || filterAbsent || filterConnected || debouncedBuilding || debouncedApartment;
       
       if (hasFilters) {
         performSearch(true); // append = true для фільтрів
@@ -948,7 +1006,7 @@ function ClientDatabase() {
     
     // Рахуємо клієнтів з кожним статусом серед відфільтрованих
     const counts = {
-      disconnected: filteredClients.filter(c => c.gasDisconnected === 'Так').length,
+      disconnected: filteredClients.filter(c => c.gasDisconnected === true).length,
       dacha: filteredClients.filter(c => c.dacha === true).length,
       absent: filteredClients.filter(c => c.temporaryAbsent === true).length
     };
@@ -1099,7 +1157,7 @@ function ClientDatabase() {
       const result = await searchClientsPaginated(
         debouncedSearchTerm, selectedSettlement, selectedStreet,
         selectedMeterBrand, selectedMeterSize, selectedMeterYear, selectedMeterGroups,
-        filterDisconnected, filterDacha, filterAbsent,
+        filterDisconnected, filterDacha, filterAbsent, filterConnected, debouncedBuilding, debouncedApartment,
         currentPage, CONFIG.PAGE_SIZE
       );
       
@@ -1155,6 +1213,23 @@ function ClientDatabase() {
       console.error('Error saving client:', error);
       showToast('error', 'Помилка при збереженні клієнта');
     }
+  };
+
+  const handleAdd = () => {
+    setEditingClient(null);
+    setFormData({
+      fullName: '', settlement: '', streetType: '', street: '', building: '', buildingLetter: '',
+      apartment: '', apartmentLetter: '', accountNumber: '', eic: '', phone: '',
+      meterBrand: '', meterSize: '', meterNumber: '', meterYear: '', verificationDate: '',
+      nextVerificationDate: '', installationDate: '', meterLocation: '', meterGroup: '',
+      meterSubtype: '', meterOwnership: '', serviceOrg: '', mvnssh: '',
+      rsp: '', seal: '', stickerSeal: '', meterManufacturer: '',
+      boilerBrand: '', boilerPower: '', stoveType: '', stoveCount: '', columnType: '', columnCount: '',
+      area: '', utilityType: '', utilityGroup: '', grs: '',
+      gasDisconnected: false, disconnectMethod: '', disconnectSeal: '', disconnectDate: '',
+      connectDate: '', dacha: false, temporaryAbsent: false
+    });
+    setIsModalOpen(true);
   };
 
   const handleEdit = (client) => {
@@ -1222,20 +1297,7 @@ function ClientDatabase() {
         finalUrl = finalUrl.replace('?dl=0', '?dl=1').replace('www.dropbox.com', 'dl.dropboxusercontent.com');
         showToast('info', '🔄 Конвертую Dropbox URL...', 1000);
       }
-      
-      // 🔥 CORS PROXY для всіх URL (крім localhost та github.io)
-      const needsProxy = !finalUrl.includes('localhost') && 
-                        !finalUrl.includes('127.0.0.1') &&
-                        !finalUrl.includes('.github.io') &&
-                        !finalUrl.includes('cdn.jsdelivr.net') &&
-                        !finalUrl.includes('raw.githack.com');
-      
-if (needsProxy) {
-  // 🔥 Використовуємо власний CORS-проксі (на Vercel)
-  finalUrl = `https://my-cors-proxy-jfls.vercel.app/api/proxy?url=${encodeURIComponent(finalUrl)}`;
-  showToast('info', '🌐 Використовую власний CORS proxy...', 1500);
-}
-      
+            
       console.log('🌐 Final URL:', finalUrl);
       
       // 🔥 Fetch БЕЗ Service Worker (обхід SW кешу)
@@ -1253,7 +1315,19 @@ if (needsProxy) {
         throw new Error(`Помилка завантаження: ${response.status} ${response.statusText}`);
       }
       
-      const data = await response.json();
+      const text = await response.text();
+
+// 🔒 обмеження розміру (~5MB)
+if (text.length > 5 * 1024 * 1024) {
+  throw new Error('Файл занадто великий');
+}
+
+let data;
+try {
+  data = JSON.parse(text);
+} catch {
+  throw new Error('Невалідний JSON');
+}
       
       console.log('📦 Data loaded:', {
         isArray: Array.isArray(data),
@@ -1263,7 +1337,7 @@ if (needsProxy) {
       });
       
       // Перевірка формату
-      if (!Array.isArray(data) && !data.clients) {
+      if (!Array.isArray(data) && (!data || !Array.isArray(data.clients))) {
         console.error('❌ Invalid format:', data);
         throw new Error('Неправильний формат файлу. Очікується масив клієнтів або об\'єкт з полем "clients"');
       }
@@ -1291,9 +1365,16 @@ if (needsProxy) {
       
       // Додаємо клієнтів
       let imported = 0;
-      for (let i = 0; i < clients.length; i++) {
-        await addClient(clients[i]);
-        imported++;
+for (let i = 0; i < clients.length; i++) {
+  const c = clients[i];
+
+  // 🔒 базова валідація
+  if (!c || typeof c.fullName !== 'string' || typeof c.accountNumber !== 'string') {
+    continue;
+  }
+
+  await addClient(c);
+  imported++;
         // Оновлюємо прогрес кожні 50 записів або на останньому
         if ((i + 1) % 50 === 0 || i === clients.length - 1) {
           setImportProgress(prev => ({ ...prev, current: i + 1 }));
@@ -1479,13 +1560,13 @@ if (needsProxy) {
             meterLocation: (row['Розташування лічильника'] || '').toString().trim(),
             meterGroup: (row['Група ліч.'] || '').toString().trim(),
             meterSubtype: (row['Підтип'] || '').toString().trim(),
-            meterType: (row['Тип ліч.'] || '').toString().trim(),
             meterOwnership: (row['Належність'] || '').toString().trim(),
             serviceOrg: (row['Серв.орган.'] || '').toString().trim(),
             mvnssh: (row['МВНСШ'] || '').toString().trim(),
             rsp: (row['РСП'] || '').toString().trim(),
             seal: (row['Пломба'] || '').toString().trim(),
             stickerSeal: (row['Стікерна пломба'] || '').toString().trim(),
+            meterManufacturer: (row['Завод виробник'] || '').toString().trim(),
             // ⚠️ НЕ читаємо окремі стовпці приладів - вони будуть заповнені парсером нижче
             boilerBrand: '',
             boilerPower: '',
@@ -1497,7 +1578,7 @@ if (needsProxy) {
             utilityType: (row['Комун. гос-во'] || '').toString().trim(),
             utilityGroup: (row['Група'] || '').toString().trim(),
             grs: (row['ГРС'] || '').toString().trim(),
-            gasDisconnected: (row['Газ вимкнено'] || '').toString().trim(),
+            gasDisconnected: (row['Газ вимкнено'] === 'Так' || row['Газ вимкнено'] === true),
             disconnectMethod: (row['Метод відключення'] || '').toString().trim(),
             disconnectSeal: (row['Пломба відкл.'] || '').toString().trim(),
             disconnectDate: (row['Дата відкл.'] || '').toString().trim(),
@@ -1597,12 +1678,12 @@ if (needsProxy) {
         'Марка лічильника': c.meterBrand, 'Типорозмір': c.meterSize, '№ лічильника': c.meterNumber, 
         'Рік випуску': c.meterYear, 'Дата повірки': c.verificationDate, 'Наступна повірка': c.nextVerificationDate, 
         'Дата встановлення': c.installationDate, 'Розташування лічильника': c.meterLocation,
-        'Група ліч.': c.meterGroup, 'Підтип': c.meterSubtype, 'Тип ліч.': c.meterType,
+        'Група ліч.': c.meterGroup, 'Підтип': c.meterSubtype,
         'Належність': c.meterOwnership, 'Серв.орган.': c.serviceOrg, 'МВНСШ': c.mvnssh,
-        'РСП': c.rsp, 'Пломба': c.seal, 'Стікерна пломба': c.stickerSeal,
+        'РСП': c.rsp, 'Пломба': c.seal, 'Стікерна пломба': c.stickerSeal, 'Завод виробник': c.meterManufacturer,
         'Прилади': formatAppliances(c),
         'Площа': c.area, 'Комун. гос-во': c.utilityType, 'Група': c.utilityGroup, 'ГРС': c.grs,
-        'Газ вимкнено': c.gasDisconnected, 'Метод відключення': c.disconnectMethod,
+        'Газ вимкнено': c.gasDisconnected ? 'Так' : 'Ні', 'Метод відключення': c.disconnectMethod,
         'Пломба відкл.': c.disconnectSeal, 'Дата відкл.': c.disconnectDate, 'Дата підкл.': c.connectDate,
         'Дача': c.dacha ? 'Так' : 'Ні', 'Тимчасово відсутній': c.temporaryAbsent ? 'Так' : 'Ні'
       }));
@@ -1691,11 +1772,11 @@ if (needsProxy) {
       apartment: '', apartmentLetter: '', accountNumber: '', eic: '', phone: '',
       meterBrand: '', meterSize: '', meterNumber: '', meterYear: '', verificationDate: '',
       nextVerificationDate: '', installationDate: '', meterLocation: '', meterGroup: '', 
-      meterSubtype: '', meterType: '', meterOwnership: '', serviceOrg: '', mvnssh: '', 
-      rsp: '', seal: '', stickerSeal: '',
+      meterSubtype: '', meterOwnership: '', serviceOrg: '', mvnssh: '', 
+      rsp: '', seal: '', stickerSeal: '', meterManufacturer: '',
       boilerBrand: '', boilerPower: '', stoveType: '', stoveCount: '', columnType: '', columnCount: '',
       area: '', utilityType: '', utilityGroup: '', grs: '',
-      gasDisconnected: '', disconnectMethod: '', disconnectSeal: '', disconnectDate: '',
+      gasDisconnected: false, disconnectMethod: '', disconnectSeal: '', disconnectDate: '',
       connectDate: '', dacha: false, temporaryAbsent: false
     });
     setEditingClient(null);
@@ -1725,88 +1806,61 @@ if (needsProxy) {
 
     useEffect(() => {
       if (!isOpen) return;
-
       const handleClickOutside = (event) => {
-        // Ігноруємо кліки на модалках
-        const modal = event.target.closest('[class*="fixed"][class*="z-50"]');
-        if (modal) {
-          console.log('🔵 Ignoring click - modal detected');
-          return;
-        }
-
         if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-          console.log('🔴 Closing dropdown - click outside');
           setOpenDropdown(null);
         }
       };
-
-      const timer = setTimeout(() => {
-        console.log('✅ Dropdown listener added for:', name);
-        document.addEventListener('mousedown', handleClickOutside);
-      }, 150);
-
-      return () => {
-        clearTimeout(timer);
-        document.removeEventListener('mousedown', handleClickOutside);
-        console.log('🧹 Dropdown listener removed for:', name);
-      };
-    }, [isOpen, name]); // ⭐ Додав name щоб не реагувати на зміни selected
+      const timer = setTimeout(() => { document.addEventListener('mousedown', handleClickOutside); }, 150);
+      return () => { clearTimeout(timer); document.removeEventListener('mousedown', handleClickOutside); };
+    }, [isOpen, name]);
 
     const toggleOption = useCallback((option) => {
-      console.log('🎯 Toggle option:', option, 'in dropdown:', name);
       toggleSelection(selected, onChange, option);
     }, [selected, onChange, name]);
 
+    const labelText = selected.length === 0 ? label
+      : selected.length === 1 ? selected[0]
+      : `${label} (${selected.length})`;
+
     return (
-      <div className="relative w-full sm:w-auto" ref={dropdownRef}>
+      <div className="dropdown-wrap" ref={dropdownRef}>
         <button
           type="button"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            console.log('🔵 Dropdown button clicked:', name, 'isOpen:', isOpen);
-            setOpenDropdown(isOpen ? null : name);
-          }}
-          className="w-full px-3 sm:px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white text-left flex items-center justify-between min-w-full sm:min-w-[180px] text-sm sm:text-base">
-          <span className="truncate">{getFilterLabel(selected, options, label)}</span>
-          <svg className={`w-4 h-4 transition-transform flex-shrink-0 ml-2 ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
+          className={"dropdown-btn" + (selected.length > 0 ? " active" : "")}
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpenDropdown(isOpen ? null : name); }}>
+          <span className="dropdown-btn-label">{labelText}</span>
+          <ChevronDown size={11} style={{ flexShrink: 0, transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
         </button>
-        
         {isOpen && (
-          <div 
-            className="absolute z-50 mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto"
-          >
+          <div className="dropdown-menu">
             {options.length === 0 ? (
-              <div className="px-4 py-2 text-gray-400 text-sm">Немає опцій</div>
+              <div className="dropdown-empty">Немає опцій</div>
             ) : (
-              options.map(option => (
-                <div
-                  key={option}
-                  className="flex items-center px-3 sm:px-4 py-3 sm:py-2 hover:bg-indigo-50 cursor-pointer active:bg-indigo-100"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    console.log('🟢 Option div clicked:', option);
-                    toggleOption(option);
-                  }}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation(); // ⭐ КРИТИЧНО!
-                    console.log('🟡 Option mousedown:', option);
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={selected.includes(option)}
-                    onChange={() => {}}
-                    tabIndex={-1}
-                    className="w-5 h-5 sm:w-4 sm:h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 flex-shrink-0 pointer-events-none"
-                  />
-                  <span className="ml-3 sm:ml-2 text-sm text-gray-700 select-none">{option}</span>
-                </div>
-              ))
+              <>
+                {selected.length > 0 && (
+                  <div className="dropdown-reset"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); onChange([]); }}
+                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+                    × Скинути
+                  </div>
+                )}
+                {options.map(option => (
+                  <div key={option}
+                    className={"dropdown-option" + (selected.includes(option) ? " selected" : "")}
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleOption(option); }}
+                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+                    <div className={"dropdown-checkbox" + (selected.includes(option) ? " checked" : "")}>
+                      {selected.includes(option) && (
+                        <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
+                          <path d="M2 5l2.5 2.5L8 2.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      )}
+                    </div>
+                    <span className="dropdown-option-label">{option}</span>
+                  </div>
+                ))}
+              </>
             )}
           </div>
         )}
@@ -1815,1071 +1869,310 @@ if (needsProxy) {
   });
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-2 sm:p-4">
-      {/* ⭐ MODAL ПРОГРЕСУ ІМПОРТУ */}
+    <div className="app-wrapper">
+      {/* IMPORT PROGRESS MODAL */}
       {importProgress.show && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 transform transition-all">
-            {/* Іконка завантаження */}
-            <div className="flex justify-center mb-6">
-              <div className="relative">
-                <div className="w-20 h-20 rounded-full border-4 border-indigo-100"></div>
-                <div className="absolute top-0 left-0 w-20 h-20 rounded-full border-4 border-indigo-600 border-t-transparent animate-spin"></div>
-                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-                  <Upload className="w-8 h-8 text-indigo-600" />
+        <div className="import-progress-overlay">
+          <div className="import-progress-card">
+            <div className="import-spinner-wrap">
+              <div className="import-spinner-ring">
+                <div className="import-spinner-bg"></div>
+                <div className="import-spinner-anim"></div>
+                <div className="import-spinner-icon">
+                  <Upload size={32} />
                 </div>
               </div>
             </div>
-
-            {/* Заголовок */}
-            <h3 className="text-2xl font-bold text-gray-900 text-center mb-2">
-              Імпорт даних
-            </h3>
-            <p className="text-gray-600 text-center mb-6 text-sm">
-              {importProgress.fileName}
-            </p>
-
-            {/* Прогрес бар */}
-            <div className="mb-4">
-              <div className="flex justify-between text-sm font-medium text-gray-700 mb-2">
+            <h3 className="import-title">Імпорт даних</h3>
+            <p className="import-filename">{importProgress.fileName}</p>
+            <div className="import-progress-bar-wrap">
+              <div className="import-progress-header">
                 <span>Оброблено записів</span>
                 <span>{importProgress.current} / {importProgress.total}</span>
               </div>
-              <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-gradient-to-r from-indigo-500 to-blue-500 rounded-full"
-                  style={{ width: `${importProgress.total > 0 ? (importProgress.current / importProgress.total) * 100 : 0}%` }}
-                ></div>
+              <div className="import-progress-track">
+                <div className="import-progress-fill"
+                  style={{ width: `${importProgress.total > 0 ? (importProgress.current / importProgress.total) * 100 : 0}%` }}>
+                </div>
               </div>
-              <div className="text-center mt-2">
-                <span className="text-lg font-bold text-indigo-600">
-                  {importProgress.total > 0 ? Math.round((importProgress.current / importProgress.total) * 100) : 0}%
-                </span>
+              <div className="import-percent">
+                {importProgress.total > 0 ? Math.round((importProgress.current / importProgress.total) * 100) : 0}%
               </div>
             </div>
-
-            {/* Підказка */}
-            <p className="text-xs text-gray-500 text-center">
-              ⏳ Будь ласка, зачекайте. Не закривайте вікно.
-            </p>
+            <p className="import-hint">⏳ Будь ласка, зачекайте. Не закривайте вікно.</p>
           </div>
         </div>
       )}
 
-      {/* ⭐ ПЛАВАЮЧИЙ ЛІЧИЛЬНИК - показується тільки на desktop */}
-      {clients.length > 0 && (
-        <div className="hidden sm:block fixed top-4 right-4 z-40 bg-white/95 backdrop-blur-sm shadow-lg rounded-lg px-4 py-2 border border-indigo-200 transition-all hover:shadow-xl">
-          <div className="text-center">
-            <p className="text-xs text-gray-500 font-medium">Завантажено</p>
-            <p className="text-lg font-bold text-indigo-900">
-              {clients.length} <span className="text-sm text-gray-400">/</span> {
-                // Показуємо filteredTotalCount якщо є фільтри, інакше totalCount
-                (debouncedSearchTerm || selectedSettlement.length > 0 || selectedStreet.length > 0 || 
-                 selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || 
-                 selectedMeterYear.length > 0 || selectedMeterGroups.length > 0 ||
-                 filterDisconnected || filterDacha || filterAbsent)
-                  ? filteredTotalCount
-                  : totalCount
-              }
-            </p>
-          </div>
-        </div>
-      )}
+      <div className="app-container">
 
-      <div className="max-w-7xl mx-auto">
-        <div className="bg-white rounded-lg shadow-lg p-3 sm:p-6 mb-4 sm:mb-6">
-          {/* Заголовок + Швидкі дії */}
-          <div className="flex justify-between items-center mb-4 sm:mb-6">
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-indigo-900">База абонентів газопостачання</h1>
-            
-            {/* Dropdown з швидкими діями */}
-            <div className="relative">
-              <button 
-                onClick={() => setShowQuickActions(!showQuickActions)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                title="Швидкі дії"
-              >
-                <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-              </button>
-              
-              {/* Dropdown меню */}
-              {showQuickActions && (
-                <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-2xl border-2 border-gray-200 z-50">
-                  <div className="p-2">
-                    <button 
-                      onClick={(e) => { 
-                        e.preventDefault();
-                        e.stopPropagation();
-                        handleDownloadTemplate(); 
-                        setShowQuickActions(false); 
-                      }}
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                      }}
-                      className="w-full px-4 py-3 text-left hover:bg-purple-50 rounded-lg flex items-center gap-3 transition-colors">
-                      <FileText className="w-5 h-5 text-purple-600" />
-                      <div>
-                        <div className="font-semibold text-sm text-gray-900">Шаблон</div>
-                        <div className="text-xs text-gray-500">Завантажити Excel</div>
-                      </div>
-                    </button>
-                    
-                    <label 
-                      className="w-full px-4 py-3 hover:bg-green-50 rounded-lg flex items-center gap-3 transition-colors cursor-pointer"
-                      onMouseDown={(e) => {
-                        e.stopPropagation();
-                      }}
-                    >
-                      <Upload className="w-5 h-5 text-green-600" />
-                      <div>
-                        <div className="font-semibold text-sm text-gray-900">Імпорт</div>
-                        <div className="text-xs text-gray-500">Завантажити дані</div>
-                      </div>
-                      <input type="file" accept=".xlsx,.xls" onChange={(e) => { handleImportExcel(e); setShowQuickActions(false); }} className="hidden" disabled={loading} />
-                    </label>
-                    
-                    <button 
-                    className="md-imp w-full px-4 py-3 text-left hover:bg-teal-50 rounded-lg flex items-center gap-3 transition-colors disabled:opacity-50"
-                    onClick={(e) => { 
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setShowImportUrlModal(true); 
-                      setShowQuickActions(false); 
-                    }} 
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                    }}
-                    disabled={loading}
-                    >
-                      <svg className="w-5 h-5 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                      </svg>
-                      <div>
-                        <div className="font-semibold text-sm text-gray-900">Імпорт за URL</div>
-                        <div className="text-xs text-gray-500">Для слабких телефонів</div>
-                      </div>
-                    </button>
-                    
-                    <button 
-                      onClick={(e) => { 
-                        e.preventDefault();
-                        e.stopPropagation();
-                        handleExportExcel(); 
-                        setShowQuickActions(false); 
-                      }}
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                      }}
-                      disabled={totalCount === 0 || loading} 
-                      className="w-full px-4 py-3 text-left hover:bg-blue-50 rounded-lg flex items-center gap-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                      <Download className="w-5 h-5 text-blue-600" />
-                      <div>
-                        <div className="font-semibold text-sm text-gray-900">Експорт Excel</div>
-                        <div className="text-xs text-gray-500">Зберегти в Excel</div>
-                      </div>
-                    </button>
-                    
-                    <button 
-                      onClick={(e) => { 
-                        e.preventDefault();
-                        e.stopPropagation();
-                        handleExportJSON(); 
-                        setShowQuickActions(false); 
-                      }}
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                      }}
-                      disabled={totalCount === 0 || loading} 
-                      className="w-full px-4 py-3 text-left hover:bg-amber-50 rounded-lg flex items-center gap-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                      <FileText className="w-5 h-5 text-amber-600" />
-                      <div>
-                        <div className="font-semibold text-sm text-gray-900">Експорт JSON</div>
-                        <div className="text-xs text-gray-500">Для імпорту за URL</div>
-                      </div>
-                    </button>
-                    
-                    <div className="border-t my-2"></div>
-                    
-                    <button 
-                      onClick={(e) => { 
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setIsModalOpen(true); 
-                        setShowQuickActions(false); 
-                      }}
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                      }}
-                      disabled={loading} 
-                      className="w-full px-4 py-3 text-left hover:bg-indigo-50 rounded-lg flex items-center gap-3 transition-colors">
-                      <Plus className="w-5 h-5 text-indigo-600" />
-                      <div>
-                        <div className="font-semibold text-sm text-gray-900">Додати клієнта</div>
-                        <div className="text-xs text-gray-500">Новий запис</div>
-                      </div>
-                    </button>
-                  </div>
-                </div>
-              )}
+        {/* ===== NAVBAR ===== */}
+        <div className="navbar">
+          <div className="navbar-inner">
+            <div className="navbar-logo">
+              <div className="navbar-logo-icon"><Database size={14} /></div>
+              <span className="navbar-title">Абоненти газу</span>
+            </div>
+            <div className="navbar-stats">
+              <span className="stat-badge">Всього: <b>{totalCount}</b></span>
+              <span className="stat-badge-danger">Відключених: <b>{statusCounts.disconnected}</b></span>
+            </div>
+            <div className="navbar-actions">
+              <button className="btn" onClick={() => setShowImportUrlModal(true)}><Upload size={13} /> Імпорт JSON</button>
+              <label  className="btn" onMouseDown={(e) => {e.stopPropagation();}}><Upload size={13} />Імпорт XLS
+              <input type="file" accept=".xlsx,.xls" onChange={(e) => { handleImportExcel(e); setShowQuickActions(false); }} className="hidden" disabled={loading} />
+              </label>
+              <button className="btn" onClick={handleExportJSON}><Download size={13} /> JSON</button>
+              <button className="btn" onClick={handleExportExcel}><Download size={13} />Експорт Excel</button>
+              <button onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleDownloadTemplate(); 
+                setShowQuickActions(false); 
+                }}
+                onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                }}
+                className="btn"><FileText size={13} />Шаблон XLS</button>
+              <button className="btn-primary" onClick={handleAdd}><Plus size={13} /> Новий</button>
             </div>
           </div>
-          
-          {/* 🔥 ГІБРИДНИЙ LOADER: Skeleton пошуку + Disabled фільтри при завантаженні */}
-          {/* Показується ТІЛЬКИ якщо база не порожня (totalCount !== 0) */}
-          {(loading || isInitialLoading) && clients.length === 0 && totalCount !== 0 && (
-            <>
-              <style>{`
-                @keyframes shimmer {
-                  0% { background-position: -1000px 0; }
-                  100% { background-position: 1000px 0; }
-                }
-                .skeleton {
-                  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-                  background-size: 1000px 100%;
-                  animation: shimmer 2s infinite;
-                }
-              `}</style>
-              
-              {/* Skeleton пошуку */}
-              <div className="mb-3">
-                <div className="skeleton h-12 rounded-lg"></div>
-              </div>
-              
-              {/* Disabled фільтри - виглядають як справжні, але неактивні */}
-              
-              {/* Фільтри для Desktop - 2 колонки (disabled) */}
-              <div className="hidden sm:grid sm:grid-cols-2 gap-4 mb-4 opacity-60 pointer-events-none">
-                {/* Ліва колонка - Фільтри адреси */}
-                <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
-                  <h3 className="text-sm font-semibold text-blue-900 mb-2 flex items-center gap-2">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                    </svg>
-                    Фільтри адреси
-                  </h3>
-                  <div className="space-y-2">
-                    <select className="w-full px-3 py-3 border border-gray-300 rounded-lg bg-white text-sm cursor-not-allowed" disabled>
-                      <option>Населений пункт</option>
-                    </select>
-                    <select className="w-full px-3 py-3 border border-gray-300 rounded-lg bg-white text-sm cursor-not-allowed" disabled>
-                      <option>Вулиця</option>
-                    </select>
-                  </div>
-                </div>
-                
-                {/* Права колонка - Фільтри лічильників */}
-                <div className="bg-purple-50 p-3 rounded-lg border border-purple-200">
-                  <h3 className="text-sm font-semibold text-purple-900 mb-2 flex items-center gap-2">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                      <path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"></path>
-                      <path d="M12 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"></path>
-                      <path d="M13 12l6 -6"></path>
-                    </svg>
-                    Фільтри лічильників
-                  </h3>
-                  <div className="grid grid-cols-2 gap-2">
-                    <select className="px-3 py-3 border border-gray-300 rounded-lg bg-white text-sm cursor-not-allowed" disabled>
-                      <option>Група</option>
-                    </select>
-                    <select className="px-3 py-3 border border-gray-300 rounded-lg bg-white text-sm cursor-not-allowed" disabled>
-                      <option>Марка</option>
-                    </select>
-                    <select className="px-3 py-3 border border-gray-300 rounded-lg bg-white text-sm cursor-not-allowed" disabled>
-                      <option>Типорозмір</option>
-                    </select>
-                    <select className="px-3 py-3 border border-gray-300 rounded-lg bg-white text-sm cursor-not-allowed" disabled>
-                      <option>Рік</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
 
-              {/* Кнопки фільтрів для мобільних (disabled) */}
-              <div className="sm:hidden grid grid-cols-2 gap-2 mb-3 opacity-60 pointer-events-none">
-                <button className="px-3 py-3 bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 text-blue-900 rounded-lg flex items-center justify-between shadow-sm cursor-not-allowed">
-                  <span className="flex items-center gap-1 font-medium text-sm">
-                    <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                    </svg>
-                    Адреса
-                  </span>
-                  <span className="text-sm">▼</span>
-                </button>
-                <button className="px-3 py-3 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 text-purple-900 rounded-lg flex items-center justify-between shadow-sm cursor-not-allowed">
-                  <span className="flex items-center gap-1 font-medium text-sm">
-                    <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                      <path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"></path>
-                      <path d="M12 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"></path>
-                      <path d="M13 12l6 -6"></path>
-                    </svg>
-                    Лічильник
-                  </span>
-                  <span className="text-sm">▼</span>
-                </button>
-              </div>
-              
-              {/* Disabled статуси - виглядають як справжні (треба додати CSS стилі окремо!) */}
-              <div className="mb-4 opacity-60 pointer-events-none">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-medium text-gray-500">Статуси:</span>
-                  
-                  {/* Disabled статуси - використовуємо інлайн стиль замість класу */}
-                  <div className="relative inline-flex items-center gap-2 px-3 py-2 rounded-md bg-gray-100 text-gray-500 border-2 border-transparent cursor-not-allowed">
-                    <span className="inline-block w-[18px] h-[18px] border-2 border-gray-400 rounded"></span>
-                    {/* Знак заборони */}
-                    <svg className="w-4 h-4 hidden sm:block" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
-                    </svg>
-                    <svg className="w-5 h-5 sm:hidden" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
-                    </svg>
-                    <span className="hidden sm:inline font-medium text-sm">Відключений</span>
-                  </div>
-                  
-                  <div className="relative inline-flex items-center gap-2 px-3 py-2 rounded-md bg-gray-100 text-gray-500 border-2 border-transparent cursor-not-allowed">
-                    <span className="inline-block w-[18px] h-[18px] border-2 border-gray-400 rounded"></span>
-                    <svg className="w-4 h-4 hidden sm:block" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
-                    </svg>
-                    <svg className="w-5 h-5 sm:hidden" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
-                    </svg>
-                    <span className="hidden sm:inline font-medium text-sm">Дача</span>
-                  </div>
-                  
-                  <div className="relative inline-flex items-center gap-2 px-3 py-2 rounded-md bg-gray-100 text-gray-500 border-2 border-transparent cursor-not-allowed">
-                    <span className="inline-block w-[18px] h-[18px] border-2 border-gray-400 rounded"></span>
-                    {/* Будинок перекреслений */}
-                    <div className="relative w-4 h-4 hidden sm:block">
-                      <svg className="w-4 h-4 absolute" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/>
-                      </svg>
-                      <svg className="w-4 h-4 absolute" fill="none" stroke="currentColor" viewBox="0 0 20 20" strokeWidth="2.5">
-                        <line x1="2" y1="2" x2="18" y2="18"/>
-                      </svg>
-                    </div>
-                    <div className="relative w-5 h-5 sm:hidden">
-                      <svg className="w-5 h-5 absolute" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/>
-                      </svg>
-                      <svg className="w-5 h-5 absolute" fill="none" stroke="currentColor" viewBox="0 0 20 20" strokeWidth="2.5">
-                        <line x1="2" y1="2" x2="18" y2="18"/>
-                      </svg>
-                    </div>
-                    <span className="hidden sm:inline font-medium text-sm">Не проживає</span>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Статистика з іконками та ... */}
-              <div className="mb-4 opacity-50">
-                <div className="bg-white border border-gray-200 rounded-lg px-4 py-2 inline-block">
-                  <div className="text-sm text-gray-400 flex items-center gap-3">
-                    <span className="flex items-center gap-1.5">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                      </svg>
-                      <span className="font-medium">Всього:</span> <span className="font-semibold">...</span>
-                    </span>
-                    <span className="text-gray-300">|</span>
-                    <span className="flex items-center gap-1.5">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                      </svg>
-                      <span className="font-medium">Показано:</span> <span className="font-semibold">...</span>
-                    </span>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="border-t border-gray-200 mb-5 mt-2"></div>
-            </>
-          )}
-          
-          {/* Показуємо фільтри та пошук ТІЛЬКИ якщо база не порожня */}
-          {!isInitialLoading && totalCount > 0 && (
-          <>
-          {/* Головний пошук на всю ширину */}
-          <div className="mb-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-              <input type="text" placeholder="Пошук за ПІБ, особовим рахунком, телефоном..."
-                className="w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-base"
-                value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(0); }} />
+          {/* ===== ФІЛЬТРИ ===== */}
+          <div className="filters-panel">
+
+            {/* Пошук */}
+            <div className="search-box">
+              <Search size={14} className="search-icon" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                placeholder="Пошук: ПІБ, рахунок, телефон, № лічильника..."
+              />
               {searchTerm && (
-                <button onClick={() => setSearchTerm('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1">
-                  <X size={20} />
-                </button>
+                <button className="search-clear" onClick={() => setSearchTerm('')}><X size={14} /></button>
+              )}
+            </div>
+
+            {/* Адреса + лічильник */}
+            <div className="filter-row">
+              <MultiSelectDropdown options={settlements} selected={selectedSettlement} onChange={setSelectedSettlement} label="Нас. пункт" name="settlement" />
+              <MultiSelectDropdown options={streets} selected={selectedStreet} onChange={setSelectedStreet} label="Вулиця" name="street" />
+              <input className="filter-input-small" type="text" value={filterBuilding} onChange={e => setFilterBuilding(e.target.value)} placeholder="Буд." />
+              <input className="filter-input-small" type="text" value={filterApartment} onChange={e => setFilterApartment(e.target.value)} placeholder="Кв." />
+              <div className="filter-divider" />
+              <MultiSelectDropdown options={meterGroups} selected={selectedMeterGroups} onChange={setSelectedMeterGroups} label="Група ліч." name="meterGroup" />
+              <MultiSelectDropdown options={meterBrands} selected={selectedMeterBrand} onChange={setSelectedMeterBrand} label="Марка" name="meterBrand" />
+              <MultiSelectDropdown options={meterSizes} selected={selectedMeterSize} onChange={setSelectedMeterSize} label="Типорозмір" name="meterSize" />
+              <MultiSelectDropdown options={meterYears} selected={selectedMeterYear} onChange={setSelectedMeterYear} label="Рік" name="meterYear" />
+            </div>
+
+            {/* Статуси */}
+            <div className="status-row">
+              <span className="status-label">Статус:</span>
+              <button
+                className={"status-chip status-chip-off" + (filterDisconnected ? " active" : "")}
+                onClick={() => setFilterDisconnected(!filterDisconnected)}>
+                <span className="status-chip-dot"></span>
+                Відключений {statusCounts.disconnected > 0 && <span className="status-count">({statusCounts.disconnected})</span>}
+              </button>
+              <button
+                className={"status-chip status-chip-dacha" + (filterDacha ? " active" : "")}
+                onClick={() => setFilterDacha(!filterDacha)}>
+                <span className="status-chip-dot"></span>
+                Дача {statusCounts.dacha > 0 && <span className="status-count">({statusCounts.dacha})</span>}
+              </button>
+              <button
+                className={"status-chip status-chip-absent" + (filterAbsent ? " active" : "")}
+                onClick={() => setFilterAbsent(!filterAbsent)}>
+                <span className="status-chip-dot"></span>
+                Не проживає {statusCounts.absent > 0 && <span className="status-count">({statusCounts.absent})</span>}
+              </button>
+              <button
+                className={"status-chip status-chip-gas" + (filterConnected ? " active" : "")}
+                onClick={() => setFilterConnected(!filterConnected)}>
+                <span className="status-chip-dot"></span>
+                Газ включений
+              </button>
+              {(searchTerm || selectedSettlement.length > 0 || selectedStreet.length > 0 ||
+                selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || selectedMeterYear.length > 0 ||
+                selectedMeterGroups.length > 0 || filterDisconnected || filterDacha || filterAbsent ||
+                filterConnected || filterBuilding || filterApartment) && (
+                <button className="btn-reset" onClick={() => {
+                  setSearchTerm(''); setDebouncedSearchTerm('');
+                  setSelectedSettlement([]); setSelectedStreet([]);
+                  setSelectedMeterBrand([]); setSelectedMeterSize([]);
+                  setSelectedMeterYear([]); setSelectedMeterGroups([]);
+                  setFilterDisconnected(false); setFilterDacha(false);
+                  setFilterAbsent(false); setFilterConnected(false);
+                  setFilterBuilding(''); setFilterApartment('');
+                  setDebouncedBuilding(''); setDebouncedApartment('');
+                  setCurrentPage(0); setHasMore(true);
+                  clearScrollState(); loadClients();
+                }}><X size={11} /> Скинути</button>
               )}
             </div>
           </div>
 
-          {/* Фільтри для мобільних - 2 кнопки */}
-          <div className="sm:hidden grid grid-cols-2 gap-2 mb-3">
-            {/* Кнопка фільтрів адреси */}
-            <button 
-              onClick={() => setShowAddressFilters(!showAddressFilters)}
-              className="px-3 py-3 bg-gradient-to-r from-blue-50 to-cyan-50 hover:from-blue-100 hover:to-cyan-100 border border-blue-200 text-blue-900 rounded-lg flex items-center justify-between transition-all shadow-sm"
-            >
-              <span className="flex items-center gap-1 font-medium text-sm">
-                <Home size={18} />
-                Адреса
-                {(selectedSettlement.length > 0 || selectedStreet.length > 0) && (
-                  <span className="bg-blue-600 text-white text-xs px-1.5 py-0.5 rounded-full font-bold">
-                    {selectedSettlement.length + selectedStreet.length}
-                  </span>
-                )}
-              </span>
-              <span className="text-sm">{showAddressFilters ? '▲' : '▼'}</span>
-            </button>
-
-            {/* Кнопка фільтрів лічильників */}
-            <button 
-              onClick={() => setShowMeterFilters(!showMeterFilters)}
-              className="px-3 py-3 bg-gradient-to-r from-purple-50 to-indigo-50 hover:from-purple-100 hover:to-indigo-100 border border-purple-200 text-purple-900 rounded-lg flex items-center justify-between transition-all shadow-sm"
-            >
-              <span className="flex items-center gap-1 font-medium text-sm">
-                <Gauge size={18} />
-                Лічильник
-                {(selectedMeterGroups.length > 0 || selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || selectedMeterYear.length > 0) && (
-                  <span className="bg-purple-600 text-white text-xs px-1.5 py-0.5 rounded-full font-bold">
-                    {selectedMeterGroups.length + selectedMeterBrand.length + selectedMeterSize.length + selectedMeterYear.length}
-                  </span>
-                )}
-              </span>
-              <span className="text-sm">{showMeterFilters ? '▲' : '▼'}</span>
-            </button>
-          </div>
-
-          {/* Фільтри для Desktop - 2 колонки */}
-          <div className="hidden sm:grid sm:grid-cols-2 gap-4 mb-4">
-            {/* Ліва колонка - Фільтри адреси */}
-            <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
-              <h3 className="text-sm font-semibold text-blue-900 mb-2 flex items-center gap-2">
-                <Home size={16} />
-                Фільтри адреси
-              </h3>
-              <div className="space-y-2">
-                <MultiSelectDropdown
-                  options={settlements}
-                  selected={selectedSettlement}
-                  onChange={setSelectedSettlement}
-                  label="Населений пункт"
-                  name="settlement"
-                />
-                <MultiSelectDropdown
-                  options={streets}
-                  selected={selectedStreet}
-                  onChange={setSelectedStreet}
-                  label="Вулиця"
-                  name="street"
-                />
+          {/* Рядок результатів */}
+          <div className="results-bar">
+            <div className="results-bar-text">
+              <div class="results-bar-items">
+              {(debouncedSearchTerm || selectedSettlement.length > 0 || selectedStreet.length > 0 ||
+                selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || selectedMeterYear.length > 0 ||
+                selectedMeterGroups.length > 0 || filterDisconnected || filterDacha || filterAbsent ||
+                filterConnected || filterBuilding || filterApartment)
+                ? <><div class="results-bar-item"><Users size={14} className="ii-icon" /> Всього: <span>{totalCount}</span></div><div class="results-bar-divider"></div><div class="results-bar-item found"><Search size={14} className="ii-icon" /> Знайдено: <span>{filteredTotalCount}</span></div></>
+                : <><div class="results-bar-item"><Users size={14} className="ii-icon" /> Всього: <span>{totalCount}</span></div></>
+              }
               </div>
             </div>
-
-            {/* Права колонка - Фільтри лічильників */}
-            <div className="bg-purple-50 p-3 rounded-lg border border-purple-200">
-              <h3 className="text-sm font-semibold text-purple-900 mb-2 flex items-center gap-2">
-                <Gauge size={16} />
-                Фільтри лічильників
-              </h3>
-              <div className="grid grid-cols-2 gap-2">
-                <MultiSelectDropdown
-                  options={meterGroups}
-                  selected={selectedMeterGroups}
-                  onChange={setSelectedMeterGroups}
-                  label="Група"
-                  name="meterGroup"
-                />
-                <MultiSelectDropdown
-                  options={meterBrands}
-                  selected={selectedMeterBrand}
-                  onChange={setSelectedMeterBrand}
-                  label="Марка"
-                  name="meterBrand"
-                />
-                <MultiSelectDropdown
-                  options={meterSizes}
-                  selected={selectedMeterSize}
-                  onChange={setSelectedMeterSize}
-                  label="Типорозмір"
-                  name="meterSize"
-                />
-                <MultiSelectDropdown
-                  options={meterYears}
-                  selected={selectedMeterYear}
-                  onChange={setSelectedMeterYear}
-                  label="Рік"
-                  name="meterYear"
-                />
-              </div>
-            </div>
+            {/* <span className="results-bar-hint">↓ scroll для завантаження</span> */}
           </div>
+        </div>
 
-          {/* Фільтри адреси для мобільних (згортаються) */}
-          <div className={`sm:hidden mb-3 ${showAddressFilters ? 'block' : 'hidden'}`}>
-            <div className="bg-blue-50 p-3 rounded-lg border border-blue-200 space-y-2">
-            <MultiSelectDropdown
-              options={settlements}
-              selected={selectedSettlement}
-              onChange={setSelectedSettlement}
-              label="Населений пункт"
-              name="settlement"
-            />
-            <MultiSelectDropdown
-              options={streets}
-              selected={selectedStreet}
-              onChange={setSelectedStreet}
-              label="Вулиця"
-              name="street"
-            />
-            </div>
-          </div>
-
-          {/* Фільтри лічильників для мобільних (згортаються) */}
-          <div className={`sm:hidden mb-3 ${showMeterFilters ? 'block' : 'hidden'}`}>
-            <div className="bg-purple-50 p-3 rounded-lg border border-purple-200 space-y-2">
-            <MultiSelectDropdown
-              options={meterGroups}
-              selected={selectedMeterGroups}
-              onChange={setSelectedMeterGroups}
-              label="Група лічильника"
-              name="meterGroup"
-            />
-            <MultiSelectDropdown
-              options={meterBrands}
-              selected={selectedMeterBrand}
-              onChange={setSelectedMeterBrand}
-              label="Марка лічильника"
-              name="meterBrand"
-            />
-            <MultiSelectDropdown
-              options={meterSizes}
-              selected={selectedMeterSize}
-              onChange={setSelectedMeterSize}
-              label="Типорозмір"
-              name="meterSize"
-            />
-            <MultiSelectDropdown
-              options={meterYears}
-              selected={selectedMeterYear}
-              onChange={setSelectedMeterYear}
-              label="Рік випуску"
-              name="meterYear"
-            />
-            </div>
-          </div>
-
-          {/* ⭐ ФІЛЬТРИ СТАТУСІВ - новий дизайн з лічильниками */}
-          <div className="mb-4">
-            <style>{`
-              .status-checkbox {
-                appearance: none;
-                position: absolute;
-                opacity: 0;
-              }
-              
-              .status-label {
-                position: relative;
-                display: inline-flex;
-                align-items: center;
-                gap: 8px;
-                padding: 8px 12px;
-                border-radius: 6px;
-                cursor: pointer;
-                transition: all 0.2s ease;
-                user-select: none;
-                background-color: #f3f4f6;
-                color: #9ca3af;
-                border: 2px solid transparent;
-              }
-              
-              .status-label:hover {
-                border-color: #d1d5db;
-                color: #6b7280;
-              }
-              
-              .status-checkbox:checked + .status-label {
-                background-color: #ef4444;
-                color: white;
-                border-color: #ef4444;
-              }
-              
-              .status-checkbox.orange:checked + .status-label {
-                background-color: #f97316;
-                border-color: #f97316;
-              }
-              
-              .status-checkbox.yellow:checked + .status-label {
-                background-color: #eab308;
-                border-color: #eab308;
-              }
-              
-              .checkbox-icon {
-                width: 18px;
-                height: 18px;
-                border: 2px solid currentColor;
-                border-radius: 3px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                background-color: transparent;
-                transition: all 0.2s ease;
-                flex-shrink: 0;
-              }
-              
-              .checkbox-icon::after {
-                content: '';
-                width: 10px;
-                height: 6px;
-                border-left: 2px solid white;
-                border-bottom: 2px solid white;
-                transform: rotate(-45deg) scale(0);
-                transition: transform 0.2s ease;
-              }
-              
-              .status-checkbox:checked + .status-label .checkbox-icon {
-                background-color: white;
-                border-color: white;
-              }
-              
-              .status-checkbox:checked + .status-label .checkbox-icon::after {
-                transform: rotate(-45deg) scale(1);
-                border-color: #ef4444;
-              }
-              
-              .status-checkbox.orange:checked + .status-label .checkbox-icon::after {
-                border-color: #f97316;
-              }
-              
-              .status-checkbox.yellow:checked + .status-label .checkbox-icon::after {
-                border-color: #eab308;
-              }
-            `}</style>
-            
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-medium text-gray-500">Статуси:</span>
-              
-              {/* Відключений */}
-              <div className="relative">
-                <input 
-                  type="checkbox" 
-                  id="filter-disconnected"
-                  checked={filterDisconnected}
-                  onChange={(e) => setFilterDisconnected(e.target.checked)}
-                  className="status-checkbox"
-                />
-                <label htmlFor="filter-disconnected" className="status-label">
-                  <span className="checkbox-icon"></span>
-                  {/* Знак заборони як у бейджі ⛔ */}
-                  <svg className="w-4 h-4 hidden sm:block" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
-                  </svg>
-                  <svg className="w-5 h-5 sm:hidden" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
-                  </svg>
-                  <span className="hidden sm:inline font-medium text-sm">Відключений</span>
-                  {statusCounts.disconnected > 0 && (
-                    <span className="ml-1 px-1.5 py-0.5 bg-black bg-opacity-20 rounded text-xs font-semibold">
-                      {statusCounts.disconnected}
-                    </span>
-                  )}
-                </label>
-              </div>
-              
-              {/* Дача */}
-              <div className="relative">
-                <input 
-                  type="checkbox" 
-                  id="filter-dacha"
-                  checked={filterDacha}
-                  onChange={(e) => setFilterDacha(e.target.checked)}
-                  className="status-checkbox orange"
-                />
-                <label htmlFor="filter-dacha" className="status-label">
-                  <span className="checkbox-icon"></span>
-                  <svg className="w-4 h-4 hidden sm:block" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
-                  </svg>
-                  <svg className="w-5 h-5 sm:hidden" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
-                  </svg>
-                  <span className="hidden sm:inline font-medium text-sm">Дача</span>
-                  {statusCounts.dacha > 0 && (
-                    <span className="ml-1 px-1.5 py-0.5 bg-black bg-opacity-20 rounded text-xs font-semibold">
-                      {statusCounts.dacha}
-                    </span>
-                  )}
-                </label>
-              </div>
-              
-              {/* Не проживає */}
-              <div className="relative">
-                <input 
-                  type="checkbox" 
-                  id="filter-absent"
-                  checked={filterAbsent}
-                  onChange={(e) => setFilterAbsent(e.target.checked)}
-                  className="status-checkbox yellow"
-                />
-                <label htmlFor="filter-absent" className="status-label">
-                  <span className="checkbox-icon"></span>
-                  {/* Будинок перекреслений 🏠̷ */}
-                  <div className="relative w-4 h-4 hidden sm:block">
-                    <svg className="w-4 h-4 absolute" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/>
-                    </svg>
-                    <svg className="w-4 h-4 absolute" fill="none" stroke="currentColor" viewBox="0 0 20 20" strokeWidth="2.5">
-                      <line x1="2" y1="2" x2="18" y2="18"/>
-                    </svg>
-                  </div>
-                  <div className="relative w-5 h-5 sm:hidden">
-                    <svg className="w-5 h-5 absolute" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/>
-                    </svg>
-                    <svg className="w-5 h-5 absolute" fill="none" stroke="currentColor" viewBox="0 0 20 20" strokeWidth="2.5">
-                      <line x1="2" y1="2" x2="18" y2="18"/>
-                    </svg>
-                  </div>
-                  <span className="hidden sm:inline font-medium text-sm">Не проживає</span>
-                  {statusCounts.absent > 0 && (
-                    <span className="ml-1 px-1.5 py-0.5 bg-black bg-opacity-20 rounded text-xs font-semibold">
-                      {statusCounts.absent}
-                    </span>
-                  )}
-                </label>
-              </div>
-            </div>
-          </div>
-
-          {/* Кнопка "Скинути всі фільтри" - компактна */}
-          <div className="mb-4">
-            {(searchTerm || selectedSettlement.length > 0 || selectedStreet.length > 0 || 
-              selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || selectedMeterYear.length > 0 || selectedMeterGroups.length > 0 ||
-              filterDisconnected || filterDacha || filterAbsent) && (
-              <button onClick={() => {
-                setSearchTerm('');
-                setDebouncedSearchTerm(''); // ⭐ Очищаємо debounced пошук
-                setSelectedSettlement([]);
-                setSelectedStreet([]);
-                setSelectedMeterBrand([]);
-                setSelectedMeterSize([]);
-                setSelectedMeterYear([]);
-                setSelectedMeterGroups([]);
-                setFilterDisconnected(false);
-                setFilterDacha(false);
-                setFilterAbsent(false);
-                setCurrentPage(0);
-                setHasMore(true);
-                // ⭐ Очищаємо scroll state і перезавантажуємо
-                clearScrollState();
-                loadClients();
-              }}
-                className="px-3 py-1.5 bg-white hover:bg-red-50 text-red-600 border border-red-200 hover:border-red-300 rounded-md flex items-center gap-1.5 transition-colors text-sm font-medium">
-                <X size={16} /> Скинути фільтри
-              </button>
-            )}
-          </div>
-
-          {/* ⭐ СТАТИСТИКА з іконками */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4">
-            <div className="bg-white border border-gray-200 rounded-lg px-4 py-2 shadow-sm">
-              <div className="text-sm text-gray-600 flex items-center gap-3">
-                <span className="flex items-center gap-1.5">
-                  <svg className="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                  </svg>
-                  <span className="font-medium text-gray-700">Всього:</span>
-                  <span className="font-semibold text-indigo-600">{totalCount}</span>
-                </span>
-                <span className="text-gray-300">|</span>
-                <span className="flex items-center gap-1.5">
-                  <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                  </svg>
-                  <span className="font-medium text-gray-700">Показано:</span>
-                  <span className="font-semibold text-blue-600">{clients.length}</span>
-                </span>
-              </div>
-            </div>
-            
-            {/* ⭐ Стара пагінація видалена - тепер Infinite Scroll! */}
-          </div>
-          </>
-          )}
-
-          {/* ⭐ Видалено зайвий "Завантаження..." - тепер одразу показуємо дані після скелетону */}
-          
-          {/* 🔥 SKELETON LOADER: Показується ОДРАЗУ при початковому завантаженні (але НЕ для порожньої бази) */}
-          {((isInitialLoading && clients.length === 0 && totalCount !== 0) || (loading && clients.length === 0 && totalCount > 0)) && (
-            <div className="space-y-3">
-              <style>{`
-                @keyframes shimmer {
-                  0% { background-position: -1000px 0; }
-                  100% { background-position: 1000px 0; }
-                }
-                .skeleton {
-                  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-                  background-size: 1000px 100%;
-                  animation: shimmer 2s infinite;
-                }
-              `}</style>
-              
-              {/* Skeleton картки клієнтів */}
-              {[1,2,3].map((i) => (
-                <div key={i} className="border border-gray-200 rounded-lg p-4 bg-white">
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="flex-1">
-                      <div className="skeleton h-6 w-56 mb-2 rounded"></div>
-                      <div className="skeleton h-4 w-32 rounded"></div>
+        {/* ===== СПИСОК КЛІЄНТІВ ===== */}
+        <div className="clients-list">
+          {isInitialLoading ? (
+            <div className="skeleton-list">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="skeleton-card">
+                  <div className="skeleton-row">
+                    <div className="skeleton-dot"></div>
+                    <div className="skeleton-body">
+                      <div className="skeleton-line" style={{height:14, width:180}}></div>
+                      <div className="skeleton-line-dark" style={{height:10, width:120}}></div>
+                      <div className="skeleton-line-dark" style={{height:10, width:220}}></div>
+                      <div className="skeleton-line-dark" style={{height:10, width:160}}></div>
                     </div>
-                    <div className="flex gap-2">
-                      <div className="skeleton h-8 w-8 rounded"></div>
-                      <div className="skeleton h-8 w-8 rounded"></div>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="skeleton h-4 w-full rounded"></div>
-                    <div className="skeleton h-4 w-3/4 rounded"></div>
-                    <div className="skeleton h-4 w-2/3 rounded"></div>
                   </div>
                 </div>
               ))}
             </div>
-          )}
-
-          {!loading && (
+          ) : (
             <>
-              {/* Розділювач перед списком - показуємо тільки якщо база не порожня */}
-              {totalCount > 0 && (
-                <div className="mb-5 mt-2">
-                  <div className="border-t border-gray-200"></div>
-                </div>
-              )}
-
-              <div className="space-y-3">
+              <div className="clients-inner">
               {clients.map(c => {
-                const statusColor = c.gasDisconnected === 'Так' ? 'border-red-500' : 
-                                   c.temporaryAbsent ? 'border-yellow-400' : 
-                                   c.dacha ? 'border-orange-400' : 'border-transparent';
-                
+                const dotClass = c.gasDisconnected === true ? 'dot-red' :
+                                 c.temporaryAbsent ? 'dot-amber' :
+                                 c.dacha ? 'dot-purple' : 'dot-green';
                 return (
-                  <div key={c.id} className={`bg-white rounded-lg shadow hover:shadow-md transition-shadow border-l-4 ${statusColor}`}>
-                    {/* Компактний вид */}
-                    <div className="short-client-info p-3">
-                      {/* Заголовок */}
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className="font-bold text-gray-900 text-base">{c.fullName}</h3>
-                            {c.temporaryAbsent && (
-                              <span className="inline-flex items-center gap-1 bg-yellow-100 text-yellow-800 text-xs font-semibold px-2 py-0.5 rounded">
-                                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                                </svg>
-                                Відсутній
-                              </span>
-                            )}
-                            {c.dacha && (
-                              <span className="inline-flex items-center gap-1 bg-orange-100 text-orange-800 text-xs font-semibold px-2 py-0.5 rounded">
-                                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                  <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
-                                </svg>
-                                Дача
-                              </span>
-                            )}
-                            {c.gasDisconnected === 'Так' && (
-                              <span className="inline-flex items-center gap-1 bg-red-100 text-red-800 text-xs font-semibold px-2 py-0.5 rounded">
-                                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
-                                </svg>
-                                Відключений
-                              </span>
-                            )}
+                  <div key={c.id} className="client-card">
+
+                    {/* КОРОТКА КАРТКА */}
+                    <div className="client-card-short">
+                      <div className="client-card-body">
+                        <div className="client-card-left">
+                          <div className="client-name-row">
+                            <span className={"client-status-dot " + dotClass}></span>
+                            <span className="client-name">{c.fullName}</span>
+                            {c.gasDisconnected && <span className="badge badge-red">× Відключений</span>}
+                            {c.dacha && <span className="badge badge-purple">⌂ Дача</span>}
+                            {c.temporaryAbsent && <span className="badge badge-amber">× Не проживає</span>}
                           </div>
-                          <p className="text-xs text-gray-500">
-                            <span className="font-medium">о/р:</span> {c.accountNumber}
-                          </p>
-                        </div>
-                        <div className="flex gap-1.5 ml-2">
-                          <button onClick={(e) => { e.stopPropagation(); handleEdit(c); }} 
-                            className="text-blue-600 hover:bg-blue-50 p-1 rounded">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                          </button>
-                          <button onClick={(e) => { e.stopPropagation(); handleDelete(c.id); }} 
-                            className="text-red-600 hover:bg-red-50 p-1 rounded">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                        </div>
-                      </div>
-                      
-                      {/* Адреса та телефон */}
-                      <div className="text-sm text-gray-700 mb-2 space-y-1">
-                        <p className="flex items-start gap-1.5">
-                          <svg className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                          </svg>
-                          <span>
-                            {c.settlement}, {c.streetType} {c.street}, буд. {c.building}{c.buildingLetter}
-                            {c.apartment && `, кв. ${c.apartment}${c.apartmentLetter}`}
-                          </span>
-                        </p>
-                        {c.phone && (
-                          <p className="flex items-center gap-1.5">
-                            <svg className="w-4 h-4 text-green-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                            </svg>
-                            <span className="flex flex-wrap gap-x-1">
-                              {formatPhones(c.phone)}
-                            </span>
-                          </p>
-                        )}
-                      </div>
-                      
-                      {/* Лічильник компактно */}
-                      {c.meterNumber && (
-                        <div className="bg-purple-50 px-3 py-2 rounded text-sm flex items-center gap-2">
-                          <svg className="w-4 h-4 text-purple-800 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-                          </svg>
-                          <span>
-                            <span className="font-semibold">
-                              {c.meterBrand} {c.meterSize && `G${c.meterSize}`}
-                            </span>
-                            <span className="text-gray-600">
-                              {' '}№{c.meterNumber}
-                              {c.meterYear && ` ${c.meterYear}р.`}
-                            </span>
-                          </span>
-                        </div>
-                      )}
-                      
-                      {/* Інфо про відключення для відключених */}
-                      {c.gasDisconnected === 'Так' && (c.disconnectDate || c.disconnectMethod) && (
-                        <div className="mt-2 bg-red-50 border border-red-200 rounded px-3 py-2 text-xs text-red-800">
-                          <p>
-                            {c.disconnectDate && <><strong>Відключено:</strong> {c.disconnectDate}</>}
-                            {c.disconnectDate && c.disconnectMethod && ' | '}
-                            {c.disconnectMethod && <><strong>Метод:</strong> {c.disconnectMethod}</>}
-                          </p>
-                        </div>
-                      )}
-                      
-                      {/* Кнопка детальніше */}
-                      <button 
-                        onClick={() => handleClientCardClick(c.id)}
-                        className="mt-2 w-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 py-2 rounded text-sm font-medium transition-colors">
-                        📋 Детальніше
-                      </button>
-                    </div>
-
-                    
-                    {/* Розгорнута детальна інформація */}
-                    {expandedClientId === c.id && (
-                      <div className="border-t border-gray-200 bg-gray-50 p-3 sm:p-4">
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
-                        <div className="bg-blue-50 p-2.5 sm:p-3 rounded-lg">
-                          <p className="text-xs font-semibold text-blue-900 mb-2">ОСОБОВІ ДАНІ</p>
-                          <div className="space-y-1 text-xs sm:text-sm">
-                            <p className="text-gray-700"><span className="font-medium">Особовий рахунок:</span> {c.accountNumber}</p>
-                            {c.eic && <p className="text-gray-700"><span className="font-medium">EIC:</span> {c.eic}</p>}
+                          <div className="client-account">
+                            о/р: {c.accountNumber}{c.eic ? ` · EIC: ${c.eic}` : ''}
+                          </div>
+                          <div className="client-meta">
+                            {(c.settlement || c.street) && (
+                              <div className="client-meta-row">
+                                <div className="meta-icon"><MapPin size={11} /></div>
+                                <span>
+                                  {c.settlement}{c.street ? `, ${[c.streetType, c.street].filter(Boolean).join(' ')}` : ''}
+                                  {c.building ? `, буд. ${c.building}${c.buildingLetter || ''}` : ''}
+                                  {c.apartment ? `, кв. ${c.apartment}${c.apartmentLetter || ''}` : ''}
+                                </span>
+                              </div>
+                            )}
                             {c.phone && (
-                              <div className="flex items-center gap-2">
-                                <Phone size={14} className="text-gray-500 flex-shrink-0" />
-                                <div className="flex flex-wrap gap-x-1">
-                                  {formatPhones(c.phone)}
-                                </div>
+                              <div className="client-meta-row">
+                                <div className="meta-icon"><Phone size={11} /></div>
+                                <span>{formatPhones(c.phone)}</span>
                               </div>
                             )}
                           </div>
-                        </div>
-
-                        <div className="bg-purple-50 p-2.5 sm:p-3 rounded-lg">
-                          <p className="text-xs font-semibold text-purple-900 mb-2">ЛІЧИЛЬНИК</p>
-                          {c.meterNumber ? (
-                            <div className="space-y-1 text-xs">
-                              {c.meterBrand && <p className="text-gray-700"><span className="font-semibold">Марка:</span> {c.meterBrand}</p>}
-                              {c.meterSize && <p className="text-gray-700"><span className="font-semibold">Типорозмір:</span> {c.meterSize}</p>}
-                              <p className="text-gray-700"><span className="font-semibold">№:</span> {c.meterNumber}</p>
-                              {c.meterYear && <p className="text-gray-700"><span className="font-semibold">Рік випуску:</span> {c.meterYear}</p>}
-                              {c.verificationDate && <p className="text-gray-700"><span className="font-semibold">Дата повірки:</span> {c.verificationDate}</p>}
-                              {c.nextVerificationDate && <p className="text-gray-600"><span className="font-semibold">Наступна повірка:</span> {c.nextVerificationDate}</p>}
-                              {c.installationDate && <p className="text-gray-700"><span className="font-semibold">Дата встановлення:</span> {c.installationDate}</p>}
-                              {c.meterLocation && <p className="text-gray-600"><span className="font-semibold">Розташування:</span> {c.meterLocation}</p>}
-                              {c.meterGroup && <p className="text-gray-600"><span className="font-semibold">Група ліч.:</span> {c.meterGroup}</p>}
-                              {c.meterSubtype && <p className="text-gray-600"><span className="font-semibold">Підтип:</span> {c.meterSubtype}</p>}
-                              {c.meterType && <p className="text-gray-600"><span className="font-semibold">Тип ліч.:</span> {c.meterType}</p>}
-                              {c.meterOwnership && <p className="text-gray-600"><span className="font-semibold">Належність:</span> {c.meterOwnership}</p>}
-                              {c.serviceOrg && <p className="text-gray-600"><span className="font-semibold">Серв.орган.:</span> {c.serviceOrg}</p>}
-                              {c.mvnssh && <p className="text-gray-600"><span className="font-semibold">МВНСШ:</span> {c.mvnssh}</p>}
-                              {c.rsp && <p className="text-gray-600"><span className="font-semibold">РСП:</span> {c.rsp}</p>}
-                              {c.seal && <p className="text-gray-600"><span className="font-semibold">Пломба:</span> {c.seal}</p>}
-                              {c.stickerSeal && <p className="text-gray-600"><span className="font-semibold">Стікерна пломба:</span> {c.stickerSeal}</p>}
+                          {c.meterNumber && (
+                            <div className="client-meter-row">
+                              <Activity size={11} />
+                              {c.meterBrand && <span className="meter-tag">{c.meterBrand}
+                                 {/* { {c.meterSize ? ` ${c.meterSize}` : ''} }*/ }
+                                </span>}
+                              <span className="meter-tag">№ {c.meterNumber}</span>
+                              {c.meterYear && <span className="meter-tag">{c.meterYear} р.</span>}
+                              {c.verificationDate && <span className="meter-tag">Повірка: {c.verificationDate}</span>}
+                             {c.nextVerificationDate && (
+  <span className={`meter-tag ${c.nextVerificationDate.split('.').reverse().join('-') < new Date().toISOString().split('T')[0] ? 'meter-tag-expired' : ''}`}>
+    Наступна: {c.nextVerificationDate}
+  </span>
+)}
                             </div>
-                          ) : <p className="text-gray-400 text-sm">Немає даних</p>}
+                          )}
                         </div>
-
-                        <div className="bg-orange-50 p-3 rounded-lg">
-                          <p className="text-xs font-semibold text-orange-900 mb-2">ПРИЛАДИ</p>
-                          <div className="space-y-1 text-sm">
-                            {c.boilerBrand && <p className="text-gray-700"><span className="font-medium">Котел:</span> {c.boilerBrand}{c.boilerPower && ` (${c.boilerPower})`}</p>}
-                            {c.stoveType && <p className="text-gray-700"><span className="font-medium">Плита:</span> {c.stoveType}</p>}
-                            {c.columnType && <p className="text-gray-700"><span className="font-medium">ВПГ:</span> {c.columnType}</p>}
-                            {!c.boilerBrand && !c.stoveType && !c.columnType && <p className="text-gray-400 text-sm">Немає даних</p>}
+                        <div className="client-card-actions">
+                          <div className="action-btns">
+                            <button className="btn-icon btn-icon-edit" onClick={e => { e.stopPropagation(); handleEdit(c); }}><Edit2 size={13} /></button>
+                            <button className="btn-icon btn-icon-delete" onClick={e => { e.stopPropagation(); handleDelete(c.id); }}><Trash2 size={13} /></button>
                           </div>
+                          <button className="btn-expand" onClick={() => handleClientCardClick(c.id)}>
+                            {expandedClientId === c.id
+                              ? <><ChevronUp size={11} /> Згорнути</>
+                              : <><ChevronDown size={11} /> Повна картка</>}
+                          </button>
                         </div>
                       </div>
+                    </div>
 
-                      {c.gasDisconnected === 'Так' && (
-                        <div className="mt-4 bg-red-50 p-3 rounded-lg border-2 border-red-200">
-                          <p className="text-xs font-semibold text-red-900 mb-2">⚠️ ГАЗ ВІДКЛЮЧЕНО</p>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-                            {c.disconnectDate && <p className="text-gray-700"><span className="font-semibold">Дата відкл.:</span> {c.disconnectDate}</p>}
-                            {c.disconnectMethod && <p className="text-gray-700"><span className="font-semibold">Метод:</span> {c.disconnectMethod}</p>}
-                            {c.disconnectSeal && <p className="text-gray-700"><span className="font-semibold">Пломба:</span> {c.disconnectSeal}</p>}
-                            {c.connectDate && <p className="text-green-700"><span className="font-semibold">Дата підкл.:</span> {c.connectDate}</p>}
+                    {/* РОЗГОРНУТА КАРТКА */}
+                    {expandedClientId === c.id && (
+                      <div className="client-card-expanded">
+                        <div className="expanded-section-title"><Activity size={11} /> Дані лічильника</div>
+                        {c.meterNumber ? (
+                          <div className="meter-chips">
+                            {c.meterBrand && <div className="meter-chip"><span className="meter-chip-label">Марка</span><span className="meter-chip-value">{c.meterBrand}</span></div>}
+                            {c.meterSize && <div className="meter-chip"><span className="meter-chip-label">Типорозмір</span><span className="meter-chip-value">{c.meterSize}</span></div>}
+                            <div className="meter-chip"><span className="meter-chip-label">№</span><span className="meter-chip-value">{c.meterNumber}</span></div>
+                            {c.meterYear && <div className="meter-chip"><span className="meter-chip-label">Рік</span><span className="meter-chip-value">{c.meterYear}</span></div>}
+                            {c.verificationDate && <div className="meter-chip"><span className="meter-chip-label">Повірка</span><span className="meter-chip-value">{c.verificationDate}</span></div>}
+                            {c.nextVerificationDate && <div className="meter-chip"><span className="meter-chip-label">Наступна</span><span className="meter-chip-value">{c.nextVerificationDate}</span></div>}
+                            {c.installationDate && <div className="meter-chip"><span className="meter-chip-label">Встановлено</span><span className="meter-chip-value">{c.installationDate}</span></div>}
+                            {c.meterLocation && <div className="meter-chip"><span className="meter-chip-label">Розташування</span><span className="meter-chip-value">{c.meterLocation}</span></div>}
+                            {c.meterManufacturer && <div className="meter-chip"><span className="meter-chip-label">Завод</span><span className="meter-chip-value">{c.meterManufacturer}</span></div>}
+                            {c.meterGroup && <div className="meter-chip"><span className="meter-chip-label">Група</span><span className="meter-chip-value">{c.meterGroup}</span></div>}
+                            {c.meterSubtype && <div className="meter-chip"><span className="meter-chip-label">Підтип</span><span className="meter-chip-value">{c.meterSubtype}</span></div>}
+                            {c.meterOwnership && <div className="meter-chip"><span className="meter-chip-label">Належність</span><span className="meter-chip-value">{c.meterOwnership}</span></div>}
+                            {c.serviceOrg && <div className="meter-chip"><span className="meter-chip-label">Серв. орган</span><span className="meter-chip-value">{c.serviceOrg}</span></div>}
+                            {(c.mvnssh || c.rsp) && <div className="meter-chip"><span className="meter-chip-label">МВНСШ/РСП</span><span className="meter-chip-value">{c.mvnssh}{c.rsp ? ' / ' + c.rsp : ''}</span></div>}
+                            {c.seal && <div className="meter-chip"><span className="meter-chip-label">Пломба</span><span className="meter-chip-value">{c.seal}</span></div>}
+                            {c.stickerSeal && <div className="meter-chip"><span className="meter-chip-label">Стікерна пломба</span><span className="meter-chip-value">{c.stickerSeal}</span></div>}
                           </div>
-                        </div>
-                      )}
+                        ) : <p style={{fontSize:12,color:'#9ca3af'}}>Немає даних про лічильник</p>}
 
-                        {(c.area || c.utilityGroup || c.grs) && (
-                          <div className="mt-4 bg-white p-3 rounded-lg border border-gray-200">
-                            <p className="text-xs font-semibold text-gray-900 mb-2">ДОДАТКОВА ІНФОРМАЦІЯ</p>
-                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
-                              {c.area && <p className="text-gray-600"><span className="font-medium">Площа:</span> {c.area} м²</p>}
-                              {c.utilityGroup && <p className="text-gray-600"><span className="font-medium">Група:</span> {c.utilityGroup}</p>}
-                              {c.grs && <p className="text-gray-600"><span className="font-medium">ГРС:</span> {c.grs}</p>}
+                        {(c.boilerBrand || c.stoveType || c.columnType) && (
+                          <div className="appliances-row">
+                            <span className="appliances-label">Прилади:</span>
+                            {c.boilerBrand && <span className="appliance-pill"><Flame size={10} style={{color:'#f97316'}} /> {c.boilerBrand}</span>}
+                            {c.stoveType && <span className="appliance-pill"><Flame size={10} style={{color:'#3b82f6'}} /> {c.stoveType}</span>}
+                            {c.columnType && <span className="appliance-pill"><Flame size={10} style={{color:'#06b6d4'}} /> {c.columnType}</span>}
+                          </div>
+                        )}
+
+                        {c.gasDisconnected && (
+                          <div className="gas-off-block">
+                            <p className="gas-off-title">⚠️ Газ відключено</p>
+                            <div className="gas-off-details">
+                              {c.disconnectDate && <span><b>Дата:</b> {c.disconnectDate}</span>}
+                              {c.disconnectMethod && <span><b>Спосіб:</b> {c.disconnectMethod}</span>}
+                              {c.disconnectSeal && <span><b>Пломба:</b> {c.disconnectSeal}</span>}
+                              {c.connectDate && <span className="gas-on-date"><b>Підключено:</b> {c.connectDate}</span>}
                             </div>
                           </div>
                         )}
-                        
-                        {/* Кнопки редагування та видалення */}
-                        <div className="mt-4 flex flex-col sm:flex-row gap-2">
-                          <button onClick={(e) => { e.stopPropagation(); handleEdit(c); }} 
-                            className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center gap-2 text-sm font-medium">
-                            <Edit2 size={16} /> Редагувати
-                          </button>
-                          <button onClick={(e) => { e.stopPropagation(); handleDelete(c.id); }} 
-                            className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg flex items-center justify-center gap-2 text-sm font-medium">
-                            <Trash2 size={16} /> Видалити
-                          </button>
+
+                        <div className="expanded-btns">
+                          <button className="btn-edit-full" onClick={e => { e.stopPropagation(); handleEdit(c); }}><Edit2 size={12} /> Редагувати</button>
+                          <button className="btn-delete-full" onClick={e => { e.stopPropagation(); handleDelete(c.id); }}><Trash2 size={12} /> Видалити</button>
                         </div>
                       </div>
                     )}
@@ -2887,131 +2180,57 @@ if (needsProxy) {
                 );
               })}
 
-              {/* ⭐ INFINITE SCROLL: Індикатор завантаження */}
               {isLoadingMore && (
-                <div className="text-center py-8">
-                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-indigo-500 border-t-transparent"></div>
-                  <p className="text-gray-600 mt-2 text-sm">Завантаження...</p>
+                <div className="load-more-spinner">
+                  <div className="spinner"></div>
+                  <p className="load-more-text">Завантаження...</p>
                 </div>
               )}
 
-              {/* ⭐ INFINITE SCROLL: Кінець списку */}
               {!hasMore && clients.length > 0 && (
-                <div className="text-center py-8">
-                  <div className="text-4xl mb-3">🎉</div>
-                  <p className="text-lg font-semibold text-gray-800">
-                    {(debouncedSearchTerm || selectedSettlement.length > 0 || selectedStreet.length > 0 || 
-                      selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || 
-                      selectedMeterYear.length > 0 || selectedMeterGroups.length > 0)
-                      ? 'Це всі результати!'
-                      : 'Це всі клієнти!'}
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    {(debouncedSearchTerm || selectedSettlement.length > 0 || selectedStreet.length > 0 || 
-                      selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || 
-                      selectedMeterYear.length > 0 || selectedMeterGroups.length > 0)
-                      ? `Знайдено ${filteredTotalCount} клієнтів`
-                      : 'Ви переглянули всю базу'}
-                  </p>
+                <div className="list-end-text">
+                  {(debouncedSearchTerm || selectedSettlement.length > 0 || selectedStreet.length > 0 ||
+                    selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || selectedMeterYear.length > 0 || selectedMeterGroups.length > 0)
+                    ? `Знайдено ${filteredTotalCount} клієнтів`
+                    : `Переглянуто всіх ${totalCount} клієнтів`}
                 </div>
               )}
 
               {clients.length === 0 && !loading && (
                 <div>
-                  {searchTerm || selectedSettlement.length > 0 || selectedStreet.length > 0 || 
+                  {searchTerm || selectedSettlement.length > 0 || selectedStreet.length > 0 ||
                    selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || selectedMeterYear.length > 0 || selectedMeterGroups.length > 0 ? (
-                    // Якщо є фільтри - показуємо звичайне повідомлення
-                    <div className="text-center py-12 text-gray-500">
-                      Нічого не знайдено
+                    <div className="empty-search">
+                      <div className="empty-search-icon">🔍</div>
+                      <p className="empty-search-title">Нічого не знайдено</p>
+                      <p className="empty-search-hint">Спробуйте змінити параметри пошуку</p>
                     </div>
-                  ) : !isInitialLoading && totalCount === 0 ? (
-                    // Якщо база порожня - показуємо онбординг (але НЕ при початковому завантаженні!)
-                    <div className="max-w-3xl mx-auto py-12 px-4">
-                      {/* Заголовок */}
-                      <div className="text-center mb-8">
-                        <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-indigo-500 to-blue-500 rounded-full mb-4">
-                          <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                          </svg>
-                        </div>
-                        <h2 className="text-3xl font-bold text-gray-900 mb-2">Вітаємо в базі абонентів!</h2>
-                        <p className="text-gray-600 text-lg">Почніть роботу з додавання ваших перших клієнтів</p>
-                      </div>
-
-                      {/* Кроки */}
-                      <div className="grid md:grid-cols-3 gap-6 mb-8">
-                        {/* Крок 1 */}
-                        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
-                          <div className="flex items-center justify-center w-12 h-12 bg-indigo-100 rounded-lg mb-4">
-                            <span className="text-2xl font-bold text-indigo-600">1</span>
-                          </div>
-                          <h3 className="font-semibold text-gray-900 mb-2 text-lg">Завантажте шаблон</h3>
-                          <p className="text-gray-600 text-sm mb-4">Скачайте Excel шаблон з правильною структурою даних</p>
-                          <button 
-                            onClick={handleDownloadTemplate}
-                            className="w-full px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg flex items-center justify-center gap-2 transition-colors text-sm font-medium"
-                          >
-                            <FileText size={16} />
-                            Завантажити шаблон
-                          </button>
-                        </div>
-
-                        {/* Крок 2 */}
-                        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
-                          <div className="flex items-center justify-center w-12 h-12 bg-blue-100 rounded-lg mb-4">
-                            <span className="text-2xl font-bold text-blue-600">2</span>
-                          </div>
-                          <h3 className="font-semibold text-gray-900 mb-2 text-lg">Заповніть дані</h3>
-                          <p className="text-gray-600 text-sm mb-4">Внесіть інформацію про клієнтів в Excel файл</p>
-                          <div className="w-full px-4 py-2 bg-gray-50 text-gray-500 rounded-lg text-center text-sm">
-                            Або додайте вручну →
-                          </div>
-                        </div>
-
-                        {/* Крок 3 */}
-                        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
-                          <div className="flex items-center justify-center w-12 h-12 bg-green-100 rounded-lg mb-4">
-                            <span className="text-2xl font-bold text-green-600">3</span>
-                          </div>
-                          <h3 className="font-semibold text-gray-900 mb-2 text-lg">Імпортуйте базу</h3>
-                          <p className="text-gray-600 text-sm mb-4">Завантажте заповнений файл в систему</p>
-                          <label className="w-full px-4 py-2 bg-green-50 hover:bg-green-100 text-green-700 rounded-lg flex items-center justify-center gap-2 transition-colors cursor-pointer text-sm font-medium">
-                            <Upload size={16} />
-                            Імпортувати Excel
-                            <input type="file" accept=".xlsx,.xls" onChange={handleImportExcel} className="hidden" />
-                          </label>
-                        </div>
-                      </div>
-
-                      {/* Швидкі дії */}
-                      <div className="bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl p-6 border-2 border-indigo-100">
-                        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                          <div className="text-center md:text-left">
-                            <h3 className="font-semibold text-gray-900 mb-1">Або почніть з одного клієнта</h3>
-                            <p className="text-gray-600 text-sm">Додайте першого абонента вручну через форму</p>
-                          </div>
-                          <button
-                            onClick={() => setIsModalOpen(true)}
-                            className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg flex items-center gap-2 transition-colors font-medium shadow-sm hover:shadow-md whitespace-nowrap"
-                          >
-                            <Plus size={20} />
-                            Додати клієнта
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Підказка */}
-                      <div className="mt-6 text-center">
-                        <p className="text-sm text-gray-500">
-                          💡 <span className="font-medium">Порада:</span> Для швидкого старту рекомендуємо використати імпорт з Excel
-                        </p>
+                  ) : totalCount === 0 ? (
+                    <div className="empty-db">
+                      <div className="empty-db-icon">📋</div>
+                      <h2 className="empty-db-title">База порожня</h2>
+                      <p className="empty-db-hint">Додайте першого абонента або імпортуйте з Excel</p>
+                      <div className="empty-db-btns">
+                        <label  className="btn" onMouseDown={(e) => {e.stopPropagation();}}><Upload size={13} />Імпорт XLS
+                          <input type="file" accept=".xlsx,.xls" onChange={(e) => { handleImportExcel(e); setShowQuickActions(false); }} className="hidden" disabled={loading} />
+                        </label>
+                        <button className="btn" onClick={() => setShowImportUrlModal(true)}><Upload size={14} /> Імпорт JSON по URL </button>
+                        <button onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleDownloadTemplate(); 
+                setShowQuickActions(false); 
+                }}
+                onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                }}
+                className="btn"><FileText size={13} />Шаблон XLS</button>
+                        <button className="btn-primary" onClick={handleAdd}><Plus size={14} /> Додати абонента</button>
                       </div>
                     </div>
                   ) : !isInitialLoading ? (
-                    // Якщо є дані але зараз порожньо (через фільтри які щойно скинули)
-                    <div className="text-center py-12 text-gray-500">
-                      Немає жодного клієнта. Додайте першого!
-                    </div>
+                    <div className="list-end-text">Немає клієнтів</div>
                   ) : null}
                 </div>
               )}
@@ -3022,351 +2241,292 @@ if (needsProxy) {
       </div>
 
       {isModalOpen && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-50 overflow-y-auto"
-          onClick={resetForm}
-        >
-          <div className="min-h-screen flex items-center justify-center p-4">
-            <div 
-              className="bg-white rounded-lg max-w-6xl w-full my-8" 
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex justify-between items-center p-6 border-b bg-white rounded-t-lg">
-                <h2 className="text-2xl font-bold text-gray-900">{editingClient ? 'Редагувати клієнта' : 'Новий клієнт'}</h2>
-                <button onClick={resetForm} className="text-gray-500 hover:text-gray-700"><X size={24} /></button>
+        <div className="modal-overlay" onClick={resetForm}>
+          <div className="modal-center">
+            <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2 className="modal-title">{editingClient ? 'Редагувати клієнта' : 'Новий клієнт'}</h2>
+                <button className="modal-close" onClick={resetForm}><X size={24} /></button>
               </div>
+              <div className="modal-body">
 
-              <div className="p-6">
-                <div className="space-y-6">
-                  <div className="bg-blue-50 p-4 rounded-lg border-2 border-blue-200">
-                    <h3 className="font-bold text-blue-900 mb-3 text-lg flex items-center gap-2">
-                      <Home size={20} /> ПІБ, Адреса, Особові дані
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div className="md:col-span-3">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">ПІБ *</label>
-                        <input type="text" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
-                          value={formData.fullName} onChange={(e) => setFormData({...formData, fullName: e.target.value})} />
-                      </div>
-                      <div className="md:col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Населений пункт</label>
-                        <input type="text" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
-                          value={formData.settlement} onChange={(e) => setFormData({...formData, settlement: e.target.value})} />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Тип вулиці</label>
-                        <input type="text" placeholder="вул., пр., пл." className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                          value={formData.streetType} onChange={(e) => setFormData({...formData, streetType: e.target.value})} />
-                      </div>
-                      <div className="md:col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Вулиця</label>
-                        <input type="text" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                          value={formData.street} onChange={(e) => setFormData({...formData, street: e.target.value})} />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Будинок</label>
-                        <input type="text" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                          value={formData.building} onChange={(e) => setFormData({...formData, building: e.target.value})} />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Літера буд.</label>
-                        <input type="text" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                          value={formData.buildingLetter} onChange={(e) => setFormData({...formData, buildingLetter: e.target.value})} />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Квартира</label>
-                        <input type="text" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                          value={formData.apartment} onChange={(e) => setFormData({...formData, apartment: e.target.value})} />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Літера кв.</label>
-                        <input type="text" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                          value={formData.apartmentLetter} onChange={(e) => setFormData({...formData, apartmentLetter: e.target.value})} />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Особовий рахунок *</label>
-                        <input type="text" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                          value={formData.accountNumber} onChange={(e) => setFormData({...formData, accountNumber: e.target.value})} />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">EIC</label>
-                        <input type="text" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                          value={formData.eic} onChange={(e) => setFormData({...formData, eic: e.target.value})} />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Телефон</label>
-                        <input type="tel" placeholder="+380..." className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                          value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} />
-                      </div>
-                      <div className="md:col-span-3 flex items-center gap-6 pt-2">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input type="checkbox" className="w-4 h-4"
-                            checked={formData.dacha} onChange={(e) => setFormData({...formData, dacha: e.target.checked})} />
-                          <span className="text-sm">Дача</span>
+                {/* Особові дані */}
+                <div className="modal-section-blue">
+                  <h3 className="modal-section-title modal-section-title-blue"><Home size={18} /> ПІБ, Адреса, Особові дані</h3>
+                  <div className="modal-grid-3">
+                    <div className="modal-col-3">
+                      <label className="form-label">ПІБ *</label>
+                      <input className="form-input" type="text" value={formData.fullName} onChange={(e) => setFormData({...formData, fullName: e.target.value})} />
+                    </div>
+                    <div>
+                      <label className="form-label">Населений пункт</label>
+                      <input className="form-input" type="text" value={formData.settlement} onChange={(e) => setFormData({...formData, settlement: e.target.value})} />
+                    </div>
+                    <div>
+                      <label className="form-label">Тип вулиці</label>
+                      <input className="form-input" type="text" placeholder="вул., пр., пл." value={formData.streetType} onChange={(e) => setFormData({...formData, streetType: e.target.value})} />
+                    </div>
+                    <div>
+                      <label className="form-label">Вулиця</label>
+                      <input className="form-input" type="text" value={formData.street} onChange={(e) => setFormData({...formData, street: e.target.value})} />
+                    </div>
+                    <div>
+                      <label className="form-label">Будинок</label>
+                      <input className="form-input" type="text" value={formData.building} onChange={(e) => setFormData({...formData, building: e.target.value})} />
+                    </div>
+                    <div>
+                      <label className="form-label">Літера буд.</label>
+                      <input className="form-input" type="text" value={formData.buildingLetter} onChange={(e) => setFormData({...formData, buildingLetter: e.target.value})} />
+                    </div>
+                    <div>
+                      <label className="form-label">Квартира</label>
+                      <input className="form-input" type="text" value={formData.apartment} onChange={(e) => setFormData({...formData, apartment: e.target.value})} />
+                    </div>
+                    <div>
+                      <label className="form-label">Літера кв.</label>
+                      <input className="form-input" type="text" value={formData.apartmentLetter} onChange={(e) => setFormData({...formData, apartmentLetter: e.target.value})} />
+                    </div>
+                    <div>
+                      <label className="form-label">Особовий рахунок *</label>
+                      <input className="form-input" type="text" value={formData.accountNumber} onChange={(e) => setFormData({...formData, accountNumber: e.target.value})} />
+                    </div>
+                    <div>
+                      <label className="form-label">EIC</label>
+                      <input className="form-input" type="text" value={formData.eic} onChange={(e) => setFormData({...formData, eic: e.target.value})} />
+                    </div>
+                    <div>
+                      <label className="form-label">Телефон</label>
+                      <input className="form-input" type="tel" placeholder="+380..." value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} />
+                    </div>
+                    <div className="modal-col-3">
+                      <div className="form-checkbox-row">
+                        <label className="form-checkbox-label">
+                          <input type="checkbox" checked={formData.dacha} onChange={(e) => setFormData({...formData, dacha: e.target.checked})} />
+                          Дача
                         </label>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input type="checkbox" className="w-4 h-4"
-                            checked={formData.temporaryAbsent} onChange={(e) => setFormData({...formData, temporaryAbsent: e.target.checked})} />
-                          <span className="text-sm">Тимчасово не проживає</span>
+                        <label className="form-checkbox-label">
+                          <input type="checkbox" checked={formData.temporaryAbsent} onChange={(e) => setFormData({...formData, temporaryAbsent: e.target.checked})} />
+                          Тимчасово не проживає
                         </label>
                       </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-purple-50 p-4 rounded-lg border-2 border-purple-200">
-                    <h3 className="font-bold text-purple-900 mb-3 text-lg flex items-center gap-2">
-                      <Gauge size={20} /> Лічильник
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div><label className="block text-sm font-medium text-gray-700 mb-1">Марка лічильника</label>
-                        <input type="text" placeholder="Metrix..." className="w-full px-3 py-2 border rounded-lg text-sm"
-                          value={formData.meterBrand} onChange={(e) => setFormData({...formData, meterBrand: e.target.value})} /></div>
-                      <div><label className="block text-sm font-medium text-gray-700 mb-1">Типорозмір</label>
-                        <input type="text" placeholder="G4..." className="w-full px-3 py-2 border rounded-lg text-sm"
-                          value={formData.meterSize} onChange={(e) => setFormData({...formData, meterSize: e.target.value})} /></div>
-                      <div><label className="block text-sm font-medium text-gray-700 mb-1">№ лічильника</label>
-                        <input type="text" className="w-full px-3 py-2 border rounded-lg text-sm"
-                          value={formData.meterNumber} onChange={(e) => setFormData({...formData, meterNumber: e.target.value})} /></div>
-                      <div><label className="block text-sm font-medium text-gray-700 mb-1">Рік випуску</label>
-                        <input type="text" placeholder="2020" className="w-full px-3 py-2 border rounded-lg text-sm"
-                          value={formData.meterYear} onChange={(e) => setFormData({...formData, meterYear: e.target.value})} /></div>
-                      <div><label className="block text-sm font-medium text-gray-700 mb-1">Дата повірки</label>
-                        <input type="text" placeholder="ДД.ММ.РРРР" className="w-full px-3 py-2 border rounded-lg text-sm"
-                          value={formData.verificationDate} onChange={(e) => setFormData({...formData, verificationDate: e.target.value})} /></div>
-                      <div><label className="block text-sm font-medium text-gray-700 mb-1">Наступна повірка</label>
-                        <input type="text" placeholder="ДД.ММ.РРРР" className="w-full px-3 py-2 border rounded-lg text-sm"
-                          value={formData.nextVerificationDate} onChange={(e) => setFormData({...formData, nextVerificationDate: e.target.value})} /></div>
-                      <div><label className="block text-sm font-medium text-gray-700 mb-1">Дата встановлення</label>
-                        <input type="text" placeholder="ДД.ММ.РРРР" className="w-full px-3 py-2 border rounded-lg text-sm"
-                          value={formData.installationDate} onChange={(e) => setFormData({...formData, installationDate: e.target.value})} /></div>
-                      <div><label className="block text-sm font-medium text-gray-700 mb-1">Розташування</label>
-                        <input type="text" placeholder="Кухня..." className="w-full px-3 py-2 border rounded-lg text-sm"
-                          value={formData.meterLocation} onChange={(e) => setFormData({...formData, meterLocation: e.target.value})} /></div>
-                      <div><label className="block text-sm font-medium text-gray-700 mb-1">Група ліч.</label>
-                        <input type="text" className="w-full px-3 py-2 border rounded-lg text-sm"
-                          value={formData.meterGroup} onChange={(e) => setFormData({...formData, meterGroup: e.target.value})} /></div>
-                      <div><label className="block text-sm font-medium text-gray-700 mb-1">Підтип</label>
-                        <input type="text" placeholder="Мембранний..." className="w-full px-3 py-2 border rounded-lg text-sm"
-                          value={formData.meterSubtype} onChange={(e) => setFormData({...formData, meterSubtype: e.target.value})} /></div>
-                      <div><label className="block text-sm font-medium text-gray-700 mb-1">Тип ліч.</label>
-                        <input type="text" placeholder="Побутовий..." className="w-full px-3 py-2 border rounded-lg text-sm"
-                          value={formData.meterType} onChange={(e) => setFormData({...formData, meterType: e.target.value})} /></div>
-                      <div><label className="block text-sm font-medium text-gray-700 mb-1">Належність</label>
-                        <input type="text" placeholder="Абонент..." className="w-full px-3 py-2 border rounded-lg text-sm"
-                          value={formData.meterOwnership} onChange={(e) => setFormData({...formData, meterOwnership: e.target.value})} /></div>
-                      <div><label className="block text-sm font-medium text-gray-700 mb-1">Серв.орган.</label>
-                        <input type="text" className="w-full px-3 py-2 border rounded-lg text-sm"
-                          value={formData.serviceOrg} onChange={(e) => setFormData({...formData, serviceOrg: e.target.value})} /></div>
-                      <div><label className="block text-sm font-medium text-gray-700 mb-1">МВНСШ</label>
-                        <input type="text" className="w-full px-3 py-2 border rounded-lg text-sm"
-                          value={formData.mvnssh} onChange={(e) => setFormData({...formData, mvnssh: e.target.value})} /></div>
-                      <div><label className="block text-sm font-medium text-gray-700 mb-1">РСП</label>
-                        <input type="text" className="w-full px-3 py-2 border rounded-lg text-sm"
-                          value={formData.rsp} onChange={(e) => setFormData({...formData, rsp: e.target.value})} /></div>
-                      <div><label className="block text-sm font-medium text-gray-700 mb-1">Пломба</label>
-                        <input type="text" placeholder="№123456" className="w-full px-3 py-2 border rounded-lg text-sm"
-                          value={formData.seal} onChange={(e) => setFormData({...formData, seal: e.target.value})} /></div>
-                      <div><label className="block text-sm font-medium text-gray-700 mb-1">Стікерна пломба</label>
-                        <input type="text" placeholder="№789012" className="w-full px-3 py-2 border rounded-lg text-sm"
-                          value={formData.stickerSeal} onChange={(e) => setFormData({...formData, stickerSeal: e.target.value})} /></div>
-                    </div>
-                  </div>
-
-                  <div className="bg-orange-50 p-4 rounded-lg border-2 border-orange-200">
-                    <h3 className="font-bold text-orange-900 mb-3 text-lg">Прилади</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div><label className="block text-sm font-medium text-gray-700 mb-1">Котел - марка</label>
-                        <input type="text" placeholder="Ariston..." className="w-full px-3 py-2 border rounded-lg text-sm"
-                          value={formData.boilerBrand} onChange={(e) => setFormData({...formData, boilerBrand: e.target.value})} /></div>
-                      <div><label className="block text-sm font-medium text-gray-700 mb-1">Котел - потужність</label>
-                        <input type="text" placeholder="24 кВт..." className="w-full px-3 py-2 border rounded-lg text-sm"
-                          value={formData.boilerPower} onChange={(e) => setFormData({...formData, boilerPower: e.target.value})} /></div>
-                      <div><label className="block text-sm font-medium text-gray-700 mb-1">Газова плита - тип</label>
-                        <input type="text" placeholder="ПГ-4..." className="w-full px-3 py-2 border rounded-lg text-sm"
-                          value={formData.stoveType} onChange={(e) => setFormData({...formData, stoveType: e.target.value})} /></div>
-                      <div><label className="block text-sm font-medium text-gray-700 mb-1">Кількість плит</label>
-                        <input type="text" placeholder="1, 2..." className="w-full px-3 py-2 border rounded-lg text-sm"
-                          value={formData.stoveCount} onChange={(e) => setFormData({...formData, stoveCount: e.target.value})} /></div>
-                      <div><label className="block text-sm font-medium text-gray-700 mb-1">ВПГ - тип</label>
-                        <input type="text" placeholder="ВПГ-10..." className="w-full px-3 py-2 border rounded-lg text-sm"
-                          value={formData.columnType} onChange={(e) => setFormData({...formData, columnType: e.target.value})} /></div>
-                      <div><label className="block text-sm font-medium text-gray-700 mb-1">Кількість ВПГ</label>
-                        <input type="text" placeholder="1, 2..." className="w-full px-3 py-2 border rounded-lg text-sm"
-                          value={formData.columnCount} onChange={(e) => setFormData({...formData, columnCount: e.target.value})} /></div>
-                    </div>
-                  </div>
-
-                  <div className="bg-gray-100 p-4 rounded-lg">
-                    <h3 className="font-semibold text-gray-900 mb-3">Комунальне господарство та відключення</h3>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div><label className="block text-sm font-medium text-gray-700 mb-1">Площа (м²)</label>
-                        <input type="text" className="w-full px-3 py-2 border rounded-lg text-sm"
-                          value={formData.area} onChange={(e) => setFormData({...formData, area: e.target.value})} /></div>
-                      <div><label className="block text-sm font-medium text-gray-700 mb-1">Комун. гос-во</label>
-                        <input type="text" className="w-full px-3 py-2 border rounded-lg text-sm"
-                          value={formData.utilityType} onChange={(e) => setFormData({...formData, utilityType: e.target.value})} /></div>
-                      <div><label className="block text-sm font-medium text-gray-700 mb-1">Група</label>
-                        <input type="text" className="w-full px-3 py-2 border rounded-lg text-sm"
-                          value={formData.utilityGroup} onChange={(e) => setFormData({...formData, utilityGroup: e.target.value})} /></div>
-                      <div><label className="block text-sm font-medium text-gray-700 mb-1">ГРС</label>
-                        <input type="text" className="w-full px-3 py-2 border rounded-lg text-sm"
-                          value={formData.grs} onChange={(e) => setFormData({...formData, grs: e.target.value})} /></div>
-                      <div><label className="block text-sm font-medium text-gray-700 mb-1">Газ вимкнено</label>
-                        <input type="text" placeholder="Так/Ні" className="w-full px-3 py-2 border rounded-lg text-sm"
-                          value={formData.gasDisconnected} onChange={(e) => setFormData({...formData, gasDisconnected: e.target.value})} /></div>
-                      <div><label className="block text-sm font-medium text-gray-700 mb-1">Метод відкл.</label>
-                        <input type="text" className="w-full px-3 py-2 border rounded-lg text-sm"
-                          value={formData.disconnectMethod} onChange={(e) => setFormData({...formData, disconnectMethod: e.target.value})} /></div>
-                      <div><label className="block text-sm font-medium text-gray-700 mb-1">Пломба відкл.</label>
-                        <input type="text" className="w-full px-3 py-2 border rounded-lg text-sm"
-                          value={formData.disconnectSeal} onChange={(e) => setFormData({...formData, disconnectSeal: e.target.value})} /></div>
-                      <div><label className="block text-sm font-medium text-gray-700 mb-1">Дата відкл.</label>
-                        <input type="text" placeholder="ДД.ММ.РРРР" className="w-full px-3 py-2 border rounded-lg text-sm"
-                          value={formData.disconnectDate} onChange={(e) => setFormData({...formData, disconnectDate: e.target.value})} /></div>
-                      <div><label className="block text-sm font-medium text-gray-700 mb-1">Дата підкл.</label>
-                        <input type="text" placeholder="ДД.ММ.РРРР" className="w-full px-3 py-2 border rounded-lg text-sm"
-                          value={formData.connectDate} onChange={(e) => setFormData({...formData, connectDate: e.target.value})} /></div>
                     </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="flex gap-3 p-6 border-t bg-gray-50 rounded-b-lg">
-                <button onClick={handleSubmit}
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 rounded-lg flex items-center justify-center gap-2">
-                  <Save size={20} /> {editingClient ? 'Зберегти зміни' : 'Додати клієнта'}
-                </button>
-                <button onClick={resetForm} className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100">
-                  Скасувати
-                </button>
+                {/* Лічильник */}
+                <div className="modal-section-purple">
+                  <h3 className="modal-section-title modal-section-title-purple"><Gauge size={18} /> Лічильник</h3>
+                  <div className="modal-grid-3">
+                    <div>
+                      <label className="form-label">Марка лічильника</label>
+                      <select 
+                        className="form-input"
+                        value={formData.meterBrand}
+                        onChange={(e) => {
+                          const brand = e.target.value;
+                          const found = METER_CATALOG.find(m => m.brand === brand);
+                          
+                          let detectedSize = formData.meterSize; // Зберігаємо поточне значення
+
+                          if (found) {
+                            const normalizedBrand = brand.replace(',', '.').replace('G ', 'G');
+                            const match = METER_SIZES.find(size => normalizedBrand.includes(size));
+                            if (match) {
+                              // Відрізаємо "G", залишаючи тільки цифри (наприклад "1.6")
+                              detectedSize = match.replace('G', ''); 
+                            }
+                          } else if (brand === "") {
+                            detectedSize = "";
+                          }
+                          setFormData({
+                            ...formData,
+                            meterBrand: brand,
+                            meterManufacturer: found ? found.manufacturer : '',
+                            meterGroup: found ? found.group : '',
+                            meterSize: detectedSize, // Вставляємо знайдений типорозмір
+                          });
+                        }}
+                      >
+                        <option value="">— оберіть марку —</option>
+                        {METER_CATALOG.map(m => (
+                          <option key={m.brand} value={m.brand}>{m.brand}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div><label className="form-label">Типорозмір</label><input className="form-input" type="text" value={formData.meterSize} onChange={(e) => setFormData({...formData, meterSize: e.target.value})} /></div>
+                    <div><label className="form-label">№ лічильника</label><input className="form-input" type="text" value={formData.meterNumber} onChange={(e) => setFormData({...formData, meterNumber: e.target.value})} /></div>
+                    <div><label className="form-label">Рік випуску</label><input className="form-input" type="text" value={formData.meterYear} onChange={(e) => setFormData({...formData, meterYear: e.target.value})} /></div>
+                    <div><label className="form-label">Дата повірки</label><input className="form-input" type="text" placeholder="ДД.ММ.РРРР" value={formData.verificationDate} onChange={(e) => setFormData({...formData, verificationDate: e.target.value})} /></div>
+                    <div><label className="form-label">Наступна повірка</label><input className="form-input" type="text" placeholder="ДД.ММ.РРРР" value={formData.nextVerificationDate} onChange={(e) => setFormData({...formData, nextVerificationDate: e.target.value})} /></div>
+                    <div><label className="form-label">Дата встановлення</label><input className="form-input" type="text" placeholder="ДД.ММ.РРРР" value={formData.installationDate} onChange={(e) => setFormData({...formData, installationDate: e.target.value})} /></div>
+                    <div><label className="form-label">Розташування</label>
+                    <select className="form-input" value={formData.meterLocation} onChange={(e) => setFormData({...formData, meterLocation: e.target.value})}>
+                      <option value="">— оберіть місце —</option>
+                      {METER_LOCATION.map((loc, idx) => (
+                        <option key={idx} value={loc}>{loc}</option>
+                      ))}
+                    </select>
+                    </div>
+                    <div><label className="form-label">Група ліч.</label>
+                    <select className="form-input" value={formData.meterGroup} onChange={(e) => setFormData({...formData, meterGroup: e.target.value})}>
+                      <option value="">— оберіть групу —</option>
+                      {METER_GROUP.map((group, idx) => (
+                        <option key={idx} value={group}>{group}</option>
+                      ))}
+                    </select>
+                    </div>
+                    <div><label className="form-label">Підтип</label>
+                      <select className="form-input" value={formData.meterSubtype} onChange={(e) => setFormData({ ...formData, meterSubtype: e.target.value })}>
+                        <option value="">— оберіть тип —</option>
+                        {METER_SUBTYPE.map((sub, idx) => (
+                        <option key={idx} value={sub}>{sub}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div><label className="form-label">Належність</label>
+                      <select className="form-input" value={formData.meterOwnership} onChange={(e) => setFormData({ ...formData, meterOwnership: e.target.value })}>
+                        <option value="">— оберіть належність —</option>
+                        {METER_OWNERSHIP.map((own, idx) => (
+                        <option key={idx} value={own}>{own}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div><label className="form-label">Серв. орган</label>
+                      <select className="form-input" value={formData.serviceOrg} onChange={(e) => setFormData({ ...formData, serviceOrg: e.target.value })}>
+                        <option value="">— оберіть сервісний орган —</option>
+                        {SERVICE_ORG.map((org, idx) => (
+                          <option key={idx} value={org}>{org}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div><label className="form-label">МВНСШ</label><input className="form-input" type="text" value={formData.mvnssh} onChange={(e) => setFormData({...formData, mvnssh: e.target.value})} /></div>
+                    <div><label className="form-label">РСП</label><input className="form-input" type="text" value={formData.rsp} onChange={(e) => setFormData({...formData, rsp: e.target.value})} /></div>
+                    <div><label className="form-label">Пломба</label><input className="form-input" type="text" value={formData.seal} onChange={(e) => setFormData({...formData, seal: e.target.value})} /></div>
+                    <div><label className="form-label">Стікерна пломба</label><input className="form-input" type="text" value={formData.stickerSeal} onChange={(e) => setFormData({...formData, stickerSeal: e.target.value})} /></div>
+                    <div><label className="form-label">Завод виробник</label>
+                    <select className="form-input" value={formData.meterManufacturer} onChange={(e) => setFormData({...formData, meterManufacturer: e.target.value})}>
+                      <option value="">— оберіть завод виробник —</option>
+                      {METER_MANUFACTURER.map((man, idx) => (
+                      <option key={idx} value={man}>{man}</option>
+                      ))}
+                    </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Прилади */}
+                <div className="modal-section-orange">
+                  <h3 className="modal-section-title modal-section-title-orange">Прилади</h3>
+                  <div className="modal-grid-2">
+                    <div><label className="form-label">Котел — марка</label><input className="form-input" type="text" value={formData.boilerBrand} onChange={(e) => setFormData({...formData, boilerBrand: e.target.value})} /></div>
+                    <div><label className="form-label">Котел — потужність</label><input className="form-input" type="text" value={formData.boilerPower} onChange={(e) => setFormData({...formData, boilerPower: e.target.value})} /></div>
+                    <div><label className="form-label">Плита — тип</label><input className="form-input" type="text" value={formData.stoveType} onChange={(e) => setFormData({...formData, stoveType: e.target.value})} /></div>
+                    <div><label className="form-label">Кількість плит</label><input className="form-input" type="text" value={formData.stoveCount} onChange={(e) => setFormData({...formData, stoveCount: e.target.value})} /></div>
+                    <div><label className="form-label">ВПГ — тип</label><input className="form-input" type="text" value={formData.columnType} onChange={(e) => setFormData({...formData, columnType: e.target.value})} /></div>
+                    <div><label className="form-label">Кількість ВПГ</label><input className="form-input" type="text" value={formData.columnCount} onChange={(e) => setFormData({...formData, columnCount: e.target.value})} /></div>
+                  </div>
+                </div>
+                <div className="modal-section-red">
+                  <h3 className="modal-section-title modal-section-title-red">Відключення</h3>
+                  <div className="modal-col-3">
+                    <div className="form-checkbox-row"> 
+                      <label className="form-checkbox-label">
+                        <input type="checkbox" checked={formData.gasDisconnected || false} onChange={(e) => setFormData({...formData, gasDisconnected: e.target.checked})} />
+                        Газ відключено
+                      </label> 
+                    </div>
+                  </div><br/>
+                  <div className="modal-grid-3">
+                    <div><label className="form-label">Метод відкл.</label><input className="form-input" type="text" value={formData.disconnectMethod} onChange={(e) => setFormData({...formData, disconnectMethod: e.target.value})} /></div>
+                    <div><label className="form-label">Пломба відкл.</label><input className="form-input" type="text" value={formData.disconnectSeal} onChange={(e) => setFormData({...formData, disconnectSeal: e.target.value})} /></div>
+                    <div><label className="form-label">Дата відкл.</label><input className="form-input" type="text" placeholder="ДД.ММ.РРРР" value={formData.disconnectDate} onChange={(e) => setFormData({...formData, disconnectDate: e.target.value})} /></div>
+                  </div>
+                </div>
+                {/* Додатково */}
+                <div className="modal-section-gray">
+                  <h3 className="modal-section-title modal-section-title-gray">Інша інформація про об'єкт</h3>
+                  <div className="modal-grid-4">
+                    <div><label className="form-label">Площа (м²)</label><input className="form-input" type="text" value={formData.area} onChange={(e) => setFormData({...formData, area: e.target.value})} /></div>
+                    <div><label className="form-label">Комун. гос-во</label><input className="form-input" type="text" value={formData.utilityType} onChange={(e) => setFormData({...formData, utilityType: e.target.value})} /></div>
+                    <div><label className="form-label">Група</label><input className="form-input" type="text" value={formData.utilityGroup} onChange={(e) => setFormData({...formData, utilityGroup: e.target.value})} /></div>
+                    <div><label className="form-label">ГРС</label><input className="form-input" type="text" value={formData.grs} onChange={(e) => setFormData({...formData, grs: e.target.value})} /></div>
+                    <div><label className="form-label">Газ вимкнено</label><input className="form-input" type="text" placeholder="Так/Ні" value={formData.gasDisconnected} onChange={(e) => setFormData({...formData, gasDisconnected: e.target.value})} /></div>
+                    <div><label className="form-label">Дата підкл.</label><input className="form-input" type="text" placeholder="ДД.ММ.РРРР" value={formData.connectDate} onChange={(e) => setFormData({...formData, connectDate: e.target.value})} /></div>
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button className="btn-save" onClick={handleSubmit}><Save size={18} /> {editingClient ? 'Зберегти зміни' : 'Додати клієнта'}</button>
+                <button className="btn-cancel" onClick={resetForm}>Скасувати</button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Модальне вікно імпорту за URL */}
       {showImportUrlModal && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" 
-          onClick={(e) => {
-            // ⭐ Ігноруємо клік протягом 200ms після відкриття (щоб уникнути випадкового закриття)
-            if (e.target === e.currentTarget) {
-              console.log('🟣 Modal backdrop clicked');
-              setShowImportUrlModal(false);
-              setImportUrl('');
-            }
-          }}
-          onMouseDown={(e) => {
-            // Зупиняємо mousedown на backdrop щоб не конфліктувати з listeners
-            if (e.target === e.currentTarget) {
-              e.stopPropagation();
-            }
-          }}
-        >
-          <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            {console.log('🟣 Modal is rendering!')}
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                  <svg className="w-6 h-6 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+        <div className="url-modal-overlay"
+          onClick={(e) => { if (e.target === e.currentTarget) { setShowImportUrlModal(false); setImportUrl(''); } }}
+          onMouseDown={(e) => { if (e.target === e.currentTarget) e.stopPropagation(); }}>
+          <div className="url-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="url-modal-body">
+              <div className="url-modal-header">
+                <h2 className="url-modal-title">
+                  <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" style={{color:'#0d9488'}} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                   </svg>
                   Імпорт за посиланням
                 </h2>
-                <button 
-                  onClick={() => { setShowImportUrlModal(false); setImportUrl(''); }}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
-                  disabled={importingFromUrl}
-                >
-                  <X size={24} />
-                </button>
+                <button className="url-modal-close" onClick={() => { setShowImportUrlModal(false); setImportUrl(''); }} disabled={importingFromUrl}><X size={22} /></button>
               </div>
 
-              <div className="space-y-6">
-                {/* Інформаційний блок */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <div className="flex gap-3">
-                    <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                    <div className="text-sm text-blue-900">
-                      <p className="font-semibold mb-2">💡 Для слабких телефонів</p>
-                      <p className="mb-2">Замість завантаження файлу (що займає багато пам'яті), просто введіть посилання на JSON файл з клієнтами.</p>
-                      <p className="font-semibold mt-3 mb-1">Де розмістити файл:</p>
-                      <ul className="list-disc list-inside space-y-1 ml-2">
-                        <li>GitHub (рекомендовано) - безкоштовно</li>
-                        <li>Google Drive - зробіть публічне посилання</li>
-                        <li>Свій сервер - покладіть на FTP</li>
-                      </ul>
-                    </div>
+              <div className="info-box">
+                <div className="info-box-inner">
+                  <Info size={18} style={{color:'#3b82f6', flexShrink:0, marginTop:2}} />
+                  <div className="info-box-text">
+                    <p><b>💡 Для слабких телефонів</b></p>
+                    <p>Введіть посилання на JSON файл замість завантаження файлу.</p>
+                    <p><b>Де розмістити файл:</b></p>
+                    <ul>
+                      <li>GitHub (рекомендовано)</li>
+                      <li>Google Drive — публічне посилання</li>
+                      <li>Свій сервер — FTP</li>
+                    </ul>
                   </div>
                 </div>
+              </div>
 
-                {/* Поле вводу URL */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Посилання на файл JSON:
-                  </label>
-                  <input
-                    type="url"
-                    value={importUrl}
-                    onChange={(e) => setImportUrl(e.target.value)}
-                    placeholder="https://raw.githubusercontent.com/your-name/repo/main/backup.json"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm"
-                    disabled={importingFromUrl}
-                  />
-                  <p className="mt-2 text-xs text-gray-500">
-                    Приклад: https://raw.githubusercontent.com/Snoopak/gas-local-db/main/backups/clients.json
-                  </p>
-                </div>
+              <div style={{marginBottom:16}}>
+                <label className="url-input-label">Посилання на файл JSON:</label>
+                <input className="url-input" type="url" value={importUrl} onChange={(e) => setImportUrl(e.target.value)}
+                  placeholder="https://raw.githubusercontent.com/your-name/repo/main/backup.json"
+                  disabled={importingFromUrl} />
+                <p className="url-input-hint">Приклад: https://raw.githubusercontent.com/Snoopak/gas-local-db/main/backups/clients.json</p>
+              </div>
 
-                {/* Приклад формату */}
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                  <p className="text-sm font-semibold text-gray-900 mb-2">📄 Очікуваний формат файлу:</p>
-                  <pre className="text-xs bg-gray-800 text-green-400 p-3 rounded overflow-x-auto">
-{`[
+              <div className="code-box">
+                <p className="code-box-title">📄 Очікуваний формат файлу:</p>
+                <pre className="code-pre">{`[
   {
     "fullName": "Іванов Іван",
     "settlement": "Київ",
-    "street": "Хрещатик",
-    "building": "1",
-    "phone": "+380501234567",
     ...
   }
-]`}
-                  </pre>
-                  <p className="text-xs text-gray-600 mt-2">Або об'єкт з полем "clients": {`{ "clients": [...] }`}</p>
-                </div>
+]`}</pre>
+                <p className="code-hint">Або об'єкт з полем "clients": {"{ clients: [...] }"}</p>
+              </div>
 
-                {/* Кнопки */}
-                <div className="flex gap-3 pt-4 border-t">
-                  <button
-                    onClick={handleImportFromURL}
-                    disabled={importingFromUrl || !importUrl.trim()}
-                    className="flex-1 bg-teal-600 hover:bg-teal-700 text-white px-6 py-3 rounded-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {importingFromUrl ? (
-                      <>
-                        <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Завантаження...
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="w-5 h-5" />
-                        Імпортувати
-                      </>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => { setShowImportUrlModal(false); setImportUrl(''); }}
-                    disabled={importingFromUrl}
-                    className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50"
-                  >
-                    Скасувати
-                  </button>
-                </div>
+              <div className="url-modal-footer">
+                <button className="btn-import-url" onClick={handleImportFromURL} disabled={importingFromUrl || !importUrl.trim()}>
+                  {importingFromUrl ? (
+                    <><div className="spinner" style={{borderColor:'white',borderTopColor:'transparent',width:18,height:18}}></div> Завантаження...</>
+                  ) : (
+                    <><Upload size={16} /> Імпортувати</>
+                  )}
+                </button>
+                <button className="btn-cancel-url" onClick={() => { setShowImportUrlModal(false); setImportUrl(''); }} disabled={importingFromUrl}>
+                  Скасувати
+                </button>
               </div>
             </div>
           </div>

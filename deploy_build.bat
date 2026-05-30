@@ -1,28 +1,55 @@
 @echo off
-echo 🚀 Building and deploying build folder to GitHub Pages...
+:: Ця команда не дасть вікну закритися при помилці
+setlocal enabledelayedexpansion
+
+echo 🚀 Starting build process...
 cd /d "%~dp0"
 
-:: 1. Build React app
-echo 🏗️ Running build...
-npm run build
-
-:: 2. Move into the build folder
-cd build
-
-:: 3. Initialize git if needed
-if not exist .git (
-    echo 🧱 Initializing git...
-    git init
-    git branch -M gh-pages
-    git remote add origin https://github.com/Snoopak/gas-local-db.git
+:: 1. Перевірка чи є папка node_modules
+if not exist "node_modules\" (
+    echo ❌ Error: node_modules not found. Run 'npm install' first.
+    pause
+    exit /b
 )
 
-:: 4. Add, commit, push
+:: 2. Збірка (використовуємо CALL обов'язково)
+echo 🏗️ Running build...
+call npm run build
+if %ERRORLEVEL% neq 0 (
+    echo ❌ Error during npm run build!
+    pause
+    exit /b
+)
+
+:: 3. Робота з папкою build
+if not exist "build\" (
+    echo ❌ Error: build folder was not created!
+    pause
+    exit /b
+)
+cd build
+
+:: 4. Налаштування Git всередині build
+if not exist .git (
+    echo 🧱 Initializing new git in build folder...
+    git init
+    git branch -M gh-pages
+    :: Обов'язково перевірте це посилання!
+    git remote add origin https://github.com/Snoopak/gas-local-db2.git
+)
+
+:: 5. Деплой
+echo 📤 Uploading to GitHub...
 git add .
-git commit -m "Auto deploy build to GitHub Pages" >nul 2>&1
+git commit -m "Auto deploy" >nul 2>&1
+:: Додаємо force push
 git push -u --force origin gh-pages
 
-:: 5. Done!
-echo ✅ Deployment complete!
-echo 🌐 Check your site at: https://snoopak.github.io/gas-local-db/
+if %ERRORLEVEL% neq 0 (
+    echo ❌ Error during git push!
+    pause
+    exit /b
+)
+
+echo ✅ Done! Site should be live soon.
 pause

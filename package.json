@@ -1,7 +1,7 @@
 {
   "name": "client-database-indexdb",
   "version": "0.1.0",
-  "homepage": "https://snoopak.github.io/gas-local-db",
+  "homepage": "https://snoopak.github.io/gas-local-db2",
   "private": true,
   "dependencies": {
     "@testing-library/dom": "^10.4.1",

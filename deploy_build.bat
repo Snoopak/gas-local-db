@@ -35,7 +35,7 @@ if not exist .git (
     git init
     git branch -M gh-pages
     :: Обов'язково перевірте це посилання!
-    git remote add origin https://github.com/Snoopak/gas-local-db2.git
+    git remote add origin https://github.com/Snoopak/gas-local-db.git
 )
 
 :: 5. Деплой

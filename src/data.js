@@ -76,5 +76,8 @@ export const SERVICE_ORG = ['Основний', 'Підмінний'];
 export const METER_MANUFACTURER = [...new Set(METER_CATALOG.map(m => m.manufacturer))].sort();
 export const METER_GROUP = [...new Set(METER_CATALOG.map(m => m.group))].sort();
 
+export const U_STREET_TYPE = ['вул.', 'пров.', 'площа'];
+
+
 
 

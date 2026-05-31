@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, createContext, useContext, useCallb
 import { Search, Plus, Edit2, Trash2, X, Save, Phone, Home, Gauge, Upload, Download, FileText, CheckCircle, AlertCircle, Info, AlertTriangle, Database, Activity, Flame, MapPin, ChevronUp, ChevronDown, Users } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import './App.css';
-import {METER_CATALOG, METER_SIZES, METER_SUBTYPE, METER_LOCATION, METER_OWNERSHIP, SERVICE_ORG, METER_GROUP, METER_MANUFACTURER} from './data';
+import {METER_CATALOG, METER_SIZES, METER_SUBTYPE, METER_LOCATION, METER_OWNERSHIP, SERVICE_ORG, METER_GROUP, METER_MANUFACTURER, U_STREET_TYPE} from './data';
 
 // ==================== ALERT SYSTEM ====================
 // Context для Alert System
@@ -566,6 +566,7 @@ function ClientDatabase() {
   const [meterSizes, setMeterSizes] = useState(['Всі']);
   const [meterYears, setMeterYears] = useState(['Всі']);
   const [meterGroups, setMeterGroups] = useState([]);
+  const [grsList, setGrsList] = useState([]);
   
   // ⭐ Лічильники для статусів
   const [statusCounts, setStatusCounts] = useState({ disconnected: 0, dacha: 0, absent: 0 });
@@ -714,6 +715,10 @@ function ClientDatabase() {
   useEffect(() => {
     const updateDynamicFilters = async () => {
       const allClients = await getAllClients();
+
+    const uniqueGrs = [...new Set(allClients.map(c => c.grs).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'uk', { sensitivity: 'base' }));
+    setGrsList(uniqueGrs);
+
 
       // Базовий фільтр по адресі
       let byAddress = allClients;
@@ -2102,11 +2107,11 @@ for (let i = 0; i < clients.length; i++) {
                               <span className="meter-tag">№ {c.meterNumber}</span>
                               {c.meterYear && <span className="meter-tag">{c.meterYear} р.</span>}
                               {c.verificationDate && <span className="meter-tag">Повірка: {c.verificationDate}</span>}
-                             {c.nextVerificationDate && (
-  <span className={`meter-tag ${c.nextVerificationDate.split('.').reverse().join('-') < new Date().toISOString().split('T')[0] ? 'meter-tag-expired' : ''}`}>
-    Наступна: {c.nextVerificationDate}
-  </span>
-)}
+                              {c.nextVerificationDate && (
+                              <span className={`meter-tag ${c.nextVerificationDate.split('.').reverse().join('-') < new Date().toISOString().split('T')[0] ? 'meter-tag-expired' : ''}`}>
+                                Наступна: {c.nextVerificationDate}
+                              </span>
+                              )}
                             </div>
                           )}
                         </div>
@@ -2151,7 +2156,7 @@ for (let i = 0; i < clients.length; i++) {
 
                         {(c.boilerBrand || c.stoveType || c.columnType) && (
                           <div className="appliances-row">
-                            <span className="appliances-label">Прилади:</span>
+                            <div className="appliances-label section-title"><Flame size={13}/> Прилади:</div>
                             {c.boilerBrand && <span className="appliance-pill"><Flame size={10} style={{color:'#f97316'}} /> {c.boilerBrand}</span>}
                             {c.stoveType && <span className="appliance-pill"><Flame size={10} style={{color:'#3b82f6'}} /> {c.stoveType}</span>}
                             {c.columnType && <span className="appliance-pill"><Flame size={10} style={{color:'#06b6d4'}} /> {c.columnType}</span>}
@@ -2254,163 +2259,146 @@ for (let i = 0; i < clients.length; i++) {
                 <div className="modal-section-blue">
                   <h3 className="modal-section-title modal-section-title-blue"><Home size={18} /> ПІБ, Адреса, Особові дані</h3>
                   <div className="modal-grid-3">
-                    <div className="modal-col-3">
-                      <label className="form-label">ПІБ *</label>
-                      <input className="form-input" type="text" value={formData.fullName} onChange={(e) => setFormData({...formData, fullName: e.target.value})} />
+                    
+                    {/* 1 РЯДОК: ПІБ + Особовий рахунок */}
+                    <div className="name-account-fields modal-col-3">
+                      <div>
+                        <label className="form-label">ПІБ *</label>
+                        <input className="form-input" type="text" value={formData.fullName} onChange={(e) => setFormData({...formData, fullName: e.target.value})} />
+                      </div>
+                      <div>
+                        <label className="form-label">Особовий рахунок *</label>
+                        <input className="form-input" type="text" maxlength="10" value={formData.accountNumber} onChange={(e) => setFormData({...formData, accountNumber: e.target.value})} />
+                      </div>
                     </div>
-                    <div>
-                      <label className="form-label">Населений пункт</label>
-                      <input className="form-input" type="text" value={formData.settlement} onChange={(e) => setFormData({...formData, settlement: e.target.value})} />
+
+                    {/* 2 РЯДОК: Населений пункт + Тип вул. + Вулиця + Будинок + Літ. + Кв. + Літ. */}
+                    <div className="address-compact-grid modal-col-3">
+                      <div>
+                        <label className="form-label">Населений пункт</label>
+                        <input className="form-input" type="text" value={formData.settlement} onChange={(e) => setFormData({...formData, settlement: e.target.value})} />
+                      </div>
+                      <div>
+                        <label className="form-label">Вулиця (тип/назва)</label>
+                        <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '8px' }}>
+                          <select className="form-input" value={formData.streetType} onChange={(e) => setFormData({...formData, streetType: e.target.value})}>
+                            {U_STREET_TYPE.map((type, idx) => (
+                              <option key={idx} value={type}>{type}</option>
+                            ))}
+                          </select>
+                          <input className="form-input" type="text" value={formData.street} onChange={(e) => setFormData({...formData, street: e.target.value})} />
+                        </div>
+                      </div>
+                      <div className="address-numbers-grid">
+                        <div>
+                          <label className="form-label" title="Будинок">Буд.</label>
+                          <input className="form-input" type="text" value={formData.building} onChange={(e) => setFormData({...formData, building: e.target.value})} />
+                        </div>
+                        <div>
+                          <label className="form-label" title="Літера">літ. Буд.</label>
+                          <input className="form-input" type="text" value={formData.buildingLetter} onChange={(e) => setFormData({...formData, buildingLetter: e.target.value})} />
+                        </div>
+                        <div>
+                          <label className="form-label" title="Квартира">Кв.</label>
+                          <input className="form-input" type="text" value={formData.apartment} onChange={(e) => setFormData({...formData, apartment: e.target.value})} />
+                        </div>
+                        <div>
+                          <label className="form-label" title="Літера кв.">літ. Кв.</label>
+                          <input className="form-input" type="text" value={formData.apartmentLetter} onChange={(e) => setFormData({...formData, apartmentLetter: e.target.value})} />
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <label className="form-label">Тип вулиці</label>
-                      <input className="form-input" type="text" placeholder="вул., пр., пл." value={formData.streetType} onChange={(e) => setFormData({...formData, streetType: e.target.value})} />
-                    </div>
-                    <div>
-                      <label className="form-label">Вулиця</label>
-                      <input className="form-input" type="text" value={formData.street} onChange={(e) => setFormData({...formData, street: e.target.value})} />
-                    </div>
-                    <div>
-                      <label className="form-label">Будинок</label>
-                      <input className="form-input" type="text" value={formData.building} onChange={(e) => setFormData({...formData, building: e.target.value})} />
-                    </div>
-                    <div>
-                      <label className="form-label">Літера буд.</label>
-                      <input className="form-input" type="text" value={formData.buildingLetter} onChange={(e) => setFormData({...formData, buildingLetter: e.target.value})} />
-                    </div>
-                    <div>
-                      <label className="form-label">Квартира</label>
-                      <input className="form-input" type="text" value={formData.apartment} onChange={(e) => setFormData({...formData, apartment: e.target.value})} />
-                    </div>
-                    <div>
-                      <label className="form-label">Літера кв.</label>
-                      <input className="form-input" type="text" value={formData.apartmentLetter} onChange={(e) => setFormData({...formData, apartmentLetter: e.target.value})} />
-                    </div>
-                    <div>
-                      <label className="form-label">Особовий рахунок *</label>
-                      <input className="form-input" type="text" value={formData.accountNumber} onChange={(e) => setFormData({...formData, accountNumber: e.target.value})} />
-                    </div>
+                    
                     <div>
                       <label className="form-label">EIC</label>
                       <input className="form-input" type="text" value={formData.eic} onChange={(e) => setFormData({...formData, eic: e.target.value})} />
                     </div>
+
+                    {/* 4 РЯДОК: Телефон + Чекбокси */}
                     <div>
                       <label className="form-label">Телефон</label>
                       <input className="form-input" type="tel" placeholder="+380..." value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} />
                     </div>
-                    <div className="modal-col-3">
-                      <div className="form-checkbox-row">
-                        <label className="form-checkbox-label">
-                          <input type="checkbox" checked={formData.dacha} onChange={(e) => setFormData({...formData, dacha: e.target.checked})} />
-                          Дача
-                        </label>
-                        <label className="form-checkbox-label">
-                          <input type="checkbox" checked={formData.temporaryAbsent} onChange={(e) => setFormData({...formData, temporaryAbsent: e.target.checked})} />
-                          Тимчасово не проживає
-                        </label>
-                      </div>
+                    
+                    <div className="flex-checkbox-wrapper">
+                      <label className="form-checkbox-label">
+                        <input type="checkbox" checked={formData.dacha} onChange={(e) => setFormData({...formData, dacha: e.target.checked})}/>Дача</label>
+                      <label className="form-checkbox-label">
+                        <input type="checkbox" checked={formData.temporaryAbsent} onChange={(e) => setFormData({...formData, temporaryAbsent: e.target.checked})}/>Тимчасово не проживає</label>
                     </div>
+
                   </div>
                 </div>
 
                 {/* Лічильник */}
                 <div className="modal-section-purple">
                   <h3 className="modal-section-title modal-section-title-purple"><Gauge size={18} /> Лічильник</h3>
-                  <div className="modal-grid-3">
-                    <div>
+                  
+                  {/* РЯДОК 1 */}
+                  <div className="form-grid-row" style={{ gridTemplateColumns: 'repeat(6, 1fr)' }}>
+                    <div style={{ gridColumn: 'span 2' }}>
                       <label className="form-label">Марка лічильника</label>
-                      <select 
-                        className="form-input"
-                        value={formData.meterBrand}
-                        onChange={(e) => {
-                          const brand = e.target.value;
-                          const found = METER_CATALOG.find(m => m.brand === brand);
-                          
-                          let detectedSize = formData.meterSize; // Зберігаємо поточне значення
-
-                          if (found) {
+                      <select className="form-input" value={formData.meterBrand} onChange={(e) => {
+                        const brand = e.target.value;
+                        const found = METER_CATALOG.find(m => m.brand === brand);
+                        let detectedSize = formData.meterSize;
+                        if (found) {
                             const normalizedBrand = brand.replace(',', '.').replace('G ', 'G');
                             const match = METER_SIZES.find(size => normalizedBrand.includes(size));
-                            if (match) {
-                              // Відрізаємо "G", залишаючи тільки цифри (наприклад "1.6")
-                              detectedSize = match.replace('G', ''); 
-                            }
-                          } else if (brand === "") {
-                            detectedSize = "";
-                          }
-                          setFormData({
-                            ...formData,
-                            meterBrand: brand,
-                            meterManufacturer: found ? found.manufacturer : '',
-                            meterGroup: found ? found.group : '',
-                            meterSize: detectedSize, // Вставляємо знайдений типорозмір
-                          });
-                        }}
-                      >
+                            if (match) detectedSize = match.replace('G', '');
+                        } else if (brand === "") detectedSize = "";
+                        setFormData({ ...formData, meterBrand: brand, meterManufacturer: found ? found.manufacturer : '', meterGroup: found ? found.group : '', meterSize: detectedSize });
+                      }}>
                         <option value="">— оберіть марку —</option>
-                        {METER_CATALOG.map(m => (
-                          <option key={m.brand} value={m.brand}>{m.brand}</option>
-                        ))}
+                        {METER_CATALOG.map(m => <option key={m.brand} value={m.brand}>{m.brand}</option>)}
                       </select>
                     </div>
                     <div><label className="form-label">Типорозмір</label><input className="form-input" type="text" value={formData.meterSize} onChange={(e) => setFormData({...formData, meterSize: e.target.value})} /></div>
                     <div><label className="form-label">№ лічильника</label><input className="form-input" type="text" value={formData.meterNumber} onChange={(e) => setFormData({...formData, meterNumber: e.target.value})} /></div>
-                    <div><label className="form-label">Рік випуску</label><input className="form-input" type="text" value={formData.meterYear} onChange={(e) => setFormData({...formData, meterYear: e.target.value})} /></div>
-                    <div><label className="form-label">Дата повірки</label><input className="form-input" type="text" placeholder="ДД.ММ.РРРР" value={formData.verificationDate} onChange={(e) => setFormData({...formData, verificationDate: e.target.value})} /></div>
-                    <div><label className="form-label">Наступна повірка</label><input className="form-input" type="text" placeholder="ДД.ММ.РРРР" value={formData.nextVerificationDate} onChange={(e) => setFormData({...formData, nextVerificationDate: e.target.value})} /></div>
-                    <div><label className="form-label">Дата встановлення</label><input className="form-input" type="text" placeholder="ДД.ММ.РРРР" value={formData.installationDate} onChange={(e) => setFormData({...formData, installationDate: e.target.value})} /></div>
-                    <div><label className="form-label">Розташування</label>
-                    <select className="form-input" value={formData.meterLocation} onChange={(e) => setFormData({...formData, meterLocation: e.target.value})}>
-                      <option value="">— оберіть місце —</option>
-                      {METER_LOCATION.map((loc, idx) => (
-                        <option key={idx} value={loc}>{loc}</option>
-                      ))}
-                    </select>
-                    </div>
-                    <div><label className="form-label">Група ліч.</label>
-                    <select className="form-input" value={formData.meterGroup} onChange={(e) => setFormData({...formData, meterGroup: e.target.value})}>
-                      <option value="">— оберіть групу —</option>
-                      {METER_GROUP.map((group, idx) => (
-                        <option key={idx} value={group}>{group}</option>
-                      ))}
-                    </select>
-                    </div>
-                    <div><label className="form-label">Підтип</label>
-                      <select className="form-input" value={formData.meterSubtype} onChange={(e) => setFormData({ ...formData, meterSubtype: e.target.value })}>
-                        <option value="">— оберіть тип —</option>
-                        {METER_SUBTYPE.map((sub, idx) => (
-                        <option key={idx} value={sub}>{sub}</option>
-                        ))}
+                    <div><label className="form-label">Рік вип.</label><input className="form-input" type="text" value={formData.meterYear} onChange={(e) => setFormData({...formData, meterYear: e.target.value})} /></div>
+                    <div><label className="form-label">Наст. повірка</label><input className="form-input" type="text" placeholder="ДД.ММ.РРРР" value={formData.nextVerificationDate} onChange={(e) => setFormData({...formData, nextVerificationDate: e.target.value})} /></div>
+                  </div>
+
+                  {/* РЯДОК 2 */}
+                  <div className="form-grid-row" style={{ gridTemplateColumns: 'repeat(6, 1fr)' }}>
+                    <div style={{ gridColumn: 'span 2' }}>
+                      <label className="form-label">Завод виробник</label>
+                      <select className="form-input" value={formData.meterManufacturer} onChange={(e) => setFormData({...formData, meterManufacturer: e.target.value})}>
+                        <option value="">— оберіть завод —</option>
+                        {METER_MANUFACTURER.map((man, idx) => <option key={idx} value={man}>{man}</option>)}
                       </select>
                     </div>
-                    <div><label className="form-label">Належність</label>
-                      <select className="form-input" value={formData.meterOwnership} onChange={(e) => setFormData({ ...formData, meterOwnership: e.target.value })}>
-                        <option value="">— оберіть належність —</option>
-                        {METER_OWNERSHIP.map((own, idx) => (
-                        <option key={idx} value={own}>{own}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div><label className="form-label">Серв. орган</label>
-                      <select className="form-input" value={formData.serviceOrg} onChange={(e) => setFormData({ ...formData, serviceOrg: e.target.value })}>
-                        <option value="">— оберіть сервісний орган —</option>
-                        {SERVICE_ORG.map((org, idx) => (
-                          <option key={idx} value={org}>{org}</option>
-                        ))}
+                    <div><label className="form-label">Група ліч.</label><select className="form-input" value={formData.meterGroup} onChange={(e) => setFormData({...formData, meterGroup: e.target.value})}>
+                        <option value="">— оберіть групу —</option>
+                        {METER_GROUP.map((group, idx) => <option key={idx} value={group}>{group}</option>)}
+                    </select></div>
+                    <div><label className="form-label">Підтип</label><select className="form-input" value={formData.meterSubtype} onChange={(e) => setFormData({...formData, meterSubtype: e.target.value})}>
+                        <option value="">— оберіть підтип —</option>
+                        {METER_SUBTYPE.map((sub, idx) => <option key={idx} value={sub}>{sub}</option>)}
+                    </select></div>
+                    <div><label className="form-label">Належність</label><select className="form-input" value={formData.meterOwnership} onChange={(e) => setFormData({...formData, meterOwnership: e.target.value})}>
+                        <option value="">— належність —</option>
+                        {METER_OWNERSHIP.map((own, idx) => <option key={idx} value={own}>{own}</option>)}
+                    </select></div>
+                    <div><label className="form-label">Серв. орган</label><select className="form-input" value={formData.serviceOrg} onChange={(e) => setFormData({...formData, serviceOrg: e.target.value})}>
+                        <option value="">— серв. орган —</option>
+                        {SERVICE_ORG.map((org, idx) => <option key={idx} value={org}>{org}</option>)}
+                    </select></div>
+                  </div>
+
+                  {/* РЯДОК 3 */}
+                  <div className="form-grid-row" style={{ gridTemplateColumns: 'repeat(6, 1fr)' }}>
+                    <div style={{ gridColumn: 'span 2' }}>
+                      <label className="form-label">Розташування</label>
+                      <select className="form-input" value={formData.meterLocation} onChange={(e) => setFormData({...formData, meterLocation: e.target.value})}>
+                        <option value="">— розташування —</option>
+                        {METER_LOCATION.map((loc, idx) => <option key={idx} value={loc}>{loc}</option>)}
                       </select>
                     </div>
                     <div><label className="form-label">МВНСШ</label><input className="form-input" type="text" value={formData.mvnssh} onChange={(e) => setFormData({...formData, mvnssh: e.target.value})} /></div>
                     <div><label className="form-label">РСП</label><input className="form-input" type="text" value={formData.rsp} onChange={(e) => setFormData({...formData, rsp: e.target.value})} /></div>
                     <div><label className="form-label">Пломба</label><input className="form-input" type="text" value={formData.seal} onChange={(e) => setFormData({...formData, seal: e.target.value})} /></div>
                     <div><label className="form-label">Стікерна пломба</label><input className="form-input" type="text" value={formData.stickerSeal} onChange={(e) => setFormData({...formData, stickerSeal: e.target.value})} /></div>
-                    <div><label className="form-label">Завод виробник</label>
-                    <select className="form-input" value={formData.meterManufacturer} onChange={(e) => setFormData({...formData, meterManufacturer: e.target.value})}>
-                      <option value="">— оберіть завод виробник —</option>
-                      {METER_MANUFACTURER.map((man, idx) => (
-                      <option key={idx} value={man}>{man}</option>
-                      ))}
-                    </select>
-                    </div>
                   </div>
                 </div>
 
@@ -2449,7 +2437,16 @@ for (let i = 0; i < clients.length; i++) {
                     <div><label className="form-label">Площа (м²)</label><input className="form-input" type="text" value={formData.area} onChange={(e) => setFormData({...formData, area: e.target.value})} /></div>
                     <div><label className="form-label">Комун. гос-во</label><input className="form-input" type="text" value={formData.utilityType} onChange={(e) => setFormData({...formData, utilityType: e.target.value})} /></div>
                     <div><label className="form-label">Група</label><input className="form-input" type="text" value={formData.utilityGroup} onChange={(e) => setFormData({...formData, utilityGroup: e.target.value})} /></div>
-                    <div><label className="form-label">ГРС</label><input className="form-input" type="text" value={formData.grs} onChange={(e) => setFormData({...formData, grs: e.target.value})} /></div>
+                    <div><label className="form-label">ГРС</label>
+                        <select className="form-input" value={formData.grs || ''} onChange={(e) => setFormData({ ...formData, grs: e.target.value })}>
+                          <option value="">— оберіть ГРС —</option>
+                          {grsList.map((grsName, index) => (
+                            <option key={index} value={grsName}>
+                              {grsName}
+                            </option>
+                          ))}
+                        </select>
+                    </div>
                     <div><label className="form-label">Газ вимкнено</label><input className="form-input" type="text" placeholder="Так/Ні" value={formData.gasDisconnected} onChange={(e) => setFormData({...formData, gasDisconnected: e.target.value})} /></div>
                     <div><label className="form-label">Дата підкл.</label><input className="form-input" type="text" placeholder="ДД.ММ.РРРР" value={formData.connectDate} onChange={(e) => setFormData({...formData, connectDate: e.target.value})} /></div>
                   </div>

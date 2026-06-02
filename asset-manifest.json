@@ -1,0 +1,15 @@
+{
+  "files": {
+    "main.css": "/gas-local-db/static/css/main.076f83bb.css",
+    "main.js": "/gas-local-db/static/js/main.3845b047.js",
+    "static/js/453.4186fc52.chunk.js": "/gas-local-db/static/js/453.4186fc52.chunk.js",
+    "index.html": "/gas-local-db/index.html",
+    "main.076f83bb.css.map": "/gas-local-db/static/css/main.076f83bb.css.map",
+    "main.3845b047.js.map": "/gas-local-db/static/js/main.3845b047.js.map",
+    "453.4186fc52.chunk.js.map": "/gas-local-db/static/js/453.4186fc52.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.076f83bb.css",
+    "static/js/main.3845b047.js"
+  ]
+}

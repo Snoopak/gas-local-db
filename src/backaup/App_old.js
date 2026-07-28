@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, createContext, useContext, useCallback } from 'react';
-import { Search, Plus, Edit2, Trash2, X, Save, Phone, Home, Gauge, Upload, Download, FileText, CheckCircle, AlertCircle, Info, AlertTriangle, Database, Activity, Flame, MapPin, ChevronUp, ChevronDown, Users, Sun, Moon, Copy, ChevronRight, UserCircle } from 'lucide-react';
+import { Search, Plus, Edit2, Trash2, X, Save, Phone, Home, Gauge, Upload, Download, FileText, CheckCircle, AlertCircle, Info, AlertTriangle, Database, Activity, Flame, MapPin, ChevronUp, ChevronDown, Users } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import './App.css';
 import {METER_CATALOG, METER_SIZES, METER_SUBTYPE, METER_LOCATION, METER_OWNERSHIP, SERVICE_ORG, METER_GROUP, METER_MANUFACTURER, U_STREET_TYPE} from './data';
@@ -651,6 +651,7 @@ function ClientDatabase() {
   const [selectedMeterSize, setSelectedMeterSize] = useState([]);
   const [selectedMeterYear, setSelectedMeterYear] = useState([]);
   const [selectedMeterGroups, setSelectedMeterGroups] = useState([]);
+  const [expandedClientId, setExpandedClientId] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState(null);
   const [totalCount, setTotalCount] = useState(0);
@@ -702,71 +703,6 @@ function ClientDatabase() {
   
   // State для згортання фільтрів адреси на мобільних
   const [showAddressFilters, setShowAddressFilters] = useState(false);
-
-    // ⭐ НОВІ СТАНИ: десктопна панель + тема + контекстне меню
-  const [selectedClient, setSelectedClient] = useState(null);
-  // 🟢 Додаємо стани для відстеження пальця
-  const [touchStartY, setTouchStartY] = useState(0);
-  const [touchCurrentY, setTouchCurrentY] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
-
-  // 🟢 Функція 1: Коли палець торкнувся екрана
-  const handleTouchStart = (e) => {
-    setTouchStartY(e.touches[0].clientY);
-    setIsDragging(true);
-  };
-
-  // 🟢 Функція 2: Коли палець рухається вниз
-  const handleTouchMove = (e) => {
-    if (!isDragging) return; 
-    const currentY = e.touches[0].clientY;
-    const diff = currentY - touchStartY;
-    if (diff > 0) {
-      setTouchCurrentY(diff); // Зсуваємо панель за пальцем
-    }
-  };
-
-  // 🟢 Функція 3: Коли палець відпустили
-  const handleTouchEnd = () => {
-    if (!isDragging) return;
-    setIsDragging(false);
-    
-    // Якщо потягнув більше ніж на 120 пікселів — закриваємо
-    if (touchCurrentY > 120) {
-      closeMobilePanel();
-    }
-    setTouchCurrentY(0); // Скидаємо позицію
-  };
-  const [darkMode, setDarkMode] = useState(false);
-  const [ctxMenu, setCtxMenu] = useState({ show: false, x: 0, y: 0, client: null });
-  const isMobile = () => window.innerWidth < 960;
-
-  // ⭐ Темна тема — завантаження з localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem('grm-theme');
-    if (saved === 'dark') {
-      setDarkMode(true);
-      document.body.classList.add('dark');
-    }
-  }, []);
-
-  // ⭐ Темна тема — перемикання
-  useEffect(() => {
-    document.body.classList.toggle('dark', darkMode);
-    localStorage.setItem('grm-theme', darkMode ? 'dark' : 'light');
-  }, [darkMode]);
-
-  // ⭐ Контекстне меню — закриття при кліку поза ним
-  useEffect(() => {
-    const handleClick = () => setCtxMenu({ show: false, x: 0, y: 0, client: null });
-    const handleEsc = (e) => { if (e.key === 'Escape') setCtxMenu({ show: false, x: 0, y: 0, client: null }); };
-    document.addEventListener('click', handleClick);
-    document.addEventListener('keydown', handleEsc);
-    return () => {
-      document.removeEventListener('click', handleClick);
-      document.removeEventListener('keydown', handleEsc);
-    };
-  }, []);
 
   // useEffect для закриття модалки на ESC
   useEffect(() => {
@@ -944,31 +880,22 @@ function ClientDatabase() {
     updateDynamicFilters();
   }, [selectedSettlement, selectedStreet, selectedMeterGroups, selectedMeterBrand, selectedMeterSize]);
 
-   // ⭐ INFINITE SCROLL: Слухач скролу
+  // ⭐ INFINITE SCROLL: Слухач скролу
   useEffect(() => {
-    let scrollSaveTimeout = null;
-
+    let scrollSaveTimeout = null; // ⭐ Локальна змінна для очищення
+    
     const handleScroll = () => {
-      let scrollTop, containerHeight, contentHeight;
-
-      // Визначаємо джерело скролу
-      const listEl = document.querySelector('.clients-list');
-      const isDesktop = window.innerWidth >= 960 && listEl;
-
-      if (isDesktop) {
-        scrollTop = listEl.scrollTop;
-        containerHeight = listEl.clientHeight;
-        contentHeight = listEl.scrollHeight;
-      } else {
-        scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-        containerHeight = window.innerHeight;
-        contentHeight = document.documentElement.scrollHeight;
-      }
-
-      if (scrollTop + containerHeight >= contentHeight - CONFIG.SCROLL_THRESHOLD && hasMore && !isLoadingMore) {
+      // ⭐ INFINITE SCROLL працює ЗАВЖДИ (і з фільтрами, і без!)
+      const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+      const windowHeight = window.innerHeight;
+      const documentHeight = document.documentElement.scrollHeight;
+      
+      // Якщо до кінця залишилось менше SCROLL_THRESHOLD і є ще дані - завантажуємо
+      if (scrollTop + windowHeight >= documentHeight - CONFIG.SCROLL_THRESHOLD && hasMore && !isLoadingMore) {
         setCurrentPage(prev => prev + 1);
       }
 
+      // Зберігаємо позицію скролу (з debounce)
       if (scrollSaveTimeout) clearTimeout(scrollSaveTimeout);
       scrollSaveTimeout = setTimeout(() => {
         saveScrollState();
@@ -976,19 +903,10 @@ function ClientDatabase() {
     };
 
     window.addEventListener('scroll', handleScroll);
-
-    // Додаємо слухач на список для десктопа
-    const listEl = document.querySelector('.clients-list');
-    if (listEl) {
-      listEl.addEventListener('scroll', handleScroll);
-    }
-
+    
     return () => {
       window.removeEventListener('scroll', handleScroll);
-      if (listEl) {
-        listEl.removeEventListener('scroll', handleScroll);
-      }
-      if (scrollSaveTimeout) clearTimeout(scrollSaveTimeout);
+      if (scrollSaveTimeout) clearTimeout(scrollSaveTimeout); // ⭐ Очищаємо при unmount
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasMore, isLoadingMore]);
@@ -1312,49 +1230,22 @@ function ClientDatabase() {
     }
   };
 
-  // ⭐ Контекстне меню — обробник правого кліку
-  const handleContextMenu = (e, client) => {
-    e.preventDefault();
-    setCtxMenu({ show: true, x: e.clientX, y: e.clientY, client });
-  };
-
-  // ⭐ Контекстне меню — дії
-  const handleCtxAction = (action) => {
-    if (!ctxMenu.client) return;
-    const c = ctxMenu.client;
-    switch(action) {
-      case 'edit': handleEdit(c); break;
-      case 'copy':
-        const addr = [c.settlement, c.streetType, c.street, c.building, c.apartment].filter(Boolean).join(' ');
-        navigator.clipboard.writeText(addr).then(() => showToast('success', 'Адресу скопійовано!'));
-        break;
-      case 'call':
-        if (c.phone) window.location.href = 'tel:' + c.phone;
-        else showToast('warning', 'Немає телефону');
-        break;
-      case 'delete': handleDelete(c.id); break;
-    }
-    setCtxMenu({ show: false, x: 0, y: 0, client: null });
-  };
-
-  // ⭐ Обробка кліку по картці
+  // ⭐ INFINITE SCROLL: Обробка кліку по картці з збереженням стану
   const handleClientCardClick = (clientId) => {
-    const client = clients.find(c => c.id === clientId);
+    // Зберігаємо стан перед відкриттям деталей
     saveScrollState();
-    setSelectedClient(client);
-    if (isMobile()) {
-      document.body.style.overflow = 'hidden';
+    // Відкриваємо/закриваємо картку
+    setExpandedClientId(expandedClientId === clientId ? null : clientId);
+    
+    // Якщо закриваємо - відновлюємо позицію
+    if (expandedClientId === clientId) {
+      setTimeout(() => {
+        const savedScrollY = sessionStorage.getItem(STORAGE_KEYS.SCROLL_Y);
+        if (savedScrollY) {
+          window.scrollTo(0, parseInt(savedScrollY));
+        }
+      }, 50);
     }
-  };
-
-  // ⭐ Закриття мобільної панелі
-  const closeMobilePanel = () => {
-    setSelectedClient(null);
-    document.body.style.overflow = '';
-    setTimeout(() => {
-      const savedScrollY = sessionStorage.getItem(STORAGE_KEYS.SCROLL_Y);
-      if (savedScrollY) window.scrollTo(0, parseInt(savedScrollY));
-    }, 50);
   };
 
   const performSearch = async (append = false) => {
@@ -2066,10 +1957,6 @@ const handleImportExcel = async (e) => {
               <span className="stat-badge-danger">Відключених: <b>{statusCounts.disconnected}</b></span>
             </div>
             <div className="navbar-actions">
-            {/* Кнопка теми */}
-              <button className="btn-theme" onClick={() => setDarkMode(!darkMode)} title="Перемкнути тему">
-                {darkMode ? <Sun size={18} /> : <Moon size={18} />}
-              </button>
             {/* Dropdown з швидкими діями */}
   <div className="relative">
 <button 
@@ -2256,11 +2143,7 @@ const handleImportExcel = async (e) => {
           </div>
         </div>
 
-        {/* ⭐ ОСНОВНИЙ КОНТЕНТ: список + бічна панель */}
-        <div className="main-content">
-          {/* ЛІВА ПАНЕЛЬ — список */}
-          <div className="list-panel">
-            {/* ===== СПИСОК КЛІЄНТІВ ===== */}
+        {/* ===== СПИСОК КЛІЄНТІВ ===== */}
         <div className="clients-list">
           {isInitialLoading ? (
             <div className="skeleton-list">
@@ -2281,41 +2164,128 @@ const handleImportExcel = async (e) => {
           ) : (
             <>
               <div className="clients-inner">
-                            {clients.map(c => {
-                const dotClass = c.gasDisconnected === true ? 'suspended' : 'active';
-                const addr = [c.settlement, [c.streetType, c.street].filter(Boolean).join(' '), c.building ? `буд. ${c.building}${c.buildingLetter || ''}` : '', c.apartment ? `кв. ${c.apartment}${c.apartmentLetter || ''}` : ''].filter(Boolean).join(', ');
-                const initials = (c.fullName || '?').split(' ').slice(0, 2).map(w => w[0]).join('');
-                const meterShort = c.meterNumber ? `${c.meterBrand ? c.meterBrand.split(' ')[0] : ''} G${c.meterSize || ''} №${c.meterNumber}` : '';
-                const badges = [];
-                if (c.dacha) badges.push('<span class="badge-sm warning">Дача</span>');
-                if (c.temporaryAbsent) badges.push('<span class="badge-sm danger">Не прож.</span>');
-
+              {clients.map(c => {
+                const dotClass = c.gasDisconnected === true ? 'dot-red' :
+                                 c.temporaryAbsent ? 'dot-amber' :
+                                 c.dacha ? 'dot-purple' : 'dot-green';
                 return (
-                  <div
-                    key={c.id}
-                    className={`client-item ${selectedClient?.id === c.id && !isMobile() ? 'selected' : ''}`}
-                    onClick={() => handleClientCardClick(c.id)}
-                    onContextMenu={(e) => handleContextMenu(e, c)}
-                  >
-                    <div className="item-avatar">{initials}</div>
-                    <div className="item-body">
-                      <div className="item-name">{c.fullName || '—'}</div>
-                      <div className="item-address"><div className="meta-icon"><MapPin size={11} /></div> {addr}</div>
-                      <div className="item-tags">
-                        <span className="account">о/р: {c.accountNumber || '—'}</span>
-                        <span className={`status-indicator ${dotClass}`}></span>
-                        {meterShort && <span className="meter-badge"><i className="fas fa-tachometer-alt"></i> {meterShort}</span>}
-                        {c.dacha && <span className="badge-sm warning">Дача</span>}
-                        {c.temporaryAbsent && <span className="badge-sm danger">Не прож.</span>}
-                        {c.gasDisconnected && <span className="badge badge-red">× Відключений</span>}
+                  <div key={c.id} className="client-card">
+
+                    {/* КОРОТКА КАРТКА */}
+                    <div className="client-card-short">
+                      <div className="client-card-body">
+                        <div className="client-card-left">
+                          <div className="client-name-row">
+                            <span className={"client-status-dot " + dotClass}></span>
+                            <span className="client-name">{c.fullName}</span>
+                            {c.gasDisconnected && <span className="badge badge-red">× Відключений</span>}
+                            {c.dacha && <span className="badge badge-purple">⌂ Дача</span>}
+                            {c.temporaryAbsent && <span className="badge badge-amber">× Не проживає</span>}
+                          </div>
+                          <div className="client-account">
+                            о/р: {c.accountNumber}{c.eic ? ` · EIC: ${c.eic}` : ''}
+                          </div>
+                          <div className="client-meta">
+                            {(c.settlement || c.street) && (
+                              <div className="client-meta-row">
+                                <div className="meta-icon"><MapPin size={11} /></div>
+                                <span>
+                                  {c.settlement}{c.street ? `, ${[c.streetType, c.street].filter(Boolean).join(' ')}` : ''}
+                                  {c.building ? `, буд. ${c.building}${c.buildingLetter || ''}` : ''}
+                                  {c.apartment ? `, кв. ${c.apartment}${c.apartmentLetter || ''}` : ''}
+                                </span>
+                              </div>
+                            )}
+                            {c.phone && (
+                              <div className="client-meta-row">
+                                <div className="meta-icon"><Phone size={11} /></div>
+                                <span>{formatPhones(c.phone)}</span>
+                              </div>
+                            )}
+                          </div>
+                          {c.meterNumber && (
+                            <div className="client-meter-row">
+                              <Activity size={11} />
+                              {c.meterBrand && <span className="meter-tag">{c.meterBrand}
+                                 {/* { {c.meterSize ? ` ${c.meterSize}` : ''} }*/ }
+                                </span>}
+                              <span className="meter-tag">№ {c.meterNumber}</span>
+                              {c.meterYear && <span className="meter-tag">{c.meterYear} р.</span>}
+                              {c.verificationDate && <span className="meter-tag">Повірка: {c.verificationDate}</span>}
+                              {c.nextVerificationDate && (
+                              <span className={`meter-tag ${c.nextVerificationDate.split('.').reverse().join('-') < new Date().toISOString().split('T')[0] ? 'meter-tag-expired' : ''}`}>
+                                Наступна: {c.nextVerificationDate}
+                              </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        <div className="client-card-actions">
+                          <div className="action-btns">
+                            <button className="btn-icon btn-icon-edit" onClick={e => { e.stopPropagation(); handleEdit(c); }}><Edit2 size={13} /></button>
+                            <button className="btn-icon btn-icon-delete" onClick={e => { e.stopPropagation(); handleDelete(c.id); }}><Trash2 size={13} /></button>
+                          </div>
+                          <button className="btn-expand" onClick={() => handleClientCardClick(c.id)}>
+                            {expandedClientId === c.id
+                              ? <><ChevronUp size={11} /> Згорнути</>
+                              : <><ChevronDown size={11} /> Повна картка</>}
+                          </button>
+                        </div>
                       </div>
                     </div>
-                    <div className="item-right">
-                      <div className="meter-brand">{c.meterBrand || ''}</div>
-                      <div className="meter-num">№ {c.meterNumber || '—'}</div>
-                    </div>
-                    <ChevronRight size={24} color="#d1d5db" />
 
+                    {/* РОЗГОРНУТА КАРТКА */}
+                    {expandedClientId === c.id && (
+                      <div className="client-card-expanded">
+                        <div className="expanded-section-title"><Activity size={11} /> Дані лічильника</div>
+                        {c.meterNumber ? (
+                          <div className="meter-chips">
+                            {c.meterBrand && <div className="meter-chip"><span className="meter-chip-label">Марка</span><span className="meter-chip-value">{c.meterBrand}</span></div>}
+                            {c.meterSize && <div className="meter-chip"><span className="meter-chip-label">Типорозмір</span><span className="meter-chip-value">{c.meterSize}</span></div>}
+                            <div className="meter-chip"><span className="meter-chip-label">№</span><span className="meter-chip-value">{c.meterNumber}</span></div>
+                            {c.meterYear && <div className="meter-chip"><span className="meter-chip-label">Рік</span><span className="meter-chip-value">{c.meterYear}</span></div>}
+                            {c.verificationDate && <div className="meter-chip"><span className="meter-chip-label">Повірка</span><span className="meter-chip-value">{c.verificationDate}</span></div>}
+                            {c.nextVerificationDate && <div className="meter-chip"><span className="meter-chip-label">Наступна</span><span className="meter-chip-value">{c.nextVerificationDate}</span></div>}
+                            {c.installationDate && <div className="meter-chip"><span className="meter-chip-label">Встановлено</span><span className="meter-chip-value">{c.installationDate}</span></div>}
+                            {c.meterLocation && <div className="meter-chip"><span className="meter-chip-label">Розташування</span><span className="meter-chip-value">{c.meterLocation}</span></div>}
+                            {c.meterManufacturer && <div className="meter-chip"><span className="meter-chip-label">Завод</span><span className="meter-chip-value">{c.meterManufacturer}</span></div>}
+                            {c.meterGroup && <div className="meter-chip"><span className="meter-chip-label">Група</span><span className="meter-chip-value">{c.meterGroup}</span></div>}
+                            {c.meterSubtype && <div className="meter-chip"><span className="meter-chip-label">Підтип</span><span className="meter-chip-value">{c.meterSubtype}</span></div>}
+                            {c.meterOwnership && <div className="meter-chip"><span className="meter-chip-label">Належність</span><span className="meter-chip-value">{c.meterOwnership}</span></div>}
+                            {c.serviceOrg && <div className="meter-chip"><span className="meter-chip-label">Серв. орган</span><span className="meter-chip-value">{c.serviceOrg}</span></div>}
+                            {(c.mvnssh || c.rsp) && <div className="meter-chip"><span className="meter-chip-label">МВНСШ/РСП</span><span className="meter-chip-value">{c.mvnssh}{c.rsp ? ' / ' + c.rsp : ''}</span></div>}
+                            {c.seal && <div className="meter-chip"><span className="meter-chip-label">Пломба</span><span className="meter-chip-value">{c.seal}</span></div>}
+                            {c.stickerSeal && <div className="meter-chip"><span className="meter-chip-label">Стікерна пломба</span><span className="meter-chip-value">{c.stickerSeal}</span></div>}
+                          </div>
+                        ) : <p style={{fontSize:12,color:'#9ca3af'}}>Немає даних про лічильник</p>}
+
+                        {(c.boilerBrand || c.stoveType || c.columnType) && (
+                          <div className="appliances-row">
+                            <div className="appliances-label section-title"><Flame size={13}/> Прилади:</div>
+                            {c.boilerBrand && <span className="appliance-pill"><Flame size={10} style={{color:'#f97316'}} /> {c.boilerBrand}</span>}
+                            {c.stoveType && <span className="appliance-pill"><Flame size={10} style={{color:'#3b82f6'}} /> {c.stoveType}</span>}
+                            {c.columnType && <span className="appliance-pill"><Flame size={10} style={{color:'#06b6d4'}} /> {c.columnType}</span>}
+                          </div>
+                        )}
+
+                        {c.gasDisconnected && (
+                          <div className="gas-off-block">
+                            <p className="gas-off-title">⚠️ Газ відключено</p>
+                            <div className="gas-off-details">
+                              {c.disconnectDate && <span><b>Дата:</b> {c.disconnectDate}</span>}
+                              {c.disconnectMethod && <span><b>Спосіб:</b> {c.disconnectMethod}</span>}
+                              {c.disconnectSeal && <span><b>Пломба:</b> {c.disconnectSeal}</span>}
+                              {c.connectDate && <span className="gas-on-date"><b>Підключено:</b> {c.connectDate}</span>}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="expanded-btns">
+                          <button className="btn-edit-full" onClick={e => { e.stopPropagation(); handleEdit(c); }}><Edit2 size={12} /> Редагувати</button>
+                          <button className="btn-delete-full" onClick={e => { e.stopPropagation(); handleDelete(c.id); }}><Trash2 size={12} /> Видалити</button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -2374,232 +2344,11 @@ const handleImportExcel = async (e) => {
                   ) : null}
                 </div>
               )}
-              </div> {/* кінець clients-inner */}
-            </>
-          )}
-        </div> {/* кінець clients-list */}
-      </div> {/* кінець list-panel */}
-
-      {/* ⭐ ПРАВА ПАНЕЛЬ — деталі клієнта (тільки десктоп) */}
-          {!isMobile() && (
-            <div className="detail-panel">
-              {selectedClient ? (
-                <>
-                  <div className="detail-panel-header">
-                    <h3>{selectedClient.fullName}</h3>
-                    <button className="btn-icon" onClick={() => setSelectedClient(null)}><X size={18} /></button>
-                  </div>
-                  <div className="detail-panel-body">
-                    {/* Особові дані */}
-                    <div className="detail-info-block">
-                      <h4><UserCircle size={14} /> Особові дані</h4>
-                      <div className="detail-row"><span className="dlbl">ПІБ</span><span className="dval"><strong>{selectedClient.fullName}</strong></span></div>
-                      <div className="detail-row"><span className="dlbl">Особовий рахунок</span><span className="dval">{selectedClient.accountNumber}</span></div>
-                      <div className="detail-row"><span className="dlbl">EIC</span><span className="dval">{selectedClient.eic || '—'}</span></div>
-                      <div className="detail-row"><span className="dlbl">Телефон</span><span className="dval">{selectedClient.phone ? (
-      <a href={`tel:${selectedClient.phone.replace(/[^\d+]/g, '')}`} style={{color: '#2563eb', textDecoration: 'none', fontWeight: 500}}>
-        {selectedClient.phone}
-      </a>
-    ) : '—'}</span></div>
-                      <div className="detail-row">
-                        <span className="dlbl">Адреса</span>
-                        <span className="dval" style={{fontSize:'0.75rem'}}>
-                          {[selectedClient.settlement, selectedClient.streetType, selectedClient.street, selectedClient.building && `буд. ${selectedClient.building}${selectedClient.buildingLetter || ''}`, selectedClient.apartment && `кв. ${selectedClient.apartment}${selectedClient.apartmentLetter || ''}`].filter(Boolean).join(', ')}
-                        </span>
-                      </div>
-                      <div className="detail-row"><span className="dlbl">Дача</span><span className="dval">{selectedClient.dacha ? 'Так' : 'Ні'}</span></div>
-                      <div className="detail-row"><span className="dlbl">Тимч. не проживає</span><span className="dval">{selectedClient.temporaryAbsent ? 'Так' : 'Ні'}</span></div>
-                    </div>
-                    {/* Об'єкт */}
-                    <div className="detail-info-block">
-                      <h4><Home size={14} /> Об'єкт</h4>
-                      <div className="detail-row"><span className="dlbl">Площа</span><span className="dval">{selectedClient.area ? `${selectedClient.area} м²` : '—'}</span></div>
-                      <div className="detail-row"><span className="dlbl">Комун. гос-во</span><span className="dval">{selectedClient.utilityType || '—'}</span></div>
-                      <div className="detail-row"><span className="dlbl">Група</span><span className="dval">{selectedClient.utilityGroup || '—'}</span></div>
-                      <div className="detail-row"><span className="dlbl">ГРС</span><span className="dval">{selectedClient.grs || '—'}</span></div>
-                      <div className="detail-row"><span className="dlbl">Дата підкл.</span><span className="dval">{selectedClient.connectDate || '—'}</span></div>
-                    </div>
-                    {/* Лічильник */}
-                    <div className="detail-info-block">
-                      <h4><Gauge size={14} /> Лічильник</h4>
-                      {selectedClient.meterNumber ? (
-                        <>
-                          <div className="detail-row"><span className="dlbl">Марка / Тип</span><span className="dval">{selectedClient.meterBrand || '—'} G{selectedClient.meterSize || '—'}</span></div>
-                          <div className="detail-row"><span className="dlbl">№ лічильника</span><span className="dval">{selectedClient.meterNumber}</span></div>
-                          <div className="detail-row"><span className="dlbl">Рік випуску</span><span className="dval">{selectedClient.meterYear || '—'}</span></div>
-                          <div className="detail-row"><span className="dlbl">Наступна повірка</span><span className="dval">{selectedClient.nextVerificationDate || '—'}</span></div>
-                          <div className="detail-row"><span className="dlbl">Завод-виробник</span><span className="dval" style={{fontSize:'0.7rem'}}>{selectedClient.meterManufacturer || '—'}</span></div>
-                          <div className="detail-row"><span className="dlbl">Група / Підтип</span><span className="dval">{selectedClient.meterGroup || '—'} / {selectedClient.meterSubtype || '—'}</span></div>
-                          <div className="detail-row"><span className="dlbl">Належність</span><span className="dval">{selectedClient.meterOwnership || '—'}</span></div>
-                          <div className="detail-row"><span className="dlbl">Розташування</span><span className="dval" style={{fontSize:'0.7rem'}}>{selectedClient.meterLocation || '—'}</span></div>
-                          <div className="detail-row"><span className="dlbl">МВНСШ / РСП</span><span className="dval">{selectedClient.mvnssh || '—'} / {selectedClient.rsp || '—'}</span></div>
-                          <div className="detail-row"><span className="dlbl">Пломба</span><span className="dval">{selectedClient.seal || '—'}</span></div>
-                          <div className="detail-row"><span className="dlbl">Стікерна пломба</span><span className="dval">{selectedClient.stickerSeal || '—'}</span></div>
-                        </>
-                      ) : <p style={{fontSize:12,color:'#9ca3af'}}>Немає даних</p>}
-                    </div>
-                    {/* Прилади */}
-                    <div className="detail-info-block">
-                      <h4>🔥 Прилади</h4>
-                      {selectedClient.boilerBrand && <div className="detail-row"><span className="dlbl">Котел</span><span className="dval">{selectedClient.boilerBrand}</span></div>}
-                      {selectedClient.stoveType && <div className="detail-row"><span className="dlbl">Плита</span><span className="dval">{selectedClient.stoveType}{selectedClient.stoveCount ? ` (${selectedClient.stoveCount})` : ''}</span></div>}
-                      {selectedClient.columnType && <div className="detail-row"><span className="dlbl">ВПГ</span><span className="dval">{selectedClient.columnType}{selectedClient.columnCount ? ` (${selectedClient.columnCount})` : ''}</span></div>}
-                      {!selectedClient.boilerBrand && !selectedClient.stoveType && !selectedClient.columnType && <div className="detail-row"><span className="dlbl">Прилади</span><span className="dval">—</span></div>}
-                    </div>
-                    {/* Відключення */}
-                    <div className="detail-info-block">
-                      <h4>⛔ Відключення</h4>
-                      <div className="detail-row">
-                        <span className="dlbl">Газ відключено</span>
-                        <span className="dval" style={{color: selectedClient.gasDisconnected ? '#dc2626' : '#16a34a', fontWeight: 600}}>
-                          {selectedClient.gasDisconnected ? 'ТАК' : 'Ні'}
-                        </span>
-                      </div>
-                      {selectedClient.gasDisconnected && (
-                        <>
-                          <div className="detail-row"><span className="dlbl">Метод</span><span className="dval">{selectedClient.disconnectMethod || '—'}</span></div>
-                          <div className="detail-row"><span className="dlbl">Пломба</span><span className="dval">{selectedClient.disconnectSeal || '—'}</span></div>
-                          <div className="detail-row"><span className="dlbl">Дата</span><span className="dval">{selectedClient.disconnectDate || '—'}</span></div>
-                        </>
-                      )}
-                    </div>
-                    {/* Кнопки дій */}
-                    <div style={{display:'flex', gap:'0.5rem', marginTop:'0.5rem'}}>
-                      <button className="btn-save" onClick={() => handleEdit(selectedClient)} style={{flex:1}}>✎ Редагувати</button>
-                      <button className="btn-cancel" onClick={() => handleDelete(selectedClient.id)} style={{flex:1, color:'#dc2626'}}>🗑 Видалити</button>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <div className="detail-panel-empty">
-                  <div>👆<p>Оберіть абонента<br/>для перегляду деталей</p></div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>{/* кінець main-content */}
-
-{/* ⭐ МОБІЛЬНА ПАНЕЛЬ — виїжджає знизу з підтримкою свайпу */}
-<div 
-  className={`mobile-overlay ${selectedClient && isMobile() ? 'open' : ''}`}
-  style={{
-    transform: isDragging && touchCurrentY > 0 
-      ? `translateY(${touchCurrentY}px)` 
-      : undefined,
-    transition: isDragging ? 'none' : 'transform 0.2s cubic-bezier(0.1, 0.9, 0.2, 1)'
-  }}
-  onTouchStart={handleTouchStart}
-  onTouchMove={handleTouchMove}
-  onTouchEnd={handleTouchEnd}
->
-  {selectedClient && (
-    <>
-<div className="mobile-header">
-  <div className="sheet-grabber"></div>
-  <div className="mobile-header-top">
-    <h2>{selectedClient.fullName}</h2>
-    <button className="btn-back" onClick={closeMobilePanel}>
-      <X size={18} />
-    </button>
-  </div>
-</div>
-      <div className="mobile-body">
-        
-        {/* Особові дані */}
-        <div className="info-block">
-          <h4><UserCircle size={14} /> Особові дані</h4>
-          <div className="detail-row"><span className="dlbl">ПІБ</span><span className="dval"><strong>{selectedClient.fullName}</strong></span></div>
-          <div className="detail-row"><span className="dlbl">Особовий рахунок</span><span className="dval">{selectedClient.accountNumber}</span></div>
-          <div className="detail-row"><span className="dlbl">EIC</span><span className="dval">{selectedClient.eic || '—'}</span></div>
-          <div className="detail-row">
-            <span className="dlbl">Телефон</span>
-            <span className="dval">
-              {selectedClient.phone ? (
-                <a href={`tel:${selectedClient.phone.replace(/[^\d+]/g, '')}`} style={{color: '#2563eb', textDecoration: 'none'}}>
-                  {selectedClient.phone}
-                </a>
-              ) : '—'}
-            </span>
-          </div>
-          <div className="detail-row">
-            <span className="dlbl">Адреса</span>
-            <span className="dval" style={{fontSize:'0.75rem'}}>
-              {[selectedClient.settlement, selectedClient.streetType, selectedClient.street, selectedClient.building && `буд. ${selectedClient.building}${selectedClient.buildingLetter || ''}`, selectedClient.apartment && `кв. ${selectedClient.apartment}${selectedClient.apartmentLetter || ''}`].filter(Boolean).join(', ')}
-            </span>
-          </div>
-        </div>
-
-        {/* Лічильник (повний набір полів) */}
-        <div className="info-block">
-          <h4><Gauge size={14} /> Лічильник</h4>
-          {selectedClient.meterNumber ? (
-            <>
-              <div className="detail-row"><span className="dlbl">Марка / Тип</span><span className="dval">{selectedClient.meterBrand || '—'} G{selectedClient.meterSize || '—'}</span></div>
-              <div className="detail-row"><span className="dlbl">№ лічильника</span><span className="dval">{selectedClient.meterNumber}</span></div>
-              <div className="detail-row"><span className="dlbl">Рік випуску</span><span className="dval">{selectedClient.meterYear || '—'}</span></div>
-              <div className="detail-row"><span className="dlbl">Наступна повірка</span><span className="dval">{selectedClient.nextVerificationDate || '—'}</span></div>
-              <div className="detail-row"><span className="dlbl">Завод-виробник</span><span className="dval" style={{fontSize:'0.7rem'}}>{selectedClient.meterManufacturer || '—'}</span></div>
-              <div className="detail-row"><span className="dlbl">Група / Підтип</span><span className="dval">{selectedClient.meterGroup || '—'} / {selectedClient.meterSubtype || '—'}</span></div>
-              <div className="detail-row"><span className="dlbl">Належність</span><span className="dval">{selectedClient.meterOwnership || '—'}</span></div>
-              <div className="detail-row"><span className="dlbl">Розташування</span><span className="dval" style={{fontSize:'0.7rem'}}>{selectedClient.meterLocation || '—'}</span></div>
-              <div className="detail-row"><span className="dlbl">МВНСШ / РСП</span><span className="dval">{selectedClient.mvnssh || '—'} / {selectedClient.rsp || '—'}</span></div>
-              <div className="detail-row"><span className="dlbl">Пломба</span><span className="dval">{selectedClient.seal || '—'}</span></div>
-              <div className="detail-row"><span className="dlbl">Стікерна пломба</span><span className="dval">{selectedClient.stickerSeal || '—'}</span></div>
-            </>
-          ) : <p style={{fontSize:12,color:'#9ca3af'}}>Немає даних</p>}
-        </div>
-
-        {/* Прилади */}
-        <div className="info-block">
-          <h4><Flame size={14} /> Прилади</h4>
-          {selectedClient.boilerBrand && <div className="detail-row"><span className="dlbl">Котел</span><span className="dval">{selectedClient.boilerBrand}</span></div>}
-          {selectedClient.stoveType && <div className="detail-row"><span className="dlbl">Плита</span><span className="dval">{selectedClient.stoveType}{selectedClient.stoveCount ? ` (${selectedClient.stoveCount})` : ''}</span></div>}
-          {selectedClient.columnType && <div className="detail-row"><span className="dlbl">ВПГ</span><span className="dval">{selectedClient.columnType}{selectedClient.columnCount ? ` (${selectedClient.columnCount})` : ''}</span></div>}
-          {!selectedClient.boilerBrand && !selectedClient.stoveType && !selectedClient.columnType && <div className="detail-row"><span className="dlbl">Прилади</span><span className="dval">—</span></div>}
-        </div>
-
-        {/* Відключення */}
-        <div className="info-block">
-          <h4><AlertTriangle size={14} /> Відключення</h4>
-          <div className="detail-row">
-            <span className="dlbl">Газ відключено</span>
-            <span className="dval" style={{color: selectedClient.gasDisconnected ? '#dc2626' : '#16a34a', fontWeight: 600}}>
-              {selectedClient.gasDisconnected ? 'ТАК' : 'Ні'}
-            </span>
-          </div>
-          {selectedClient.gasDisconnected && (
-            <>
-              <div className="detail-row"><span className="dlbl">Метод</span><span className="dval">{selectedClient.disconnectMethod || '—'}</span></div>
-              <div className="detail-row"><span className="dlbl">Пломба</span><span className="dval">{selectedClient.disconnectSeal || '—'}</span></div>
-              <div className="detail-row"><span className="dlbl">Дата</span><span className="dval">{selectedClient.disconnectDate || '—'}</span></div>
+              </div>
             </>
           )}
         </div>
-
       </div>
-
-      {/* Нижні кнопки дій */}
-      <div className="mobile-actions">
-        <button 
-          className="btn-sm primary" 
-          onClick={() => { closeMobilePanel(); handleEdit(selectedClient); }} 
-          style={{flex: 1, background: '#f59e0b', color: '#111827', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'}}
-        >
-          <Edit2 size={16} /> Редагувати
-        </button>
-        <button 
-          className="btn-sm danger" 
-          onClick={() => { closeMobilePanel(); handleDelete(selectedClient.id); }} 
-          style={{flex: 1, color: '#ef4444', borderColor: '#fecaca', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'}}
-        >
-          <Trash2 size={16} /> Видалити
-        </button>
-      </div>
-    </>
-  )}
-</div>
-
-
 
       {isModalOpen && (
         <div className="modal-overlay" onClick={resetForm}>
@@ -2883,18 +2632,7 @@ const handleImportExcel = async (e) => {
           </div>
         </div>
       )}
-{/* ⭐ Контекстне меню */}
-      {ctxMenu.show && (
-        <div className="ctx-menu" style={{position:'fixed', left: ctxMenu.x, top: ctxMenu.y, zIndex: 9999}}>
-          <button className="ctx-item" onClick={() => handleCtxAction('edit')}><Edit2 size={14} /> Редагувати</button>
-          <button className="ctx-item" onClick={() => handleCtxAction('copy')}><Copy size={14} /> Копіювати адресу</button>
-          <button className="ctx-item" onClick={() => handleCtxAction('call')}><Phone size={14} /> Подзвонити</button>
-          <div className="ctx-divider"></div>
-          <button className="ctx-item ctx-item-danger" onClick={() => handleCtxAction('delete')}><Trash2 size={14} /> Видалити</button>
-        </div>
-      )}
-      </div> {/* Це закриває app-container */}
-    </div> 
+    </div>
   );
 }
 

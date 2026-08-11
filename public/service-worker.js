@@ -26,6 +26,11 @@ self.addEventListener('activate', (event) => {
 
 // Обробка запитів (Network First стратегія)
 self.addEventListener('fetch', (event) => {
+  // 🟢 Додаємо перевірку: кешуємо тільки HTTP/HTTPS GET-запити
+  if (event.request.method !== 'GET' || !event.request.url.startsWith('http')) {
+    return;
+  }
+  
   event.respondWith(
     fetch(event.request)
       .then((response) => {

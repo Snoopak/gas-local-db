@@ -13,4 +13,16 @@ root.render(
 
 reportWebVitals();
 
-console.log('🚀 Додаток запущено без Service Worker'); 
+// 🟢 РЕЄСТРАЦІЯ SERVICE WORKER
+if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register(`${process.env.PUBLIC_URL}/service-worker.js`)
+      .then((reg) => {
+        console.log('🚀 Service Worker успішно зареєстровано:', reg.scope);
+      })
+      .catch((err) => {
+        console.error('❌ Помилка реєстрації Service Worker:', err);
+      });
+  });
+}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, createContext, useContext, useCallback } from 'react';
-import { Search, Plus, Edit2, Trash2, X, Save, Phone, Home, Gauge, Upload, Download, FileText, CheckCircle, AlertCircle, Info, AlertTriangle, Database, Activity, Flame, MapPin, ChevronUp, ChevronDown, Users, Sun, Moon, Copy, ChevronRight, UserCircle } from 'lucide-react';
+import { Search, Plus, Edit2, Trash2, X, Save, Phone, Home, Gauge, Upload, Download, FileText, CheckCircle, AlertCircle, Info, AlertTriangle, Database, Activity, Flame, MapPin, ChevronUp, ChevronDown, Users, Sun, Moon, Copy, ChevronRight, UserCircle, Pointer, SlidersHorizontal } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import './App.css';
 import {METER_CATALOG, METER_SIZES, METER_SUBTYPE, METER_LOCATION, METER_OWNERSHIP, SERVICE_ORG, METER_GROUP, METER_MANUFACTURER, U_STREET_TYPE} from './data';
@@ -534,7 +534,11 @@ const countClients = async () => {
   });
 };
 
-const searchClients = async (searchTerm, settlements, streets, meterBrands, meterSizes, meterYears, meterGroups, filterDisconnected, filterDacha, filterAbsent, filterConnected, filterBuilding, filterApartment) => {
+const searchClients = async (
+  searchTerm, settlements, streets, meterBrands, meterSizes, meterYears, meterGroups, 
+  filterDisconnected, filterDacha, filterAbsent, filterConnected, filterBuilding, filterApartment,
+  selectedGrs, meterYearFrom, meterYearTo, verificationYearFrom, verificationYearTo, filterSeal, filterStickerSeal
+) => {
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction([STORE_NAME], 'readonly');
@@ -554,24 +558,42 @@ const searchClients = async (searchTerm, settlements, streets, meterBrands, mete
           client.meterNumber?.toLowerCase().includes(searchTerm.toLowerCase());
         
         const matchesSettlement = settlements.length === 0 || settlements.includes(client.settlement);
-        
         const clientStreetName = [client.streetType, client.street].filter(s => s).join(' ');
         const matchesStreet = streets.length === 0 || streets.includes(clientStreetName);
 
-        // ⭐ ФІЛЬТР: будинок
         const matchesBuilding = !filterBuilding ||
           (String(client.building || '') + String(client.buildingLetter || '')).toLowerCase() === filterBuilding.toLowerCase();
 
-        // ⭐ ФІЛЬТР: квартира
         const matchesApartment = !filterApartment ||
           (String(client.apartment || '') + String(client.apartmentLetter || '')).toLowerCase() === filterApartment.toLowerCase();
         
         const matchesMeterBrand = meterBrands.length === 0 || meterBrands.includes(client.meterBrand);
         const matchesMeterSize = meterSizes.length === 0 || meterSizes.includes(client.meterSize);
-        const matchesMeterYear = meterYears.length === 0 || meterYears.includes(client.meterYear);
         const matchesMeterGroup = meterGroups.length === 0 || meterGroups.includes(client.meterGroup);
+
+        // Фільтр по точково обраним рокам
+        const matchesMeterYear = meterYears.length === 0 || meterYears.includes(client.meterYear);
+
+        // Фільтр ГРС
+        const matchesGrs = selectedGrs.length === 0 || selectedGrs.includes(client.grs ? String(client.grs).trim() : '');
+
+        // Перевірка діапазону років випуску
+        const year = client.meterYear ? parseInt(client.meterYear) : null;
+        const matchesYearFrom = !meterYearFrom || (year !== null && !isNaN(year) && year >= parseInt(meterYearFrom));
+        const matchesYearTo = !meterYearTo || (year !== null && !isNaN(year) && year <= parseInt(meterYearTo));
+
+        // Перевірка діапазону років повірки
+        const verYear = client.nextVerificationDate ? parseInt(client.nextVerificationDate.split('.').pop()) : null;
+        const matchesVerYearFrom = !verificationYearFrom || (verYear !== null && !isNaN(verYear) && verYear >= parseInt(verificationYearFrom));
+        const matchesVerYearTo = !verificationYearTo || (verYear !== null && !isNaN(verYear) && verYear <= parseInt(verificationYearTo));
+
+        // Пломби
+        const matchesSeal = !filterSeal || 
+          (client.seal && client.seal.toString().toLowerCase().includes(filterSeal.toLowerCase().trim()));
+
+        const matchesStickerSeal = !filterStickerSeal || 
+          (client.stickerSeal && client.stickerSeal.toString().toLowerCase().includes(filterStickerSeal.toLowerCase().trim()));
         
-        // ⭐ ФІЛЬТРИ СТАТУСІВ
         let matchesStatus = true;
         if (filterDisconnected || filterDacha || filterAbsent) {
           matchesStatus = 
@@ -580,12 +602,13 @@ const searchClients = async (searchTerm, settlements, streets, meterBrands, mete
             (filterAbsent && client.temporaryAbsent === true);
         }
 
-        // ⭐ ФІЛЬТР: газ включений (виключає відключених)
         const matchesConnected = !filterConnected || client.gasDisconnected !== true;
         
         if (matchesSearch && matchesSettlement && matchesStreet &&
-            matchesBuilding && matchesApartment &&
-            matchesMeterBrand && matchesMeterSize && matchesMeterYear && matchesMeterGroup &&
+            matchesBuilding && matchesApartment && matchesGrs &&
+            matchesMeterBrand && matchesMeterSize && matchesMeterGroup && matchesMeterYear &&
+            matchesYearFrom && matchesYearTo && matchesVerYearFrom && matchesVerYearTo &&
+            matchesSeal && matchesStickerSeal &&
             matchesStatus && matchesConnected) {
           results.push(client);
         }
@@ -598,12 +621,18 @@ const searchClients = async (searchTerm, settlements, streets, meterBrands, mete
   });
 };
 
-// ⭐ НОВА ФУНКЦІЯ: Пошук з пагінацією для infinite scroll
-const searchClientsPaginated = async (searchTerm, settlements, streets, meterBrands, meterSizes, meterYears, meterGroups, filterDisconnected, filterDacha, filterAbsent, filterConnected, filterBuilding, filterApartment, page, pageSize) => {
-  // Спочатку отримуємо ВСІ результати
-  const allResults = await searchClients(searchTerm, settlements, streets, meterBrands, meterSizes, meterYears, meterGroups, filterDisconnected, filterDacha, filterAbsent, filterConnected, filterBuilding, filterApartment);
+const searchClientsPaginated = async (
+  searchTerm, settlements, streets, meterBrands, meterSizes, meterYears, meterGroups, 
+  filterDisconnected, filterDacha, filterAbsent, filterConnected, filterBuilding, filterApartment,
+  selectedGrs, meterYearFrom, meterYearTo, verificationYearFrom, verificationYearTo, filterSeal, filterStickerSeal,
+  page, pageSize
+) => {
+  const allResults = await searchClients(
+    searchTerm, settlements, streets, meterBrands, meterSizes, meterYears, meterGroups, 
+    filterDisconnected, filterDacha, filterAbsent, filterConnected, filterBuilding, filterApartment,
+    selectedGrs, meterYearFrom, meterYearTo, verificationYearFrom, verificationYearTo, filterSeal, filterStickerSeal
+  );
   
-  // Повертаємо тільки потрібну сторінку
   const start = page * pageSize;
   const end = start + pageSize;
   
@@ -639,6 +668,17 @@ function ClientDatabase() {
   // ⭐ ФІЛЬТРИ АДРЕСИ: будинок і квартира
   const [filterBuilding, setFilterBuilding] = useState('');
   const [filterApartment, setFilterApartment] = useState('');
+  // 🟢 Відкриття/закриття шторки фільтрів
+  const [showFilterDrawer, setShowFilterDrawer] = useState(false);
+  // 🟢 Нові фільтри
+  const [selectedGrs, setSelectedGrs] = useState([]);
+  const [meterYearFrom, setMeterYearFrom] = useState('');
+  const [meterYearTo, setMeterYearTo] = useState('');
+  const [verificationYearFrom, setVerificationYearFrom] = useState('');
+  const [verificationYearTo, setVerificationYearTo] = useState('');
+  const [filterSeal, setFilterSeal] = useState('');
+  const [filterStickerSeal, setFilterStickerSeal] = useState('');
+
   // ⭐ Dropdown швидких дій
   const [showQuickActions, setShowQuickActions] = useState(false);
   const [showImportUrlModal, setShowImportUrlModal] = useState(false);
@@ -705,38 +745,84 @@ function ClientDatabase() {
 
     // ⭐ НОВІ СТАНИ: десктопна панель + тема + контекстне меню
   const [selectedClient, setSelectedClient] = useState(null);
+
   // 🟢 Додаємо стани для відстеження пальця
-  const [touchStartY, setTouchStartY] = useState(0);
-  const [touchCurrentY, setTouchCurrentY] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
+ // 🟢 НОВІ РЕФИ ТА ФУНКЦІЇ ДЛЯ ПЛАВНОГО СВАЙПУ (GPU Accelerated)
+const overlayRef = useRef(null);
+const touchStartY = useRef(0);
+const touchCurrentY = useRef(0);
+const isDragging = useRef(false);
+const rafId = useRef(null);
 
-  // 🟢 Функція 1: Коли палець торкнувся екрана
-  const handleTouchStart = (e) => {
-    setTouchStartY(e.touches[0].clientY);
-    setIsDragging(true);
-  };
+const handleTouchStart = (e) => {
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  touchStartY.current = clientY;
+  touchCurrentY.current = 0;
+  isDragging.current = true;
 
-  // 🟢 Функція 2: Коли палець рухається вниз
-  const handleTouchMove = (e) => {
-    if (!isDragging) return; 
-    const currentY = e.touches[0].clientY;
-    const diff = currentY - touchStartY;
-    if (diff > 0) {
-      setTouchCurrentY(diff); // Зсуваємо панель за пальцем
-    }
-  };
+  if (overlayRef.current) {
+    overlayRef.current.style.transition = 'none'; // Вимикаємо анімацію під час руху
+  }
+};
 
-  // 🟢 Функція 3: Коли палець відпустили
-  const handleTouchEnd = () => {
-    if (!isDragging) return;
-    setIsDragging(false);
+const handleTouchMove = (e) => {
+  if (!isDragging.current) return;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  const diff = clientY - touchStartY.current;
+
+  if (diff > 0) {
+    touchCurrentY.current = diff;
     
-    // Якщо потягнув більше ніж на 120 пікселів — закриваємо
-    if (touchCurrentY > 120) {
-      closeMobilePanel();
+    // Плавне переміщення через GPU без перевиклику setState
+    if (rafId.current) cancelAnimationFrame(rafId.current);
+    rafId.current = requestAnimationFrame(() => {
+      if (overlayRef.current) {
+        overlayRef.current.style.transform = `translate3d(0, ${diff}px, 0)`;
+      }
+    });
+  }
+};
+
+const handleTouchEnd = () => {
+  if (!isDragging.current) return;
+  isDragging.current = false;
+
+  if (rafId.current) cancelAnimationFrame(rafId.current);
+
+  // Перевіряємо скільки пікселів користувач протягнув шторку вниз
+  if (touchCurrentY.current > 120) {
+    // ЯКЩО ПОТЯГНУЛИ БІЛЬШЕ 120px:
+    // Викликаємо функцію закриття. Вона сама анімує вихід до 100% і видалить стан.
+    // НЕ додаємо тут трансформ у 0, щоб уникнути конфлікту анімацій!
+    closeMobilePanel();
+  } else {
+    // ЯКЩО ПОТЯГНУЛИ МЕНШЕ 120px:
+    // Плавним відскоком повертаємо шторку у вихідне відкрите положення
+    if (overlayRef.current) {
+      overlayRef.current.style.transition = 'transform 0.2s cubic-bezier(0.32, 0.72, 0, 1)';
+      overlayRef.current.style.transform = 'translate3d(0, 0, 0)';
     }
-    setTouchCurrentY(0); // Скидаємо позицію
+  }
+
+  // Скидаємо лічильник зсуву
+  touchCurrentY.current = 0;
+};
+
+// 🟢 Глобальні слухачі для мишки (щоб працювало і в DevTools / на ПК)
+useEffect(() => {
+  const onMouseMove = (e) => handleTouchMove(e);
+  const onMouseUp = () => handleTouchEnd();
+
+  window.addEventListener('mousemove', onMouseMove);
+  window.addEventListener('mouseup', onMouseUp);
+
+  return () => {
+    window.removeEventListener('mousemove', onMouseMove);
+    window.removeEventListener('mouseup', onMouseUp);
   };
+}, []);
+
+
   const [darkMode, setDarkMode] = useState(false);
   const [ctxMenu, setCtxMenu] = useState({ show: false, x: 0, y: 0, client: null });
   const isMobile = () => window.innerWidth < 960;
@@ -805,6 +891,8 @@ function ClientDatabase() {
     connectDate: '', dacha: false, temporaryAbsent: false
   });
 
+  const [accountError, setAccountError] = useState('');
+
   // useEffect для debounce пошуку
   useEffect(() => {
     // Очищуємо попередній таймер
@@ -845,43 +933,51 @@ function ClientDatabase() {
 
   // ⭐ СТАРИЙ useEffect ВИДАЛЕНО - тепер є правильний нижче!
 
-  useEffect(() => {
-    // ⭐ Пропускаємо перший рендер (дані завантажуються в init useEffect)
+useEffect(() => {
     if (isFirstRender.current) {
       return;
     }
     
-    // ⭐ Якщо тільки що відновили стан - пропускаємо один раз
     if (stateRestored.current) {
       stateRestored.current = false;
       return;
     }
 
-    if (debouncedSearchTerm || selectedSettlement.length > 0 || selectedStreet.length > 0 || 
-        selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || selectedMeterYear.length > 0 || selectedMeterGroups.length > 0 ||
-        filterDisconnected || filterDacha || filterAbsent || filterConnected || debouncedBuilding || debouncedApartment) {
-      // ⭐ При фільтрації ТЕОЖ використовуємо infinite scroll!
+    // Перевіряємо всі фільтри, включаючи нові зі шторки
+    const hasActiveFilters = debouncedSearchTerm || selectedSettlement.length > 0 || selectedStreet.length > 0 || 
+      selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || selectedMeterYear.length > 0 || selectedMeterGroups.length > 0 ||
+      filterDisconnected || filterDacha || filterAbsent || filterConnected || debouncedBuilding || debouncedApartment ||
+      selectedGrs || meterYearFrom || meterYearTo || verificationYearFrom || verificationYearTo || filterSeal || filterStickerSeal;
+
+    if (hasActiveFilters) {
       clearScrollState();
       setCurrentPage(0);
-      setHasMore(true); // ⭐ Увімкнуто!
+      setHasMore(true);
       performSearch();
     } else {
-      // ⭐ Без фільтрів - скидаємо і завантажуємо заново
       clearScrollState();
       setCurrentPage(0);
       setHasMore(true);
       loadClients();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearchTerm, selectedSettlement, selectedStreet, selectedMeterBrand, selectedMeterSize, selectedMeterYear, selectedMeterGroups, filterDisconnected, filterDacha, filterAbsent, filterConnected, debouncedBuilding, debouncedApartment]);
+  }, [
+    debouncedSearchTerm, selectedSettlement, selectedStreet, selectedMeterBrand, selectedMeterSize, 
+    selectedMeterYear, selectedMeterGroups, filterDisconnected, filterDacha, filterAbsent, filterConnected, 
+    debouncedBuilding, debouncedApartment,
+    // Додаємо нові стейти зі шторки у масив залежностей
+    selectedGrs, meterYearFrom, meterYearTo, verificationYearFrom, verificationYearTo, filterSeal, filterStickerSeal
+  ]);
 
   // Динамічне оновлення фільтрів — каскадна логіка
   useEffect(() => {
     const updateDynamicFilters = async () => {
       const allClients = await getAllClients();
 
-    const uniqueGrs = [...new Set(allClients.map(c => c.grs).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'uk', { sensitivity: 'base' }));
-    setGrsList(uniqueGrs);
+      const uniqueGrs = [...new Set(
+        allClients.map(c => c.grs ? String(c.grs).trim() : '').filter(Boolean)
+      )].sort((a, b) => a.localeCompare(b, 'uk', { sensitivity: 'base' }));
+      setGrsList(uniqueGrs);
 
 
       // Базовий фільтр по адресі
@@ -1011,52 +1107,77 @@ function ClientDatabase() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage]);
 
-  // ⭐ INFINITE SCROLL: Відновлення стану при mount
+ // ⭐ Оптимізований єдиний підрахунок загальної кількості та статусів
+  const loadAllCounts = useCallback(async () => {
+    try {
+      const allClients = await getAllClients();
+      
+      // 1. Загальна кількість
+      const total = allClients.length;
+      
+      // 2. Фільтрація статусів
+      const filteredClients = allClients.filter(client => {
+        const matchesSettlement = selectedSettlement.length === 0 || selectedSettlement.includes(client.settlement);
+        const matchesStreet = selectedStreet.length === 0 || selectedStreet.includes(client.street);
+        const matchesMeterGroup = selectedMeterGroups.length === 0 || selectedMeterGroups.includes(client.meterGroup);
+        const matchesMeterBrand = selectedMeterBrand.length === 0 || selectedMeterBrand.includes(client.meterBrand);
+        const matchesMeterSize = selectedMeterSize.length === 0 || selectedMeterSize.includes(client.meterSize);
+        const matchesMeterYear = selectedMeterYear.length === 0 || selectedMeterYear.includes(client.meterYear);
+        
+        return matchesSettlement && matchesStreet && matchesMeterGroup && matchesMeterBrand && matchesMeterSize && matchesMeterYear;
+      });
+      
+      const counts = {
+        disconnected: filteredClients.filter(c => c.gasDisconnected === true).length,
+        dacha: filteredClients.filter(c => c.dacha === true).length,
+        absent: filteredClients.filter(c => c.temporaryAbsent === true).length
+      };
+
+      // Оновлюємо стейти одночасно
+      setTotalCount(total);
+      setStatusCounts(counts);
+    } catch (error) {
+      console.error('Error loading counts:', error);
+    }
+  }, [selectedSettlement, selectedStreet, selectedMeterGroups, selectedMeterBrand, selectedMeterSize, selectedMeterYear]);
+
+// ⭐ INFINITE SCROLL: Відновлення стану при mount
   useEffect(() => {
     const initializeApp = async () => {
-      // ⭐ Перевіряємо чи це повне перезавантаження (F5)
       const isPageReload = !sessionStorage.getItem('app_initialized');
       
-      // Завантажуємо фільтри завжди
-      await loadTotalCount();
+      // 🟢 Одночасне завантаження лічильників та фільтрів
+      await loadAllCounts();
       loadSettlements();
       loadStreets();
       loadMeterData();
-      loadStatusCounts(); // ⭐ Завантажуємо лічильники статусів
       
       if (isPageReload) {
-        // ⭐ При F5: зберігаємо тільки позицію скролу, але скидаємо клієнтів
         const savedScrollY = sessionStorage.getItem(STORAGE_KEYS.SCROLL_Y);
         
-        // Очищаємо клієнтів і сторінки
         sessionStorage.removeItem(STORAGE_KEYS.CLIENTS);
         sessionStorage.removeItem(STORAGE_KEYS.PAGE);
         sessionStorage.removeItem(STORAGE_KEYS.HAS_MORE);
         sessionStorage.removeItem(STORAGE_KEYS.FILTERED_TOTAL);
         
-        // Завантажуємо перших клієнтів
         await loadClients();
         
-        // Відновлюємо тільки скрол
         if (savedScrollY) {
           setTimeout(() => {
-            window.scrollTo(0, parseInt(savedScrollY));
+            window.scrollTo(0, parseInt(savedScrollY, 10));
           }, CONFIG.STATE_RESTORE_DELAY);
         }
         
         sessionStorage.setItem('app_initialized', 'true');
       } else {
-        // ⭐ При переключенні вкладок: повне відновлення
         const restored = restoreScrollState();
         if (!restored) {
           await loadClients();
         }
       }
       
-      // ⭐ Завершили початкове завантаження
       setIsInitialLoading(false);
       
-      // ⭐ Дозволяємо useEffect з фільтрами спрацьовувати тільки ПІСЛЯ всього завантаження
       setTimeout(() => {
         isFirstRender.current = false;
       }, CONFIG.STATE_RESTORE_DELAY);
@@ -1064,18 +1185,21 @@ function ClientDatabase() {
     
     initializeApp();
     
-    // ⭐ Очищуємо прапорець при закритті вкладки
     const handleBeforeUnload = () => {
       sessionStorage.removeItem('app_initialized');
     };
     
     window.addEventListener('beforeunload', handleBeforeUnload);
-    
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-    };
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ⭐ Оновлення статусів та кількості при зміні фільтрів
+  useEffect(() => {
+    if (!isFirstRender.current) {
+      loadAllCounts();
+    }
+  }, [loadAllCounts]);
 
   // ⭐ Закриття dropdown швидких дій при кліку поза ним
   useEffect(() => {
@@ -1114,9 +1238,9 @@ function ClientDatabase() {
   // ⭐ Оновлюємо лічильники статусів при зміні фільтрів
   useEffect(() => {
     if (!isFirstRender.current) {
-      loadStatusCounts();
+      loadAllCounts();
     }
-  }, [selectedSettlement, selectedStreet, selectedMeterGroups, selectedMeterBrand, selectedMeterSize, selectedMeterYear]);
+  }, [loadAllCounts]);
 
 
   const loadClients = async (append = false) => {
@@ -1157,47 +1281,6 @@ function ClientDatabase() {
     } else {
       setLoading(false);
     }
-  };
-
-  const loadTotalCount = async () => {
-    const count = await countClients();
-    setTotalCount(count);
-  };
-  
-  // ⭐ Підрахунок клієнтів за статусами (враховує фільтри!)
-  const loadStatusCounts = async () => {
-    const allClients = await getAllClients();
-    
-    // Фільтруємо клієнтів за поточними фільтрами
-    const filteredClients = allClients.filter(client => {
-      // Фільтр по населеному пункту
-      const matchesSettlement = selectedSettlement.length === 0 || selectedSettlement.includes(client.settlement);
-      
-      // Фільтр по вулиці
-      const matchesStreet = selectedStreet.length === 0 || selectedStreet.includes(client.street);
-      
-      // Фільтр по групі лічильника
-      const matchesMeterGroup = selectedMeterGroups.length === 0 || selectedMeterGroups.includes(client.meterGroup);
-      
-      // Фільтр по марці лічильника
-      const matchesMeterBrand = selectedMeterBrand.length === 0 || selectedMeterBrand.includes(client.meterBrand);
-      
-      // Фільтр по розміру лічильника
-      const matchesMeterSize = selectedMeterSize.length === 0 || selectedMeterSize.includes(client.meterSize);
-      
-      // Фільтр по року лічильника
-      const matchesMeterYear = selectedMeterYear.length === 0 || selectedMeterYear.includes(client.meterYear);
-      
-      return matchesSettlement && matchesStreet && matchesMeterGroup && matchesMeterBrand && matchesMeterSize && matchesMeterYear;
-    });
-    
-    // Рахуємо клієнтів з кожним статусом серед відфільтрованих
-    const counts = {
-      disconnected: filteredClients.filter(c => c.gasDisconnected === true).length,
-      dacha: filteredClients.filter(c => c.dacha === true).length,
-      absent: filteredClients.filter(c => c.temporaryAbsent === true).length
-    };
-    setStatusCounts(counts);
   };
 
   const loadSettlements = async () => {
@@ -1342,23 +1425,36 @@ function ClientDatabase() {
     const client = clients.find(c => c.id === clientId);
     saveScrollState();
     setSelectedClient(client);
-    if (isMobile()) {
-      document.body.style.overflow = 'hidden';
-    }
   };
 
-  // ⭐ Закриття мобільної панелі
-  const closeMobilePanel = () => {
+// ⭐ Закриття мобільної панелі
+// ⭐ Закриття мобільної панелі (і для свайпу, і для кнопки Х)
+const closeMobilePanel = useCallback(() => {
+  if (overlayRef.current) {
+    // 1. Спочатку знімаємо клас відкритого стану (якщо він використовується)
+    overlayRef.current.classList.remove('open');
+
+    // 2. Примусово задаємо анімацію зсуву вниз за межі екрана
+    overlayRef.current.style.transition = 'transform 0.25s cubic-bezier(0.32, 0.72, 0, 1)';
+    overlayRef.current.style.transform = 'translate3d(0, 100%, 0)';
+  }
+
+  // 3. Чекаємо точно 250 мс (поки шторка повністю сховається) і лише тоді скидаємо стан
+  setTimeout(() => {
     setSelectedClient(null);
-    document.body.style.overflow = '';
-    setTimeout(() => {
-      const savedScrollY = sessionStorage.getItem(STORAGE_KEYS.SCROLL_Y);
-      if (savedScrollY) window.scrollTo(0, parseInt(savedScrollY));
-    }, 50);
-  };
 
-  const performSearch = async (append = false) => {
-    // ⭐ INFINITE SCROLL для фільтрів
+    if (overlayRef.current) {
+      overlayRef.current.style.transform = '';
+      overlayRef.current.style.transition = '';
+    }
+
+    // Відновлюємо скрол, якщо він зберігався
+    const savedScrollY = sessionStorage.getItem(STORAGE_KEYS.SCROLL_Y);
+    if (savedScrollY) window.scrollTo(0, parseInt(savedScrollY, 10));
+  }, 250);
+}, []);
+
+const performSearch = async (append = false) => {
     if (isLoadingMore || (!append && loading)) return;
     
     if (append) {
@@ -1372,22 +1468,19 @@ function ClientDatabase() {
         debouncedSearchTerm, selectedSettlement, selectedStreet,
         selectedMeterBrand, selectedMeterSize, selectedMeterYear, selectedMeterGroups,
         filterDisconnected, filterDacha, filterAbsent, filterConnected, debouncedBuilding, debouncedApartment,
+        selectedGrs, meterYearFrom, meterYearTo, verificationYearFrom, verificationYearTo, filterSeal, filterStickerSeal,
         currentPage, CONFIG.PAGE_SIZE
       );
       
       if (append) {
-        // ⭐ Додаємо до існуючих
         setClients(prev => [...prev, ...result.items]);
       } else {
-        // Перші результати
         setClients(result.items);
       }
       
-      // Зберігаємо загальну кількість знайдених
       setFilteredTotalCount(result.total);
       setHasMore(result.hasMore);
       
-      // Зберігаємо стан
       setTimeout(() => {
         saveScrollState();
       }, 100);
@@ -1403,12 +1496,41 @@ function ClientDatabase() {
     }
   };
 
+  const checkAccountDuplicate = (accNum) => {
+  const trimmed = accNum ? accNum.toString().trim() : '';
+
+  if (!trimmed) {
+    setAccountError('');
+    return false;
+  }
+
+  // Перевіряємо по масиву клієнтів. Якщо редагуємо існуючого — ігноруємо його власний ID
+  const isDuplicate = clients.some(c => 
+    c.accountNumber && 
+    c.accountNumber.toString().trim() === trimmed &&
+    (!editingClient || c.id !== editingClient.id)
+  );
+
+  if (isDuplicate) {
+    setAccountError('Абонент з таким особовим рахунком вже існує!');
+    return true;
+  } else {
+    setAccountError('');
+    return false;
+  }
+};
+
   const handleSubmit = async () => {
     if (!formData.accountNumber || !formData.fullName) {
       showToast('warning', 'Заповніть обов\'язкові поля: Особовий рахунок та ПІБ');
       return;
     }
-    
+        
+    if (checkAccountDuplicate(formData.accountNumber)) {
+    showToast('warning', 'Абонент з таким особовим рахунком вже існує в базі!');
+    return;
+  }
+
     try {
       if (editingClient) {
         await updateClient({ ...formData, id: editingClient.id });
@@ -1418,7 +1540,7 @@ function ClientDatabase() {
         showToast('success', 'Клієнта успішно додано!');
       }
       await loadClients();
-      await loadTotalCount();
+      await loadAllCounts(); // 🟢 Вставили замість loadTotalCount() та loadStatusCounts()
       await loadSettlements();
       await loadStreets();
       await loadMeterData();
@@ -1431,6 +1553,7 @@ function ClientDatabase() {
 
   const handleAdd = () => {
     setEditingClient(null);
+    setAccountError('');
     setFormData({
       fullName: '', settlement: '', streetType: '', street: '', building: '', buildingLetter: '',
       apartment: '', apartmentLetter: '', accountNumber: '', eic: '', phone: '',
@@ -1458,11 +1581,10 @@ function ClientDatabase() {
       'Підтвердження видалення',
       'Ви впевнені що хочете видалити цього клієнта з бази? Цю дію не можна буде відмінити.',
       async () => {
-        // Підтверджено - видаляємо
         try {
           await deleteClient(id);
           await loadClients();
-          await loadTotalCount();
+          await loadAllCounts(); // 🟢 Вставили замість loadStatusCounts() / loadTotalCount()
           await loadSettlements();
           await loadStreets();
           await loadMeterData();
@@ -1473,7 +1595,7 @@ function ClientDatabase() {
         }
       },
       () => {
-        // Скасовано - нічого не робимо
+        // Скасовано
       }
     );
   };
@@ -1597,11 +1719,10 @@ for (let i = 0; i < clients.length; i++) {
       
       // Оновлюємо дані
       await loadClients();
-      await loadTotalCount();
+      await loadAllCounts();
       await loadSettlements();
       await loadStreets();
       await loadMeterData();
-      await loadStatusCounts();
       
       showToast('success', `✅ Імпортовано ${imported} клієнтів з посилання!`);
       setImportUrl(''); // Очищаємо поле
@@ -1760,7 +1881,7 @@ const handleImportExcel = async (e) => {
         
         // Оновлюємо стан на екрані після завершення бази
         await loadClients();
-        await loadTotalCount();
+        await loadAllCounts();
         await loadSettlements();
         await loadStreets();
         await loadMeterData();
@@ -1928,6 +2049,7 @@ const handleImportExcel = async (e) => {
       connectDate: '', dacha: false, temporaryAbsent: false
     });
     setEditingClient(null);
+    setAccountError('');
     setIsModalOpen(false);
   };
 
@@ -2016,6 +2138,16 @@ const handleImportExcel = async (e) => {
     );
   });
 
+
+// ⭐ Перевірка, чи активований бодай один фільтр
+  const hasActiveFilters = Boolean(
+    debouncedSearchTerm || selectedSettlement.length || selectedStreet.length ||
+    selectedMeterBrand.length || selectedMeterSize.length || selectedMeterYear.length ||
+    selectedMeterGroups.length || filterDisconnected || filterDacha || filterAbsent ||
+    filterConnected || filterBuilding || filterApartment || selectedGrs || meterYearFrom || 
+    meterYearTo || verificationYearFrom || verificationYearTo || filterSeal || filterStickerSeal
+  );
+
   return (
     <div className="app-wrapper">
       {/* IMPORT PROGRESS MODAL */}
@@ -2058,202 +2190,319 @@ const handleImportExcel = async (e) => {
         <div className="navbar">
           <div className="navbar-inner">
             <div className="navbar-logo">
-              <div className="navbar-logo-icon"><Database size={14} /></div>
-              <span className="navbar-title">Абоненти газу</span>
-            </div>
-            <div className="navbar-stats">
-              <span className="stat-badge">Всього: <b>{totalCount}</b></span>
-              <span className="stat-badge-danger">Відключених: <b>{statusCounts.disconnected}</b></span>
+              <div className="navbar-logo-icon"><Database size={15} /></div>
+              <div className="nav-title-group">
+                <span className="navbar-title">Абоненти газу</span>
+                <span className="nav-subtitle">Всього абонентів: {!isInitialLoading && <strong className="count-fade-in">{totalCount}</strong>}</span>
+              </div>
             </div>
             <div className="navbar-actions">
-            {/* Кнопка теми */}
+              {/* Кнопка теми */}
               <button className="btn-theme" onClick={() => setDarkMode(!darkMode)} title="Перемкнути тему">
                 {darkMode ? <Sun size={18} /> : <Moon size={18} />}
               </button>
-            {/* Dropdown з швидкими діями */}
-  <div className="relative">
-<button 
-    title="Швидкі дії"
-    onClick={() => setShowQuickActions(!showQuickActions)}
-    className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 font-medium transition-colors shadow-sm"
-  >
-    <Activity size={18} className="text-indigo-600" />
-    <span className="hidden sm:inline text-gray-700">Швидкі дії</span>
-    <ChevronDown size={16} className={`text-gray-500 transition-transform ${showQuickActions ? 'rotate-180' : ''}`} />
-  </button>
-  
-  {/* Випадаюче меню */}
-  {showQuickActions && (
-    <div 
-      className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden" 
-      style={{ animation: 'fade-in 0.2s ease-out' }}
-      onMouseDown={(e) => e.stopPropagation()} /* 🟢 ДОДАНО: зупиняє передчасне закриття меню */
-    >
-      <div className="p-1.5 flex flex-col gap-0.5">
-        
-        {/* === СТВОРЕННЯ === */}
-        <button 
-          onClick={(e) => { e.preventDefault(); handleAdd(); setShowQuickActions(false); }} 
-          className="w-full text-left px-3 py-2.5 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 rounded-lg flex items-center gap-3 transition-colors font-medium"
-        >
-          <div className="bg-indigo-100 p-1.5 rounded-md text-indigo-600"><Plus size={16} /></div> 
-          Новий клієнт
-        </button>
-        
-        <div className="h-px bg-gray-100 my-1 mx-2"></div>
-        
-        {/* === ІМПОРТ === */}
-        <label 
-          className="w-full cursor-pointer text-left px-3 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 rounded-lg flex items-center gap-3 transition-colors font-medium m-0"
-        >
-          <div className="bg-green-100 p-1.5 rounded-md text-green-600"><Upload size={16} /></div>
-          Імпорт XLS
-          <input 
-            type="file" 
-            accept=".xlsx,.xls" 
-            onChange={(e) => { handleImportExcel(e); setShowQuickActions(false); }} 
-            className="hidden" 
-            disabled={loading} 
-          />
-        </label>
 
-        <button 
-          onClick={(e) => { e.preventDefault(); setShowImportUrlModal(true); setShowQuickActions(false); }} 
-          className="w-full text-left px-3 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 rounded-lg flex items-center gap-3 transition-colors font-medium"
-        >
-          <div className="bg-green-100 p-1.5 rounded-md text-green-600"><Upload size={16} /></div>
-          Імпорт JSON
-        </button>
-        
-        <div className="h-px bg-gray-100 my-1 mx-2"></div>
-        
-        {/* === ЕКСПОРТ === */}
-        <button 
-          onClick={(e) => { e.preventDefault(); handleExportExcel(); setShowQuickActions(false); }} 
-          className="w-full text-left px-3 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg flex items-center gap-3 transition-colors font-medium"
-        >
-          <div className="bg-blue-100 p-1.5 rounded-md text-blue-600"><Download size={16} /></div>
-          Експорт Excel
-        </button>
+              {/* 🟢 Вертикальний розділювач */}
+              <div className="nav-divider"></div>
 
-        <button 
-          onClick={(e) => { e.preventDefault(); handleExportJSON(); setShowQuickActions(false); }} 
-          className="w-full text-left px-3 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg flex items-center gap-3 transition-colors font-medium"
-        >
-          <div className="bg-blue-100 p-1.5 rounded-md text-blue-600"><Download size={16} /></div>
-          Експорт JSON
-        </button>
+              {/* Dropdown з швидкими діями */}
+              <div className="relative">
+                <button 
+                  title="Швидкі дії"
+                  onClick={() => setShowQuickActions(!showQuickActions)}
+                  className="btn-quick-pill"
+                >
+                  <Activity size={16} />
+                  <span className="hidden sm:inline">Швидкі дії</span>
+                  <ChevronDown size={14} className={showQuickActions ? 'rotate-180' : ''} style={{ transition: 'transform 0.2s' }} />
+                </button>
+                
+                {/* Випадаюче меню */}
+                {showQuickActions && (
+                  <div 
+                    className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden" 
+                    style={{ animation: 'fade-in 0.2s ease-out' }}
+                    onMouseDown={(e) => e.stopPropagation()}
+                  >
+                    <div className="p-1.5 flex flex-col gap-0.5">
+                      
+                      {/* === СТВОРЕННЯ === */}
+                      <button 
+                        onClick={(e) => { e.preventDefault(); handleAdd(); setShowQuickActions(false); }} 
+                        className="w-full text-left px-3 py-2.5 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 rounded-lg flex items-center gap-3 transition-colors font-medium"
+                      >
+                        <div className="bg-indigo-100 p-1.5 rounded-md text-indigo-600"><Plus size={16} /></div> 
+                        Новий клієнт
+                      </button>
+                      
+                      <div className="h-px bg-gray-100 my-1 mx-2"></div>
+                      
+                      {/* === ІМПОРТ === */}
+                      <label 
+                        className="w-full cursor-pointer text-left px-3 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 rounded-lg flex items-center gap-3 transition-colors font-medium m-0"
+                      >
+                        <div className="bg-green-100 p-1.5 rounded-md text-green-600"><Upload size={16} /></div>
+                        Імпорт XLS
+                        <input 
+                          type="file" 
+                          accept=".xlsx,.xls" 
+                          onChange={(e) => { handleImportExcel(e); setShowQuickActions(false); }} 
+                          className="hidden" 
+                          disabled={loading} 
+                        />
+                      </label>
 
-        <div className="h-px bg-gray-100 my-1 mx-2"></div>
+                      <button 
+                        onClick={(e) => { e.preventDefault(); setShowImportUrlModal(true); setShowQuickActions(false); }} 
+                        className="w-full text-left px-3 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 rounded-lg flex items-center gap-3 transition-colors font-medium"
+                      >
+                        <div className="bg-green-100 p-1.5 rounded-md text-green-600"><Upload size={16} /></div>
+                        Імпорт JSON
+                      </button>
+                      
+                      <div className="h-px bg-gray-100 my-1 mx-2"></div>
+                      
+                      {/* === ЕКСПОРТ === */}
+                      <button 
+                        onClick={(e) => { e.preventDefault(); handleExportExcel(); setShowQuickActions(false); }} 
+                        className="w-full text-left px-3 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg flex items-center gap-3 transition-colors font-medium"
+                      >
+                        <div className="bg-blue-100 p-1.5 rounded-md text-blue-600"><Download size={16} /></div>
+                        Експорт Excel
+                      </button>
 
-        {/* === ШАБЛОН === */}
-        <button 
-          onClick={(e) => { e.preventDefault(); handleDownloadTemplate(); setShowQuickActions(false); }}
-          className="w-full text-left px-3 py-2.5 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-700 rounded-lg flex items-center gap-3 transition-colors font-medium"
-        >
-          <div className="bg-orange-100 p-1.5 rounded-md text-orange-600"><FileText size={16} /></div>
-          Шаблон XLS
-        </button>
+                      <button 
+                        onClick={(e) => { e.preventDefault(); handleExportJSON(); setShowQuickActions(false); }} 
+                        className="w-full text-left px-3 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg flex items-center gap-3 transition-colors font-medium"
+                      >
+                        <div className="bg-blue-100 p-1.5 rounded-md text-blue-600"><Download size={16} /></div>
+                        Експорт JSON
+                      </button>
 
-      </div>
-    </div>
-  )}
-  </div>
-            </div>
+                      <div className="h-px bg-gray-100 my-1 mx-2"></div>
+
+                      {/* === ШАБЛОН === */}
+                      <button 
+                        onClick={(e) => { e.preventDefault(); handleDownloadTemplate(); setShowQuickActions(false); }}
+                        className="w-full text-left px-3 py-2.5 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-700 rounded-lg flex items-center gap-3 transition-colors font-medium"
+                      >
+                        <div className="bg-orange-100 p-1.5 rounded-md text-orange-600"><FileText size={16} /></div>
+                        Шаблон XLS
+                      </button>
+
+                    </div>
+                  </div>
+                )}
+              </div>
+          </div>
           </div>
 
           {/* ===== ФІЛЬТРИ ===== */}
           <div className="filters-panel">
+            <div className="filters-panel-compact">
+              <div className="search-row-compact">
+                <div className="search-box" style={{ flex: 1 }}>
+                  <Search size={14} className="search-icon" />
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                    placeholder="Пошук: ПІБ, рахунок, телефон, № лічильника..."
+                  />
+                  {searchTerm && (
+                    <button className="search-clear" onClick={() => setSearchTerm('')}><X size={14} /></button>
+                  )}
+                </div>
 
-            {/* Пошук */}
-            <div className="search-box">
-              <Search size={14} className="search-icon" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                placeholder="Пошук: ПІБ, рахунок, телефон, № лічильника..."
-              />
-              {searchTerm && (
-                <button className="search-clear" onClick={() => setSearchTerm('')}><X size={14} /></button>
-              )}
+                {/* Кнопка виклику шторки */}
+                <button 
+                  className={`btn-toggle-filters ${(selectedSettlement.length || selectedStreet.length || filterBuilding || filterApartment || selectedGrs.length || selectedMeterBrand.length || selectedMeterSize.length || selectedMeterGroups.length || meterYearFrom || meterYearTo || verificationYearFrom || verificationYearTo || filterSeal || filterStickerSeal) ? 'has-active' : ''}`}
+                  onClick={() => setShowFilterDrawer(true)}
+                >
+                  <SlidersHorizontal size={15} />
+                  <span className="hidden sm:inline">Фільтри</span>
+                </button>
+              </div>
+
             </div>
 
-            {/* Адреса + лічильник */}
-            <div className="filter-row">
-              <MultiSelectDropdown options={settlements} selected={selectedSettlement} onChange={setSelectedSettlement} label="Нас. пункт" name="settlement" />
-              <MultiSelectDropdown options={streets} selected={selectedStreet} onChange={setSelectedStreet} label="Вулиця" name="street" />
-              <input className="filter-input-small" type="text" value={filterBuilding} onChange={e => setFilterBuilding(e.target.value)} placeholder="Буд." />
-              <input className="filter-input-small" type="text" value={filterApartment} onChange={e => setFilterApartment(e.target.value)} placeholder="Кв." />
-              <div className="filter-divider" />
-              <MultiSelectDropdown options={meterGroups} selected={selectedMeterGroups} onChange={setSelectedMeterGroups} label="Група ліч." name="meterGroup" />
-              <MultiSelectDropdown options={meterBrands} selected={selectedMeterBrand} onChange={setSelectedMeterBrand} label="Марка" name="meterBrand" />
-              <MultiSelectDropdown options={meterSizes} selected={selectedMeterSize} onChange={setSelectedMeterSize} label="Типорозмір" name="meterSize" />
-              <MultiSelectDropdown options={meterYears} selected={selectedMeterYear} onChange={setSelectedMeterYear} label="Рік" name="meterYear" />
-            </div>
+{/* ===== БІЧНА ШТОРКА (DRAWER) ===== */}
+          {showFilterDrawer && (
+            <div className="drawer-backdrop" onClick={() => setShowFilterDrawer(false)}>
+              <div className="drawer-panel" onClick={e => e.stopPropagation()}>
+                <div className="drawer-header">
+                  <div className="drawer-header-title">
+                    <SlidersHorizontal size={18} style={{ color: '#4f46e5' }} />
+                    <span>Розширені фільтри</span>
+                  </div>
+                  <button className="btn-close-drawer" onClick={() => setShowFilterDrawer(false)}>
+                    <X size={18} />
+                  </button>
+                </div>
 
-            {/* Статуси */}
-            <div className="status-row">
-              <span className="status-label">Статус:</span>
-              <button
-                className={"status-chip status-chip-off" + (filterDisconnected ? " active" : "")}
-                onClick={() => setFilterDisconnected(!filterDisconnected)}>
-                <span className="status-chip-dot"></span>
-                Відключений {statusCounts.disconnected > 0 && <span className="status-count">({statusCounts.disconnected})</span>}
-              </button>
-              <button
-                className={"status-chip status-chip-dacha" + (filterDacha ? " active" : "")}
-                onClick={() => setFilterDacha(!filterDacha)}>
-                <span className="status-chip-dot"></span>
-                Дача {statusCounts.dacha > 0 && <span className="status-count">({statusCounts.dacha})</span>}
-              </button>
-              <button
-                className={"status-chip status-chip-absent" + (filterAbsent ? " active" : "")}
-                onClick={() => setFilterAbsent(!filterAbsent)}>
-                <span className="status-chip-dot"></span>
-                Не проживає {statusCounts.absent > 0 && <span className="status-count">({statusCounts.absent})</span>}
-              </button>
-              <button
-                className={"status-chip status-chip-gas" + (filterConnected ? " active" : "")}
-                onClick={() => setFilterConnected(!filterConnected)}>
-                <span className="status-chip-dot"></span>
-                Газ включений
-              </button>
-              {(searchTerm || selectedSettlement.length > 0 || selectedStreet.length > 0 ||
-                selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || selectedMeterYear.length > 0 ||
-                selectedMeterGroups.length > 0 || filterDisconnected || filterDacha || filterAbsent ||
-                filterConnected || filterBuilding || filterApartment) && (
-                <button className="btn-reset" onClick={() => {
-                  setSearchTerm(''); setDebouncedSearchTerm('');
-                  setSelectedSettlement([]); setSelectedStreet([]);
-                  setSelectedMeterBrand([]); setSelectedMeterSize([]);
-                  setSelectedMeterYear([]); setSelectedMeterGroups([]);
-                  setFilterDisconnected(false); setFilterDacha(false);
-                  setFilterAbsent(false); setFilterConnected(false);
-                  setFilterBuilding(''); setFilterApartment('');
-                  setDebouncedBuilding(''); setDebouncedApartment('');
-                  setCurrentPage(0); setHasMore(true);
-                  clearScrollState(); loadClients();
-                }}><X size={11} /> Скинути</button>
-              )}
-            </div>
-          </div>
+                <div className="drawer-body">
+                  {/* 1. АДРЕСА ТА ГРС */}
+                  <div className="drawer-section">
+                    <div className="drawer-section-title">Адреса та ГРС</div>
+                    <div className="drawer-grid-2">
+                      <MultiSelectDropdown options={settlements} selected={selectedSettlement} onChange={setSelectedSettlement} label="Нас. пункт" name="settlement" />
+                      <MultiSelectDropdown options={streets} selected={selectedStreet} onChange={setSelectedStreet} label="Вулиця" name="street" />
+                    </div>
+                    
+                    <div className="drawer-grid-2">
+                      <input className="drawer-input" type="text" value={filterBuilding} onChange={e => setFilterBuilding(e.target.value)} placeholder="Будинок" />
+                      <input className="drawer-input" type="text" value={filterApartment} onChange={e => setFilterApartment(e.target.value)} placeholder="Квартира" />
+                    </div>
 
-          {/* Рядок результатів */}
-          <div className="results-bar">
-            <div className="results-bar-text">
-              <div class="results-bar-items">
-              {(debouncedSearchTerm || selectedSettlement.length > 0 || selectedStreet.length > 0 ||
-                selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || selectedMeterYear.length > 0 ||
-                selectedMeterGroups.length > 0 || filterDisconnected || filterDacha || filterAbsent ||
-                filterConnected || filterBuilding || filterApartment)
-                ? <><div class="results-bar-item"><Users size={14} className="ii-icon" /> Всього: <span>{totalCount}</span></div><div class="results-bar-divider"></div><div class="results-bar-item found"><Search size={14} className="ii-icon" /> Знайдено: <span>{filteredTotalCount}</span></div></>
-                : <><div class="results-bar-item"><Users size={14} className="ii-icon" /> Всього: <span>{totalCount}</span></div></>
-              }
+                    <MultiSelectDropdown 
+  options={grsList} 
+  selected={selectedGrs} 
+  onChange={setSelectedGrs} 
+  label="ГРС" 
+  name="grs" 
+/>
+                  </div>
+
+                  {/* 2. ЛІЧИЛЬНИК ТА ДІАПАЗОНИ */}
+                  <div className="drawer-section">
+                    <div className="drawer-section-title">Параметри лічильника</div>
+                    <MultiSelectDropdown options={meterGroups} selected={selectedMeterGroups} onChange={setSelectedMeterGroups} label="Група ліч." name="meterGroup" />
+                    
+                    <div className="drawer-grid-2">
+                      <MultiSelectDropdown options={meterBrands} selected={selectedMeterBrand} onChange={setSelectedMeterBrand} label="Марка" name="meterBrand" />
+                      <MultiSelectDropdown options={meterSizes} selected={selectedMeterSize} onChange={setSelectedMeterSize} label="Розмір" name="meterSize" />
+                    </div>
+
+                    {/* ОБ'ЄДНАНИЙ БЛОК РОКІВ */}
+                    <div className="drawer-card-box">
+                      <span className="drawer-card-title">Рік випуску</span>
+                      
+                      <MultiSelectDropdown options={meterYears} selected={selectedMeterYear} onChange={setSelectedMeterYear} label="Оберіть конкретні роки" name="meterYear" />
+                      
+                      <div className="drawer-or-divider">
+                        <span>або діапазон</span>
+                      </div>
+
+                      <div className="drawer-grid-2">
+                        <input className="drawer-input" style={{ textAlign: 'center' }} type="number" placeholder="Від (1995)" value={meterYearFrom} onChange={e => setMeterYearFrom(e.target.value)} />
+                        <input className="drawer-input" style={{ textAlign: 'center' }} type="number" placeholder="До (2010)" value={meterYearTo} onChange={e => setMeterYearTo(e.target.value)} />
+                      </div>
+                    </div>
+
+                    {/* Повірка */}
+                    <div>
+                      <label className="drawer-label">Рік повірки (від — до)</label>
+                      <div className="drawer-grid-2">
+                        <input className="drawer-input" style={{ textAlign: 'center' }} type="number" placeholder="2024" value={verificationYearFrom} onChange={e => setVerificationYearFrom(e.target.value)} />
+                        <input className="drawer-input" style={{ textAlign: 'center' }} type="number" placeholder="2028" value={verificationYearTo} onChange={e => setVerificationYearTo(e.target.value)} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 3. НОМЕРИ ПЛОМБ */}
+                  <div className="drawer-section">
+                    <div className="drawer-section-title">Пошук за номерами пломб</div>
+                    <input className="drawer-input" type="text" placeholder="№ пломби (напр. R261)" value={filterSeal} onChange={e => setFilterSeal(e.target.value)} />
+                    <input className="drawer-input" type="text" placeholder="№ стікерної пломби (напр. B1484)" value={filterStickerSeal} onChange={e => setFilterStickerSeal(e.target.value)} />
+                  </div>
+                </div>
+
+                <div className="drawer-footer">
+                  <button className="btn-apply-drawer" onClick={() => setShowFilterDrawer(false)}>
+                    Показати результати
+                  </button>
+                </div>
               </div>
             </div>
-            {/* <span className="results-bar-hint">↓ scroll для завантаження</span> */}
+          )}
+
+          {/* ===== ОБ'ЄДНАНИЙ ТУЛБАР: СТАТИСТИКА ЗЛІВА + СТАТУСИ ===== */}
+            <div className="status-toolbar-left">
+              
+          {/* 1. Лічильник зліва (не розсуває фільтри) */}
+          <div className="stats-left-group">
+            <div className="stats-item">
+              <Users size={14} className="stats-icon" />
+              {hasActiveFilters ? (
+                <>
+                  <span>Знайдено:</span> 
+                  {!isInitialLoading && <strong className="count-fade-in" style={{ color: '#0d9488' }}>{filteredTotalCount}</strong>}
+                </>
+              ) : (
+                <>
+                  <span>Всього:</span> 
+                  {!isInitialLoading && <strong className="count-fade-in">{totalCount}</strong>}
+                </>
+              )}
+            </div>
           </div>
+
+              <div className="toolbar-v-divider"></div>
+
+              {/* 2. Статуси та кнопка Скинути (справа від статистики) */}
+              <div className="status-group">
+                <span className="status-label">Статус:</span>
+                
+                {/* Відключений */}
+                <button className={`status-chip status-off ${filterDisconnected ? 'active' : ''}`} onClick={() => setFilterDisconnected(!filterDisconnected)}>
+                  <span className="chip-dot"></span>
+                  <span className="chip-text">Відключений</span>
+                  <span className={`chip-count ${!isInitialLoading && statusCounts.disconnected > 0 ? 'chip-count-visible' : 'chip-count-placeholder'}`}>
+                    ({isInitialLoading ? '000' : statusCounts.disconnected})
+                  </span>
+                </button>
+
+                {/* Дача */}
+                <button className={`status-chip status-dacha ${filterDacha ? 'active' : ''}`} onClick={() => setFilterDacha(!filterDacha)}>
+                  <span className="chip-dot"></span>
+                  <span className="chip-text">Дача</span>
+                  <span className={`chip-count ${!isInitialLoading && statusCounts.dacha > 0 ? 'chip-count-visible' : 'chip-count-placeholder'}`}>
+                    ({isInitialLoading ? '0000' : statusCounts.dacha})
+                  </span>
+                </button>
+
+                {/* Не проживає */}
+                <button className={`status-chip status-absent ${filterAbsent ? 'active' : ''}`} onClick={() => setFilterAbsent(!filterAbsent)}>
+                  <span className="chip-dot"></span>
+                  <span className="chip-text">Не проживає</span>
+                  <span className={`chip-count ${!isInitialLoading && statusCounts.absent > 0 ? 'chip-count-visible' : 'chip-count-placeholder'}`}>
+                    ({isInitialLoading ? '000' : statusCounts.absent})
+                  </span>
+                </button>
+
+                {/* Газ включений */}
+                <button className={`status-chip status-on ${filterConnected ? 'active' : ''}`} onClick={() => setFilterConnected(!filterConnected)}>
+                  <span className="chip-dot"></span>
+                  <span className="chip-text">Газ включений</span>
+                </button>
+
+                {/* Кнопка Скинути */}
+                {hasActiveFilters && (
+                  <button className="btn-reset-pill" onClick={() => {
+                    setSearchTerm(''); setDebouncedSearchTerm('');
+                    setSelectedSettlement([]); setSelectedStreet([]);
+                    setSelectedMeterBrand([]); setSelectedMeterSize([]);
+                    setSelectedMeterYear([]); setSelectedMeterGroups([]);
+                    setFilterDisconnected(false); setFilterDacha(false);
+                    setFilterAbsent(false); setFilterConnected(false);
+                    setFilterBuilding(''); setFilterApartment('');
+                    setDebouncedBuilding(''); setDebouncedApartment('');
+                    
+                    setSelectedGrs([]);
+                    setMeterYearFrom(''); setMeterYearTo('');
+                    setVerificationYearFrom(''); setVerificationYearTo('');
+                    setFilterSeal(''); setFilterStickerSeal('');
+
+                    setCurrentPage(0); setHasMore(true);
+                    clearScrollState(); loadClients();
+                  }}><X size={12} /> Скинути</button>
+                )}
+              </div>
+            </div>
+          
+
+          </div>
+
         </div>
 
         {/* ⭐ ОСНОВНИЙ КОНТЕНТ: список + бічна панель */}
@@ -2264,17 +2513,26 @@ const handleImportExcel = async (e) => {
         <div className="clients-list">
           {isInitialLoading ? (
             <div className="skeleton-list">
-              {[...Array(6)].map((_, i) => (
-                <div key={i} className="skeleton-card">
-                  <div className="skeleton-row">
-                    <div className="skeleton-dot"></div>
-                    <div className="skeleton-body">
-                      <div className="skeleton-line" style={{height:14, width:180}}></div>
-                      <div className="skeleton-line-dark" style={{height:10, width:120}}></div>
-                      <div className="skeleton-line-dark" style={{height:10, width:220}}></div>
-                      <div className="skeleton-line-dark" style={{height:10, width:160}}></div>
+              {[...Array(12)].map((_, i) => (
+                <div key={i} className="skeleton-client-card">
+                  <div className="sk-avatar"></div>
+                  <div className="sk-body">
+                    <div className="sk-name" style={{ width: `${60 + (i % 3) * 10}%` }}></div>
+                    <div className="sk-address-row">
+                      <div className="sk-icon-dot"></div>
+                      <div className="sk-address" style={{ width: `${70 + (i % 2) * 15}%` }}></div>
+                    </div>
+                    <div className="sk-tags">
+                      <div className="sk-badge-account"></div>
+                      <div className="sk-badge-dot"></div>
+                      <div className="sk-badge-meter"></div>
                     </div>
                   </div>
+                  <div className="sk-right">
+                    <div className="sk-meter-brand"></div>
+                    <div className="sk-meter-num"></div>
+                  </div>
+                  <div className="sk-chevron"></div>
                 </div>
               ))}
             </div>
@@ -2305,9 +2563,9 @@ const handleImportExcel = async (e) => {
                         <span className="account">о/р: {c.accountNumber || '—'}</span>
                         <span className={`status-indicator ${dotClass}`}></span>
                         {meterShort && <span className="meter-badge"><i className="fas fa-tachometer-alt"></i> {meterShort}</span>}
-                        {c.dacha && <span className="badge-sm warning">Дача</span>}
-                        {c.temporaryAbsent && <span className="badge-sm danger">Не прож.</span>}
-                        {c.gasDisconnected && <span className="badge badge-red">× Відключений</span>}
+                        {c.dacha && <span className="badge-chip badge-dacha">Дача</span>}
+                        {c.temporaryAbsent && <span className="badge-chip badge-absent">Не прож.</span>}
+                        {c.gasDisconnected && <span className="badge-chip badge-off">× Відключений</span>}
                       </div>
                     </div>
                     <div className="item-right">
@@ -2407,8 +2665,19 @@ const handleImportExcel = async (e) => {
                           {[selectedClient.settlement, selectedClient.streetType, selectedClient.street, selectedClient.building && `буд. ${selectedClient.building}${selectedClient.buildingLetter || ''}`, selectedClient.apartment && `кв. ${selectedClient.apartment}${selectedClient.apartmentLetter || ''}`].filter(Boolean).join(', ')}
                         </span>
                       </div>
-                      <div className="detail-row"><span className="dlbl">Дача</span><span className="dval">{selectedClient.dacha ? 'Так' : 'Ні'}</span></div>
-                      <div className="detail-row"><span className="dlbl">Тимч. не проживає</span><span className="dval">{selectedClient.temporaryAbsent ? 'Так' : 'Ні'}</span></div>
+                      {selectedClient.dacha && (
+                        <div className="detail-row">
+                          <span className="dlbl">Тип об'єкта</span>
+                          <span className="dval"><span className="badge-chip badge-dacha">Дача</span></span>
+                        </div>
+                      )}
+
+                      {selectedClient.temporaryAbsent && (
+                        <div className="detail-row">
+                          <span className="dlbl">Проживання</span>
+                          <span className="dval"><span className="badge-chip badge-absent">Не проживає</span></span>
+                        </div>
+                      )}
                     </div>
                     {/* Об'єкт */}
                     <div className="detail-info-block">
@@ -2424,7 +2693,7 @@ const handleImportExcel = async (e) => {
                       <h4><Gauge size={14} /> Лічильник</h4>
                       {selectedClient.meterNumber ? (
                         <>
-                          <div className="detail-row"><span className="dlbl">Марка / Тип</span><span className="dval">{selectedClient.meterBrand || '—'} G{selectedClient.meterSize || '—'}</span></div>
+                          <div className="detail-row"><span className="dlbl">Марка / Тип</span><span className="dval">{selectedClient.meterBrand || '—'}</span></div>
                           <div className="detail-row"><span className="dlbl">№ лічильника</span><span className="dval">{selectedClient.meterNumber}</span></div>
                           <div className="detail-row"><span className="dlbl">Рік випуску</span><span className="dval">{selectedClient.meterYear || '—'}</span></div>
                           <div className="detail-row"><span className="dlbl">Наступна повірка</span><span className="dval">{selectedClient.nextVerificationDate || '—'}</span></div>
@@ -2440,7 +2709,7 @@ const handleImportExcel = async (e) => {
                     </div>
                     {/* Прилади */}
                     <div className="detail-info-block">
-                      <h4>🔥 Прилади</h4>
+                      <h4><Flame size={14} /> Прилади</h4>
                       {selectedClient.boilerBrand && <div className="detail-row"><span className="dlbl">Котел</span><span className="dval">{selectedClient.boilerBrand}</span></div>}
                       {selectedClient.stoveType && <div className="detail-row"><span className="dlbl">Плита</span><span className="dval">{selectedClient.stoveType}{selectedClient.stoveCount ? ` (${selectedClient.stoveCount})` : ''}</span></div>}
                       {selectedClient.columnType && <div className="detail-row"><span className="dlbl">ВПГ</span><span className="dval">{selectedClient.columnType}{selectedClient.columnCount ? ` (${selectedClient.columnCount})` : ''}</span></div>}
@@ -2448,7 +2717,7 @@ const handleImportExcel = async (e) => {
                     </div>
                     {/* Відключення */}
                     <div className="detail-info-block">
-                      <h4>⛔ Відключення</h4>
+                      <h4><AlertTriangle size={14} />  Відключення</h4>
                       <div className="detail-row">
                         <span className="dlbl">Газ відключено</span>
                         <span className="dval" style={{color: selectedClient.gasDisconnected ? '#dc2626' : '#16a34a', fontWeight: 600}}>
@@ -2472,7 +2741,7 @@ const handleImportExcel = async (e) => {
                 </>
               ) : (
                 <div className="detail-panel-empty">
-                  <div>👆<p>Оберіть абонента<br/>для перегляду деталей</p></div>
+                  <div><Pointer size={40} /><p>Оберіть абонента<br/>для перегляду деталей</p></div>
                 </div>
               )}
             </div>
@@ -2480,36 +2749,44 @@ const handleImportExcel = async (e) => {
         </div>{/* кінець main-content */}
 
 {/* ⭐ МОБІЛЬНА ПАНЕЛЬ — виїжджає знизу з підтримкою свайпу */}
-<div 
-  className={`mobile-overlay ${selectedClient && isMobile() ? 'open' : ''}`}
-  style={{
-    transform: isDragging && touchCurrentY > 0 
-      ? `translateY(${touchCurrentY}px)` 
-      : undefined,
-    transition: isDragging ? 'none' : 'transform 0.2s cubic-bezier(0.1, 0.9, 0.2, 1)'
-  }}
-  onTouchStart={handleTouchStart}
-  onTouchMove={handleTouchMove}
-  onTouchEnd={handleTouchEnd}
->
+<div
+  ref={overlayRef}
+  className={`mobile-overlay ${selectedClient && isMobile() ? 'open' : ''}`}>
   {selectedClient && (
     <>
-<div className="mobile-header">
-  <div className="sheet-grabber"></div>
-  <div className="mobile-header-top">
-    <h2>{selectedClient.fullName}</h2>
-    <button className="btn-back" onClick={closeMobilePanel}>
-      <X size={18} />
-    </button>
-  </div>
-</div>
+      <div className="mobile-header"onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onMouseDown={handleTouchStart}>
+        <div className="sheet-grabber"></div>
+        <div className="mobile-header-top">
+          <h2>{selectedClient.fullName}</h2>
+          <button 
+            type="button" 
+            className="btn-back" 
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              closeMobilePanel();
+            }}
+            >
+             <X size={18} />
+          </button>
+        </div>
+      </div>
       <div className="mobile-body">
         
         {/* Особові дані */}
         <div className="info-block">
           <h4><UserCircle size={14} /> Особові дані</h4>
-          <div className="detail-row"><span className="dlbl">ПІБ</span><span className="dval"><strong>{selectedClient.fullName}</strong></span></div>
           <div className="detail-row"><span className="dlbl">Особовий рахунок</span><span className="dval">{selectedClient.accountNumber}</span></div>
+          <div className="detail-row"><span className="dlbl">ПІБ</span><span className="dval"><strong>{selectedClient.fullName}</strong></span></div>
+          <div className="detail-row">
+            <span className="dlbl">Адреса</span>
+            <span className="dval" style={{fontSize:'0.75rem'}}>
+              {[selectedClient.settlement, selectedClient.streetType, selectedClient.street, selectedClient.building && `буд. ${selectedClient.building}${selectedClient.buildingLetter || ''}`, selectedClient.apartment && `кв. ${selectedClient.apartment}${selectedClient.apartmentLetter || ''}`].filter(Boolean).join(', ')}
+            </span>
+          </div>
           <div className="detail-row"><span className="dlbl">EIC</span><span className="dval">{selectedClient.eic || '—'}</span></div>
           <div className="detail-row">
             <span className="dlbl">Телефон</span>
@@ -2521,15 +2798,10 @@ const handleImportExcel = async (e) => {
               ) : '—'}
             </span>
           </div>
-          <div className="detail-row">
-            <span className="dlbl">Адреса</span>
-            <span className="dval" style={{fontSize:'0.75rem'}}>
-              {[selectedClient.settlement, selectedClient.streetType, selectedClient.street, selectedClient.building && `буд. ${selectedClient.building}${selectedClient.buildingLetter || ''}`, selectedClient.apartment && `кв. ${selectedClient.apartment}${selectedClient.apartmentLetter || ''}`].filter(Boolean).join(', ')}
-            </span>
-          </div>
+
         </div>
 
-        {/* Лічильник (повний набір полів) */}
+        {/* Лічильник */}
         <div className="info-block">
           <h4><Gauge size={14} /> Лічильник</h4>
           {selectedClient.meterNumber ? (
@@ -2582,15 +2854,13 @@ const handleImportExcel = async (e) => {
       <div className="mobile-actions">
         <button 
           className="btn-sm primary" 
-          onClick={() => { closeMobilePanel(); handleEdit(selectedClient); }} 
-          style={{flex: 1, background: '#f59e0b', color: '#111827', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'}}
+          onClick={() => { closeMobilePanel(); handleEdit(selectedClient); }}
         >
           <Edit2 size={16} /> Редагувати
         </button>
         <button 
           className="btn-sm danger" 
-          onClick={() => { closeMobilePanel(); handleDelete(selectedClient.id); }} 
-          style={{flex: 1, color: '#ef4444', borderColor: '#fecaca', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'}}
+          onClick={() => { closeMobilePanel(); handleDelete(selectedClient.id); }}
         >
           <Trash2 size={16} /> Видалити
         </button>
@@ -2624,18 +2894,33 @@ const handleImportExcel = async (e) => {
                       </div>
                       <div>
                         <label className="form-label">Особовий рахунок *</label>
-                        <input className="form-input" type="text" maxlength="10" value={formData.accountNumber} onChange={(e) => setFormData({...formData, accountNumber: e.target.value})} />
+                        <input 
+                          className={`form-input ${accountError ? 'input-error' : ''}`} 
+                          type="text" 
+                          maxLength="10" 
+                          value={formData.accountNumber} 
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setFormData({...formData, accountNumber: val});
+                            checkAccountDuplicate(val); // викликає перевірку при кожному сивмолі
+                          }} 
+                        />
+                        {accountError && (
+                          <div style={{ color: '#ef4444', fontSize: '11px', marginTop: '4px', fontWeight: 600 }}>
+                            ⚠️ {accountError}
+                          </div>
+                        )}
                       </div>
                     </div>
 
                     {/* 2 РЯДОК: Населений пункт + Тип вул. + Вулиця + Будинок + Літ. + Кв. + Літ. */}
                     <div className="address-compact-grid modal-col-3">
                       <div>
-                        <label className="form-label">Населений пункт</label>
+                        <label className="form-label">Населений пункт *</label>
                         <input className="form-input" type="text" value={formData.settlement} onChange={(e) => setFormData({...formData, settlement: e.target.value})} />
                       </div>
                       <div>
-                        <label className="form-label">Вулиця (тип/назва)</label>
+                        <label className="form-label">Вулиця (тип/назва) *</label>
                         <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '8px' }}>
                           <select className="form-input" value={formData.streetType} onChange={(e) => setFormData({...formData, streetType: e.target.value})}>
                             {U_STREET_TYPE.map((type, idx) => (
@@ -2647,11 +2932,11 @@ const handleImportExcel = async (e) => {
                       </div>
                       <div className="address-numbers-grid">
                         <div>
-                          <label className="form-label" title="Будинок">Буд.</label>
+                          <label className="form-label" title="Будинок">Буд. *</label>
                           <input className="form-input" type="text" value={formData.building} onChange={(e) => setFormData({...formData, building: e.target.value})} />
                         </div>
                         <div>
-                          <label className="form-label" title="Літера">літ. Буд.</label>
+                          <label className="form-label" title="Літера">літ. Буд. *</label>
                           <input className="form-input" type="text" value={formData.buildingLetter} onChange={(e) => setFormData({...formData, buildingLetter: e.target.value})} />
                         </div>
                         <div>
@@ -2666,7 +2951,7 @@ const handleImportExcel = async (e) => {
                     </div>
                     
                     <div>
-                      <label className="form-label">EIC</label>
+                      <label className="form-label">EIC *</label>
                       <input className="form-input" type="text" value={formData.eic} onChange={(e) => setFormData({...formData, eic: e.target.value})} />
                     </div>
 
@@ -2677,10 +2962,14 @@ const handleImportExcel = async (e) => {
                     </div>
                     
                     <div className="flex-checkbox-wrapper">
-                      <label className="form-checkbox-label">
-                        <input type="checkbox" checked={formData.dacha} onChange={(e) => setFormData({...formData, dacha: e.target.checked})}/>Дача</label>
-                      <label className="form-checkbox-label">
-                        <input type="checkbox" checked={formData.temporaryAbsent} onChange={(e) => setFormData({...formData, temporaryAbsent: e.target.checked})}/>Тимчасово не проживає</label>
+                      <label className="form-checkbox-label custom-checkbox-label">
+                        <input type="checkbox" className="custom-checkbox-input" checked={formData.dacha} onChange={(e) => setFormData({...formData, dacha: e.target.checked})}/>
+                        <span className="custom-checkbox-box"></span>
+                        <span>Дача</span></label>
+                      <label className="form-checkbox-label custom-checkbox-label">
+                        <input type="checkbox" className="custom-checkbox-input" checked={formData.temporaryAbsent} onChange={(e) => setFormData({...formData, temporaryAbsent: e.target.checked})}/>
+                        <span className="custom-checkbox-box"></span>
+                        <span>Тимчасово не проживає</span></label>
                     </div>
                   </div>
                   <div style={{ width: '100%', height: '1px', backgroundColor: '#bfdbfe', margin: '20px 0 10px' }}></div>
@@ -2690,8 +2979,18 @@ const handleImportExcel = async (e) => {
                     <div><label className="form-label">Комун. гос-во</label><input className="form-input" type="text" value={formData.utilityType} onChange={(e) => setFormData({...formData, utilityType: e.target.value})} /></div>
                     <div><label className="form-label">Група</label><input className="form-input" type="text" value={formData.utilityGroup} onChange={(e) => setFormData({...formData, utilityGroup: e.target.value})} /></div>
                     <div><label className="form-label">ГРС</label>
-                        <select className="form-input" value={formData.grs || ''} onChange={(e) => setFormData({ ...formData, grs: e.target.value })}>
+                        <select 
+                          className="form-input" 
+                          value={formData.grs || ''} 
+                          onChange={(e) => setFormData({ ...formData, grs: e.target.value })}
+                        >
                           <option value="">— оберіть ГРС —</option>
+                          
+                          {/* ⭐ Захист: якщо у клієнта є ГРС, якої чомусь немає в загальному списку — додаємо її */}
+                          {formData.grs && !grsList.includes(String(formData.grs).trim()) && (
+                            <option value={String(formData.grs).trim()}>{String(formData.grs).trim()}</option>
+                          )}
+
                           {grsList.map((grsName, index) => (
                             <option key={index} value={grsName}>
                               {grsName}
@@ -2792,9 +3091,10 @@ const handleImportExcel = async (e) => {
                   <h3 className="modal-section-title modal-section-title-red">Відключення</h3>
                   <div className="modal-col-3">
                     <div className="form-checkbox-row"> 
-                      <label className="form-checkbox-label">
-                        <input type="checkbox" checked={formData.gasDisconnected || false} onChange={(e) => setFormData({...formData, gasDisconnected: e.target.checked})} />
-                        Газ відключено
+                      <label className="form-checkbox-label custom-checkbox-label">
+                        <input type="checkbox" className="custom-checkbox-input" checked={formData.gasDisconnected || false} onChange={(e) => setFormData({...formData, gasDisconnected: e.target.checked})} />
+                        <span className="custom-checkbox-box"></span>
+                        <span>Газ відключено</span>
                       </label> 
                     </div>
                   </div><br/>
@@ -2807,7 +3107,15 @@ const handleImportExcel = async (e) => {
 
               </div>
               <div className="modal-footer">
-                <button className="btn-save" onClick={handleSubmit}><Save size={18} /> {editingClient ? 'Зберегти зміни' : 'Додати клієнта'}</button>
+                <button 
+                  className="btn-save" 
+                  onClick={handleSubmit}
+                  disabled={!!accountError}
+                  style={{
+                    opacity: accountError ? 0.5 : 1,
+                    cursor: accountError ? 'not-allowed' : 'pointer'
+                  }}
+                  ><Save size={18} /> {editingClient ? 'Зберегти зміни' : 'Додати клієнта'}</button>
                 <button className="btn-cancel" onClick={resetForm}>Скасувати</button>
               </div>
             </div>

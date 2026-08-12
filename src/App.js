@@ -1566,22 +1566,37 @@ const handleImportExcel = async (e) => {
   const file = e.target.files[0];
   if (!file) return;
 
+  // 1. Спочатку МИТТЄВО показуємо оверлей із прогресом
   setLoading(true);
+  setImportProgress({ 
+    show: true, 
+    current: 0, 
+    total: 0, 
+    fileName: `${file.name} (зчитування...)` 
+  });
 
   const reader = new FileReader();
   reader.onload = async (event) => {
     try {
+      // ⚡ 2. ДАЄМО БРАУЗЕРУ 50мс НА МАЛЮВАННЯ UI
+      // Без цієї паузи браузер заморожує екран і не малює вікно до кінця парсингу
+      await new Promise(resolve => setTimeout(resolve, 50));
+
       const data = new Uint8Array(event.target.result);
+      
+      // Важка синхронна обробка Excel
       const workbook = XLSX.read(data, { type: 'array' });
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
       const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
       if (!jsonData || jsonData.length === 0) {
         showToast('warning', 'Файл порожній або має невалідний формат');
+        setImportProgress({ show: false, current: 0, total: 0, fileName: '' });
         setLoading(false);
         return;
       }
 
+      // Оновлюємо точну кількість записів у вже відкритому вікні
       setImportProgress({ show: true, current: 0, total: jsonData.length, fileName: file.name });
 
       const cleanAcc = (val) => {
@@ -1589,7 +1604,6 @@ const handleImportExcel = async (e) => {
         return String(val).replace(/\s/g, '').replace(/^0+/, '').toLowerCase();
       };
 
-      // Отримуємо всіх клієнтів з БД для швидкого мапінгу існуючих
       const allDbClients = await getAllClients();
       const existingClientsMap = new Map();
       allDbClients.forEach(c => {
@@ -1601,8 +1615,7 @@ const handleImportExcel = async (e) => {
       let imported = 0;
       let updated = 0;
 
-      // ⚡ Налаштування пакетного імпорту
-      const BATCH_SIZE = 500; // Оптимальний розмір пачки для мобілок
+      const BATCH_SIZE = 500;
       let newClientsBatch = [];
 
       for (let i = 0; i < jsonData.length; i++) {
@@ -1642,12 +1655,7 @@ const handleImportExcel = async (e) => {
           seal: (row['Пломба'] || '').toString().trim(),
           stickerSeal: (row['Стікерна пломба'] || '').toString().trim(),
           meterManufacturer: (row['Завод виробник'] || '').toString().trim(),
-          boilerBrand: '',
-          boilerCount: '',
-          stoveType: '',
-          stoveCount: '',
-          columnType: '',
-          columnCount: '',
+          boilerBrand: '', boilerCount: '', stoveType: '', stoveCount: '', columnType: '', columnCount: '',
           area: (row['Площа'] || '').toString().trim(),
           utilityType: (row['Комун. гос-во'] || '').toString().trim(),
           utilityGroup: (row['Група'] || '').toString().trim(),
@@ -1679,32 +1687,21 @@ const handleImportExcel = async (e) => {
           client.columnCount = (row['Кількість ВПГ'] || '').toString().trim();
         }
 
-        // Логіка розділення: Оновлення чи Додавання нового
         if (existingClientsMap.has(accStr)) {
           const existingClient = existingClientsMap.get(accStr);
-          const clientToUpdate = {
-            ...existingClient,
-            ...client,
-            id: existingClient.id
-          };
-          await updateClient(clientToUpdate);
+          await updateClient({ ...existingClient, ...client, id: existingClient.id });
           updated++;
         } else {
           newClientsBatch.push(client);
           imported++;
         }
 
-        // 🚀 Зберігаємо пачку нових записів, коли досягли BATCH_SIZE або це останній елемент
         if (newClientsBatch.length >= BATCH_SIZE || i === jsonData.length - 1) {
           if (newClientsBatch.length > 0) {
             await addClientsBatch(newClientsBatch);
-            newClientsBatch = []; // очищаємо буфер
+            newClientsBatch = [];
           }
-
-          // 🎨 Оновлюємо UI прогрес-бару
           setImportProgress(prev => ({ ...prev, current: i + 1 }));
-
-          // ☕ Пауза на 10мс, щоб мобільний браузер встиг перемалювати відсотки на екрані
           await new Promise(resolve => setTimeout(resolve, 10));
         }
       }
@@ -1717,8 +1714,8 @@ const handleImportExcel = async (e) => {
 
       setImportProgress({ show: false, current: 0, total: 0, fileName: '' });
       setIsInitialLoading(false);
-
       showToast('success', `Готово! Нових: ${imported}, Оновлено: ${updated}`, 5000);
+
     } catch (error) {
       console.error('Import error:', error);
       setImportProgress({ show: false, current: 0, total: 0, fileName: '' });
@@ -1726,6 +1723,7 @@ const handleImportExcel = async (e) => {
     }
     setLoading(false);
   };
+  
   reader.readAsArrayBuffer(file);
   e.target.value = '';
 };
@@ -2455,20 +2453,21 @@ const handleImportExcel = async (e) => {
                   <div className="detail-panel-body">
                     <div className="detail-info-block">
                       <h4><UserCircle size={14} /> Особові дані</h4>
-                      <div className="detail-row"><span className="dlbl">ПІБ</span><span className="dval"><strong>{selectedClient.fullName}</strong></span></div>
                       <div className="detail-row"><span className="dlbl">Особовий рахунок</span><span className="dval">{selectedClient.accountNumber}</span></div>
+                      <div className="detail-row"><span className="dlbl">ПІБ</span><span className="dval"><strong>{selectedClient.fullName}</strong></span></div>
+                       <div className="detail-row">
+                        <span className="dlbl">Адреса</span>
+                        <span className="dval" style={{fontSize:'0.75rem'}}>
+                          {[selectedClient.settlement, selectedClient.streetType, selectedClient.street, selectedClient.building && `буд. ${selectedClient.building}${selectedClient.buildingLetter || ''}`, selectedClient.apartment && `кв. ${selectedClient.apartment}${selectedClient.apartmentLetter || ''}`].filter(Boolean).join(', ')}
+                        </span>
+                      </div>
                       <div className="detail-row"><span className="dlbl">EIC</span><span className="dval">{selectedClient.eic || '—'}</span></div>
                       <div className="detail-row"><span className="dlbl">Телефон</span><span className="dval">{selectedClient.phone ? (
                         <a href={`tel:${selectedClient.phone.replace(/[^\d+]/g, '')}`} style={{color: '#2563eb', textDecoration: 'none', fontWeight: 500}}>
                           {selectedClient.phone}
                         </a>
                       ) : '—'}</span></div>
-                      <div className="detail-row">
-                        <span className="dlbl">Адреса</span>
-                        <span className="dval" style={{fontSize:'0.75rem'}}>
-                          {[selectedClient.settlement, selectedClient.streetType, selectedClient.street, selectedClient.building && `буд. ${selectedClient.building}${selectedClient.buildingLetter || ''}`, selectedClient.apartment && `кв. ${selectedClient.apartment}${selectedClient.apartmentLetter || ''}`].filter(Boolean).join(', ')}
-                        </span>
-                      </div>
+                     
                       {selectedClient.dacha && (
                         <div className="detail-row">
                           <span className="dlbl">Тип об'єкта</span>

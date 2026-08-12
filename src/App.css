@@ -389,6 +389,154 @@ body.dark .btn-quick-pill:hover {
   background: #334155;
   color: #f8fafc;
 }
+
+/* ==========================================================================
+   КОМПАКТНЕ МЕНЮ З КОЛЬОРОВИМИ ІКОНКАМИ (ЧИСТИЙ CSS)
+   ========================================================================== */
+
+.quick-actions-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  width: 175px;
+  /* Компактна ширина */
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+  padding: 5px;
+  z-index: 1000;
+  animation: qa-fade-in 0.15s ease-out;
+}
+
+@keyframes qa-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.qa-menu-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+/* Пункт меню */
+.qa-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 5px 6px;
+  /* Акуратна компактна висота */
+  font-size: 13px;
+  font-weight: 500;
+  color: #334155;
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+  box-sizing: border-box;
+  text-align: left;
+  margin: 0;
+}
+
+.qa-item:hover {
+  background-color: #f1f5f9;
+  color: #0f172a;
+}
+
+/* КОМПАКТНІ КОЛЬОРОВІ КВАДРАТИКИ ДЛЯ ІКОНОК (24x24 замість 32x32) */
+.qa-icon-box {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Кольорові теми квадратів */
+.qa-icon-box.qa-indigo {
+  background-color: #e0e7ff;
+  color: #4338ca;
+}
+
+.qa-icon-box.qa-green {
+  background-color: #dcfce7;
+  color: #15803d;
+}
+
+.qa-icon-box.qa-blue {
+  background-color: #dbeafe;
+  color: #1d4ed8;
+}
+
+.qa-icon-box.qa-orange {
+  background-color: #ffedd5;
+  color: #c2410c;
+}
+
+/* Тонкий розділювач */
+.qa-divider {
+  height: 1px;
+  background-color: #f1f5f9;
+  margin: 3px 2px;
+}
+
+/* --------------------------------------------------------------------------
+   Підтримка темної теми (body.dark)
+   -------------------------------------------------------------------------- */
+body.dark .quick-actions-dropdown {
+  background: #0f172a;
+  border-color: #1e293b;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+}
+
+body.dark .qa-item {
+  color: #cbd5e1;
+}
+
+body.dark .qa-item:hover {
+  background-color: #1e293b;
+  color: #f8fafc;
+}
+
+body.dark .qa-divider {
+  background-color: #1e293b;
+}
+
+/* Приглушені кольори квадратів у темній темі для приємного вигляду */
+body.dark .qa-icon-box.qa-indigo {
+  background-color: rgba(99, 102, 241, 0.2);
+  color: #818cf8;
+}
+
+body.dark .qa-icon-box.qa-green {
+  background-color: rgba(34, 197, 94, 0.2);
+  color: #4ade80;
+}
+
+body.dark .qa-icon-box.qa-blue {
+  background-color: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+}
+
+body.dark .qa-icon-box.qa-orange {
+  background-color: rgba(249, 115, 22, 0.2);
+  color: #fb923c;
+}
+
 .btn {
   font-size: 12px;
   padding: 5px 10px;
@@ -1986,6 +2134,41 @@ body.dark .ctx-divider { background: #334155; }
 .item-tags { font-size: 0.68rem; display: flex; gap: 0.4rem; align-items: center; margin-top: 0.2rem; flex-wrap: wrap; }
 .item-tags .account { font-weight: 500; color: #6b7280; }
 .item-tags .meter-badge { font-weight: 600; background: #f3f4f6; padding: 0.15rem 0.6rem; border-radius: 12px; font-size: 0.65rem; display: none; }
+
+.item-tags {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+/* Контейнер статусних беджів */
+.item-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 💻 ДЕСКТОП: все стає в один лінійний рядок */
+@media (min-width: 641px) {
+  .item-badges {
+    display: inline-flex;
+  }
+}
+
+/* 📱 МОБІЛКА / ВУЗЬКИЙ ЕКРАН: примусовий перенос ВСІХ беджів разом */
+@media (max-width: 640px) {
+  .item-badges {
+    display: flex;
+    width: 100%;
+    /* Займає весь рядок і скидає ВСІ беджі на рядок нижче */
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 2px;
+  }
+}
+
 /* ===== ЄДИНИЙ СТИЛЬ БЕЙДЖІВ КАРТКИ ===== */
 .badge-chip {
   display: inline-flex;
@@ -3052,3 +3235,4 @@ body.dark .custom-checkbox-input:checked + .custom-checkbox-label .custom-checkb
   background-color: #6366f1;
   border-color: #6366f1;
 }
+

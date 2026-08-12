@@ -1081,7 +1081,7 @@ function ClientDatabase() {
   useEffect(() => {
     const handleClickOutside = (event) => {
       const quickActionsButton = event.target.closest('button[title="Швидкі дії"]');
-      const quickActionsMenu = event.target.closest('.absolute.right-0.mt-2.w-80');
+      const quickActionsMenu = event.target.closest('.quick-actions-dropdown');
       
       if (showQuickActions && !quickActionsButton && !quickActionsMenu) {
         setShowQuickActions(false);
@@ -1331,59 +1331,83 @@ function ClientDatabase() {
     }
   };
 
-  const checkAccountDuplicate = (accNum) => {
-    const trimmed = accNum ? accNum.toString().trim() : '';
+  // ✅ Асинхронна перевірка дубліката по УСІЙ IndexedDB
+const checkAccountDuplicate = async (accNum) => {
+  const trimmed = accNum ? accNum.toString().trim() : '';
 
-    if (!trimmed) {
-      setAccountError('');
-      return false;
-    }
+  if (!trimmed) {
+    setAccountError('');
+    return false;
+  }
 
-    const isDuplicate = clients.some(c => 
-      c.accountNumber && 
-      c.accountNumber.toString().trim() === trimmed &&
-      (!editingClient || c.id !== editingClient.id)
-    );
+  try {
+    const db = await openDB();
+    const isDuplicate = await new Promise((resolve, reject) => {
+      const transaction = db.transaction([STORE_NAME], 'readonly');
+      const store = transaction.objectStore(STORE_NAME);
+      const index = store.index('accountNumber');
+      
+      const request = index.get(trimmed);
+
+      request.onsuccess = () => {
+        const found = request.result;
+        if (!found) {
+          resolve(false);
+        } else {
+          // Якщо це редагування і знайшли того самого клієнта — це не дубль
+          const isSameClient = editingClient && found.id === editingClient.id;
+          resolve(!isSameClient);
+        }
+      };
+
+      request.onerror = () => reject(request.error);
+    });
 
     if (isDuplicate) {
-      setAccountError('Абонент з таким особовим рахунком вже існує!');
+      setAccountError('Абонент з таким особовим рахунком вже існує в базі!');
       return true;
     } else {
       setAccountError('');
       return false;
     }
-  };
+  } catch (error) {
+    console.error('Помилка перевірки о/р:', error);
+    return false;
+  }
+};
 
   const handleSubmit = async () => {
-    if (!formData.accountNumber || !formData.fullName) {
-      showToast('warning', 'Заповніть обов\'язкові поля: Особовий рахунок та ПІБ');
-      return;
-    }
-        
-    if (checkAccountDuplicate(formData.accountNumber)) {
-      showToast('warning', 'Абонент з таким особовим рахунком вже існує в базі!');
-      return;
-    }
+  if (!formData.accountNumber || !formData.fullName) {
+    showToast('warning', 'Заповніть обов\'язкові поля: Особовий рахунок та ПІБ');
+    return;
+  }
+      
+  // 🔍 Чекаємо на результат перевірки по всій IndexedDB
+  const isDuplicate = await checkAccountDuplicate(formData.accountNumber);
+  if (isDuplicate) {
+    showToast('warning', 'Абонент з таким особовим рахунком вже існує в базі!');
+    return;
+  }
 
-    try {
-      if (editingClient) {
-        await updateClient({ ...formData, id: editingClient.id });
-        showToast('success', 'Зміни успішно збережено!');
-      } else {
-        await addClient(formData);
-        showToast('success', 'Клієнта успішно додано!');
-      }
-      await loadClients();
-      await loadAllCounts();
-      await loadSettlements();
-      await loadStreets();
-      await loadMeterData();
-      resetForm();
-    } catch (error) {
-      console.error('Error saving client:', error);
-      showToast('error', 'Помилка при збереженні клієнта');
+  try {
+    if (editingClient) {
+      await updateClient({ ...formData, id: editingClient.id });
+      showToast('success', 'Зміни успішно збережено!');
+    } else {
+      await addClient(formData);
+      showToast('success', 'Клієнта успішно додано!');
     }
-  };
+    await loadClients();
+    await loadAllCounts();
+    await loadSettlements();
+    await loadStreets();
+    await loadMeterData();
+    resetForm();
+  } catch (error) {
+    console.error('Error saving client:', error);
+    showToast('error', 'Помилка при збереженні клієнта');
+  }
+};
 
   const handleAdd = () => {
     setEditingClient(null);
@@ -2003,75 +2027,73 @@ function ClientDatabase() {
                 </button>
                 
                 {showQuickActions && (
-                  <div 
-                    className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden" 
-                    style={{ animation: 'fade-in 0.2s ease-out' }}
-                    onMouseDown={(e) => e.stopPropagation()}
-                  >
-                    <div className="p-1.5 flex flex-col gap-0.5">
-                      <button 
-                        onClick={(e) => { e.preventDefault(); handleAdd(); setShowQuickActions(false); }} 
-                        className="w-full text-left px-3 py-2.5 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 rounded-lg flex items-center gap-3 transition-colors font-medium"
-                      >
-                        <div className="bg-indigo-100 p-1.5 rounded-md text-indigo-600"><Plus size={16} /></div> 
-                        Новий клієнт
-                      </button>
-                      
-                      <div className="h-px bg-gray-100 my-1 mx-2"></div>
-                      
-                      <label 
-                        className="w-full cursor-pointer text-left px-3 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 rounded-lg flex items-center gap-3 transition-colors font-medium m-0"
-                      >
-                        <div className="bg-green-100 p-1.5 rounded-md text-green-600"><Upload size={16} /></div>
-                        Імпорт XLS
-                        <input 
-                          type="file" 
-                          accept=".xlsx,.xls" 
-                          onChange={(e) => { handleImportExcel(e); setShowQuickActions(false); }} 
-                          className="hidden" 
-                          disabled={loading} 
-                        />
-                      </label>
+                <div className="quick-actions-dropdown">
+                  <div className="qa-menu-group">
+                    {/* Створення */}
+                    <button 
+                      onClick={(e) => { e.preventDefault(); handleAdd(); setShowQuickActions(false); }} 
+                      className="qa-item"
+                    >
+                      <div className="qa-icon-box qa-indigo"><Plus size={14} /></div> 
+                      <span>Новий клієнт</span>
+                    </button>
+                    
+                    <div className="qa-divider"></div>
+                    
+                    {/* Імпорт */}
+                    <label className="qa-item">
+                      <div className="qa-icon-box qa-green"><Upload size={14} /></div>
+                      <span>Імпорт XLS</span>
+                      <input 
+                        type="file" 
+                        accept=".xlsx,.xls" 
+                        onChange={(e) => { handleImportExcel(e); setShowQuickActions(false); }} 
+                        className="hidden" 
+                        disabled={loading} 
+                      />
+                    </label>
 
-                      <button 
-                        onClick={(e) => { e.preventDefault(); setShowImportUrlModal(true); setShowQuickActions(false); }} 
-                        className="w-full text-left px-3 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 rounded-lg flex items-center gap-3 transition-colors font-medium"
-                      >
-                        <div className="bg-green-100 p-1.5 rounded-md text-green-600"><Upload size={16} /></div>
-                        Імпорт JSON
-                      </button>
-                      
-                      <div className="h-px bg-gray-100 my-1 mx-2"></div>
-                      
-                      <button 
-                        onClick={(e) => { e.preventDefault(); handleExportExcel(); setShowQuickActions(false); }} 
-                        className="w-full text-left px-3 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg flex items-center gap-3 transition-colors font-medium"
-                      >
-                        <div className="bg-blue-100 p-1.5 rounded-md text-blue-600"><Download size={16} /></div>
-                        Експорт Excel
-                      </button>
+                    <button 
+                      onClick={(e) => { e.preventDefault(); setShowImportUrlModal(true); setShowQuickActions(false); }} 
+                      className="qa-item"
+                    >
+                      <div className="qa-icon-box qa-green"><Upload size={14} /></div>
+                      <span>Імпорт JSON</span>
+                    </button>
+                    
+                    <div className="qa-divider"></div>
+                    
+                    {/* Експорт */}
+                    <button 
+                      onClick={(e) => { e.preventDefault(); handleExportExcel(); setShowQuickActions(false); }} 
+                      className="qa-item"
+                    >
+                      <div className="qa-icon-box qa-blue"><Download size={14} /></div>
+                      <span>Експорт Excel</span>
+                    </button>
 
-                      <button 
-                        onClick={(e) => { e.preventDefault(); handleExportJSON(); setShowQuickActions(false); }} 
-                        className="w-full text-left px-3 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg flex items-center gap-3 transition-colors font-medium"
-                      >
-                        <div className="bg-blue-100 p-1.5 rounded-md text-blue-600"><Download size={16} /></div>
-                        Експорт JSON
-                      </button>
+                    <button 
+                      onClick={(e) => { e.preventDefault(); handleExportJSON(); setShowQuickActions(false); }} 
+                      className="qa-item"
+                    >
+                      <div className="qa-icon-box qa-blue"><Download size={14} /></div>
+                      <span>Експорт JSON</span>
+                    </button>
 
-                      <div className="h-px bg-gray-100 my-1 mx-2"></div>
+                    <div className="qa-divider"></div>
 
-                      <button 
-                        onClick={(e) => { e.preventDefault(); handleDownloadTemplate(); setShowQuickActions(false); }}
-                        className="w-full text-left px-3 py-2.5 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-700 rounded-lg flex items-center gap-3 transition-colors font-medium"
-                      >
-                        <div className="bg-orange-100 p-1.5 rounded-md text-orange-600"><FileText size={16} /></div>
-                        Шаблон XLS
-                      </button>
-
-                    </div>
+                    {/* Шаблон */}
+                    <button 
+                      onClick={(e) => { e.preventDefault(); handleDownloadTemplate(); setShowQuickActions(false); }}
+                      className="qa-item"
+                    >
+                      <div className="qa-icon-box qa-orange"><FileText size={14} /></div>
+                      <span>Шаблон XLS</span>
+                    </button>
                   </div>
-                )}
+                </div>
+              )}
+
               </div>
             </div>
           </div>
@@ -2316,12 +2338,19 @@ function ClientDatabase() {
                             <div className="item-name">{c.fullName || '—'}</div>
                             <div className="item-address"><div className="meta-icon"><MapPin size={11} /></div> {addr}</div>
                             <div className="item-tags">
+                              {/* Рядок 1: Завжди о/р, крапка та лічильник */}
                               <span className="account">о/р: {c.accountNumber || '—'}</span>
                               <span className={`status-indicator ${dotClass}`}></span>
                               {meterShort && <span className="meter-badge"><i className="fas fa-tachometer-alt"></i> {meterShort}</span>}
-                              {c.dacha && <span className="badge-chip badge-dacha">Дача</span>}
-                              {c.temporaryAbsent && <span className="badge-chip badge-absent">Не прож.</span>}
-                              {c.gasDisconnected && <span className="badge-chip badge-off">× Відключений</span>}
+
+                              {/* Рядок 2 (на мобілці) / Продовження (на десктопі): Всі статусні беджі */}
+                              {(c.dacha || c.temporaryAbsent || c.gasDisconnected) && (
+                                <div className="item-badges">
+                                  {c.dacha && <span className="badge-chip badge-dacha">Дача</span>}
+                                  {c.temporaryAbsent && <span className="badge-chip badge-absent">Не прож.</span>}
+                                  {c.gasDisconnected && <span className="badge-chip badge-off">× Відключений</span>}
+                                </div>
+                              )}
                             </div>
                           </div>
                           <div className="item-right">
@@ -2448,10 +2477,12 @@ function ClientDatabase() {
                           <div className="detail-row"><span className="dlbl">Марка / Тип</span><span className="dval">{selectedClient.meterBrand || '—'}</span></div>
                           <div className="detail-row"><span className="dlbl">№ лічильника</span><span className="dval">{selectedClient.meterNumber}</span></div>
                           <div className="detail-row"><span className="dlbl">Рік випуску</span><span className="dval">{selectedClient.meterYear || '—'}</span></div>
+                          <div className="detail-row"><span className="dlbl">Повірка</span><span className="dval">{selectedClient.verificationDate || '—'}</span></div>
                           <div className="detail-row"><span className="dlbl">Наступна повірка</span><span className="dval">{selectedClient.nextVerificationDate || '—'}</span></div>
+                          <div className="detail-row"><span className="dlbl">Підтип</span><span className="dval">{selectedClient.meterSubtype || '—'}</span></div>
                           <div className="detail-row"><span className="dlbl">Завод-виробник</span><span className="dval" style={{fontSize:'0.7rem'}}>{selectedClient.meterManufacturer || '—'}</span></div>
-                          <div className="detail-row"><span className="dlbl">Група / Підтип</span><span className="dval">{selectedClient.meterGroup || '—'} / {selectedClient.meterSubtype || '—'}</span></div>
-                          <div className="detail-row"><span className="dlbl">Належність</span><span className="dval">{selectedClient.meterOwnership || '—'}</span></div>
+                          <div className="detail-row"><span className="dlbl">Група</span><span className="dval">{selectedClient.meterGroup || '—'}</span></div>
+                          <div className="detail-row"><span className="dlbl">Належність / Серв. орган</span><span className="dval">{selectedClient.meterOwnership || '—'} / {selectedClient.serviceOrg || '—'}</span></div>
                           <div className="detail-row"><span className="dlbl">Розташування</span><span className="dval" style={{fontSize:'0.7rem'}}>{selectedClient.meterLocation || '—'}</span></div>
                           <div className="detail-row"><span className="dlbl">МВНСШ / РСП</span><span className="dval">{selectedClient.mvnssh || '—'} / {selectedClient.rsp || '—'}</span></div>
                           <div className="detail-row"><span className="dlbl">Пломба</span><span className="dval">{selectedClient.seal || '—'}</span></div>
@@ -2467,7 +2498,8 @@ function ClientDatabase() {
                       {selectedClient.columnType && <div className="detail-row"><span className="dlbl">ВПГ</span><span className="dval">{selectedClient.columnType}{selectedClient.columnCount ? ` (${selectedClient.columnCount})` : ''}</span></div>}
                       {!selectedClient.boilerBrand && !selectedClient.stoveType && !selectedClient.columnType && <div className="detail-row"><span className="dlbl">Прилади</span><span className="dval">—</span></div>}
                     </div>
-
+                    
+                    {selectedClient.gasDisconnected && (
                     <div className="detail-info-block">
                       <h4><AlertTriangle size={14} />  Відключення</h4>
                       <div className="detail-row">
@@ -2484,6 +2516,7 @@ function ClientDatabase() {
                         </>
                       )}
                     </div>
+                    )}
 
                     <div style={{display:'flex', gap:'0.5rem', marginTop:'0.5rem'}}>
                       <button className="btn-save" onClick={() => handleEdit(selectedClient)} style={{flex:1}}>✎ Редагувати</button>
@@ -2548,6 +2581,21 @@ function ClientDatabase() {
                       ) : '—'}
                     </span>
                   </div>
+
+                  {selectedClient.dacha && (
+                        <div className="detail-row">
+                          <span className="dlbl">Тип об'єкта</span>
+                          <span className="dval"><span className="badge-chip badge-dacha">Дача</span></span>
+                        </div>
+                      )}
+
+                      {selectedClient.temporaryAbsent && (
+                        <div className="detail-row">
+                          <span className="dlbl">Проживання</span>
+                          <span className="dval"><span className="badge-chip badge-absent">Не проживає</span></span>
+                        </div>
+                      )}
+
                 </div>
 
                 <div className="info-block">
@@ -2557,10 +2605,12 @@ function ClientDatabase() {
                       <div className="detail-row"><span className="dlbl">Марка / Тип</span><span className="dval">{selectedClient.meterBrand || '—'} G{selectedClient.meterSize || '—'}</span></div>
                       <div className="detail-row"><span className="dlbl">№ лічильника</span><span className="dval">{selectedClient.meterNumber}</span></div>
                       <div className="detail-row"><span className="dlbl">Рік випуску</span><span className="dval">{selectedClient.meterYear || '—'}</span></div>
+                      <div className="detail-row"><span className="dlbl">Повірка</span><span className="dval">{selectedClient.verificationDate || '—'}</span></div>
                       <div className="detail-row"><span className="dlbl">Наступна повірка</span><span className="dval">{selectedClient.nextVerificationDate || '—'}</span></div>
+                      <div className="detail-row"><span className="dlbl">Підтип</span><span className="dval">{selectedClient.meterSubtype || '—'}</span></div>
                       <div className="detail-row"><span className="dlbl">Завод-виробник</span><span className="dval" style={{fontSize:'0.7rem'}}>{selectedClient.meterManufacturer || '—'}</span></div>
-                      <div className="detail-row"><span className="dlbl">Група / Підтип</span><span className="dval">{selectedClient.meterGroup || '—'} / {selectedClient.meterSubtype || '—'}</span></div>
-                      <div className="detail-row"><span className="dlbl">Належність</span><span className="dval">{selectedClient.meterOwnership || '—'}</span></div>
+                      <div className="detail-row"><span className="dlbl">Група</span><span className="dval">{selectedClient.meterGroup || '—'}</span></div>
+                      <div className="detail-row"><span className="dlbl">Належність / Серв. орган</span><span className="dval">{selectedClient.meterOwnership || '—'} / {selectedClient.serviceOrg || '—'}</span></div>
                       <div className="detail-row"><span className="dlbl">Розташування</span><span className="dval" style={{fontSize:'0.7rem'}}>{selectedClient.meterLocation || '—'}</span></div>
                       <div className="detail-row"><span className="dlbl">МВНСШ / РСП</span><span className="dval">{selectedClient.mvnssh || '—'} / {selectedClient.rsp || '—'}</span></div>
                       <div className="detail-row"><span className="dlbl">Пломба</span><span className="dval">{selectedClient.seal || '—'}</span></div>
@@ -2576,7 +2626,7 @@ function ClientDatabase() {
                   {selectedClient.columnType && <div className="detail-row"><span className="dlbl">ВПГ</span><span className="dval">{selectedClient.columnType}{selectedClient.columnCount ? ` (${selectedClient.columnCount})` : ''}</span></div>}
                   {!selectedClient.boilerBrand && !selectedClient.stoveType && !selectedClient.columnType && <div className="detail-row"><span className="dlbl">Прилади</span><span className="dval">—</span></div>}
                 </div>
-
+                {selectedClient.gasDisconnected && (
                 <div className="info-block">
                   <h4><AlertTriangle size={14} /> Відключення</h4>
                   <div className="detail-row">
@@ -2593,7 +2643,7 @@ function ClientDatabase() {
                     </>
                   )}
                 </div>
-
+                )}
               </div>
 
               <div className="mobile-actions">
@@ -2643,10 +2693,10 @@ function ClientDatabase() {
                             value={formData.accountNumber} 
                             onChange={(e) => {
                               const val = e.target.value;
-                              setFormData({...formData, accountNumber: val});
-                              checkAccountDuplicate(val);
-                            }} 
-                          />
+                              setFormData(prev => ({ ...prev, accountNumber: val }));
+                              checkAccountDuplicate(val); // Жива перевірка під час вводу по всій БД
+                              }} 
+                            />
                           {accountError && (
                             <div style={{ color: '#ef4444', fontSize: '11px', marginTop: '4px', fontWeight: 600 }}>
                               ⚠️ {accountError}
@@ -2785,7 +2835,7 @@ function ClientDatabase() {
                       <div><label className="form-label">Типорозмір</label><input className="form-input" type="text" value={formData.meterSize} onChange={(e) => setFormData({...formData, meterSize: e.target.value})} /></div>
                       <div><label className="form-label">№ лічильника</label><input className="form-input" type="text" value={formData.meterNumber} onChange={(e) => setFormData({...formData, meterNumber: e.target.value})} /></div>
                       <div><label className="form-label">Рік вип.</label><input className="form-input" type="text" value={formData.meterYear} onChange={(e) => setFormData({...formData, meterYear: e.target.value})} /></div>
-                      <div><label className="form-label">Наст. повірка</label><input className="form-input" type="text" placeholder="ДД.ММ.РРРР" value={formData.nextVerificationDate} onChange={(e) => setFormData({...formData, nextVerificationDate: e.target.value})} /></div>
+                      <div><label className="form-label">Остання повірка</label><input className="form-input" type="text" placeholder="ДД.ММ.РРРР" value={formData.VerificationDate} onChange={(e) => setFormData({...formData, VerificationDate: e.target.value})} /></div>
                     </div>
 
                     <div className="form-grid-row" style={{ gridTemplateColumns: 'repeat(6, 1fr)' }}>

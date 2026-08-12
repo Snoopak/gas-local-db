@@ -429,6 +429,24 @@ const updateClient = async (client) => {
   });
 };
 
+// ⚡ Пакетний запис масиву клієнтів в одній транзакції IndexedDB
+const addClientsBatch = async (clientsBatch) => {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    // Відкриваємо ОДНУ транзакцію 'readwrite' для всього пакета
+    const transaction = db.transaction([STORE_NAME], 'readwrite');
+    const store = transaction.objectStore(STORE_NAME);
+
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+
+    // Всі елементи пакета додаються в один суцільний потік
+    for (let i = 0; i < clientsBatch.length; i++) {
+      store.add(clientsBatch[i]);
+    }
+  });
+};
+
 const deleteClient = async (id) => {
   const db = await openDB();
   return new Promise((resolve, reject) => {
@@ -1459,266 +1477,258 @@ const checkAccountDuplicate = async (accNum) => {
   const [importUrl, setImportUrl] = useState('');
   const [importingFromUrl, setImportingFromUrl] = useState(false);
 
-  const handleImportFromURL = async () => {
-    if (!importUrl.trim()) {
-      showToast('warning', 'Введіть посилання на файл JSON');
-      return;
+// 🎯 Оптимізована функція імпорту з URL
+const handleImportFromURL = async () => {
+  if (!importUrl.trim()) {
+    showToast('warning', 'Введіть посилання на файл JSON');
+    return;
+  }
+  
+  setImportingFromUrl(true);
+  setLoading(true);
+  
+  try {
+    showToast('info', 'Завантаження файлу...', 2000);
+    
+    let finalUrl = importUrl.trim();
+    if (finalUrl.includes('drive.google.com/file')) {
+      const match = finalUrl.match(/\/d\/([^\/]+)/);
+      if (match && match[1]) {
+        finalUrl = `https://drive.google.com/uc?export=download&id=${match[1]}`;
+      }
     }
     
-    setImportingFromUrl(true);
-    setLoading(true);
+    const response = await fetch(finalUrl, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`Помилка завантаження: ${response.status}`);
     
+    const text = await response.text();
+    const data = JSON.parse(text);
+    const clients = Array.isArray(data) ? data : data.clients;
+    
+    if (!clients || clients.length === 0) throw new Error('Файл порожній');
+
+    setImportProgress({ show: true, current: 0, total: clients.length, fileName: 'import-url.json' });
+
+    // Очищаємо стару базу перед масовим імпортом
+    const db = await openDB();
+    const clearTransaction = db.transaction([STORE_NAME], 'readwrite');
+    await new Promise((res, rej) => {
+      const req = clearTransaction.objectStore(STORE_NAME).clear();
+      req.onsuccess = res;
+      req.onerror = rej;
+    });
+
+    // 🚀 ПАКЕТНИЙ ІМПОРТ (BATCHING)
+    const BATCH_SIZE = 500; // Оптимальний розмір пачки для мобілок
+    let currentBatch = [];
+    let importedCount = 0;
+
+    for (let i = 0; i < clients.length; i++) {
+      const c = clients[i];
+      if (!c || !c.fullName || !c.accountNumber) continue;
+
+      currentBatch.push(c);
+      importedCount++;
+
+      // Коли пачка заповнена або це останній елемент — записуємо в БД
+      if (currentBatch.length === BATCH_SIZE || i === clients.length - 1) {
+        await addClientsBatch(currentBatch);
+        currentBatch = []; // Очищаємо буфер
+
+        // Оновлюємо прогрес-бар
+        setImportProgress(prev => ({ ...prev, current: importedCount }));
+
+        // ☕ Ковток повітря для Main Thread (щоб UI перемалювався без затримок)
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+    }
+
+    await loadClients();
+    await loadAllCounts();
+    await loadSettlements();
+    await loadStreets();
+    await loadMeterData();
+
+    showToast('success', `✅ Успішно імпортовано ${importedCount} абонентів!`);
+    setImportUrl('');
+
+  } catch (error) {
+    console.error('Import error:', error);
+    showToast('error', `Помилка імпорту: ${error.message}`);
+  } finally {
+    setImportProgress({ show: false, current: 0, total: 0, fileName: '' });
+    setImportingFromUrl(false);
+    setLoading(false);
+  }
+};
+
+const handleImportExcel = async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  setLoading(true);
+
+  const reader = new FileReader();
+  reader.onload = async (event) => {
     try {
-      showToast('info', 'Завантаження файлу...', 2000);
-      
-      let finalUrl = importUrl.trim();
-      
-      if (finalUrl.includes('drive.google.com/file')) {
-        const match = finalUrl.match(/\/d\/([^\/]+)/);
-        if (match && match[1]) {
-          const fileId = match[1];
-          finalUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
-          showToast('info', '🔄 Конвертую Google Drive URL...', 1000);
-        }
-      }
-      
-      if (finalUrl.includes('dropbox.com')) {
-        finalUrl = finalUrl.replace('?dl=0', '?dl=1').replace('www.dropbox.com', 'dl.dropboxusercontent.com');
-        showToast('info', '🔄 Конвертую Dropbox URL...', 1000);
-      }
-      
-      const response = await fetch(finalUrl, {
-        method: 'GET',
-        cache: 'no-store',
-        headers: {
-          'Accept': 'application/json',
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Помилка завантаження: ${response.status} ${response.statusText}`);
-      }
-      
-      const text = await response.text();
+      const data = new Uint8Array(event.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
-      if (text.length > 5 * 1024 * 1024) {
-        throw new Error('Файл занадто великий');
+      if (!jsonData || jsonData.length === 0) {
+        showToast('warning', 'Файл порожній або має невалідний формат');
+        setLoading(false);
+        return;
       }
 
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        throw new Error('Невалідний JSON');
-      }
-      
-      if (!Array.isArray(data) && (!data || !Array.isArray(data.clients))) {
-        throw new Error('Неправильний формат файлу. Очікується масив клієнтів або об\'єкт з полем "clients"');
-      }
-      
-      const clients = Array.isArray(data) ? data : data.clients;
-      
-      if (clients.length === 0) {
-        throw new Error('Файл не містить клієнтів');
-      }
-      
-      setImportProgress({ show: true, current: 0, total: clients.length, fileName: 'import-url.json' });
-      
-      const db = await openDB();
-      const transaction = db.transaction([STORE_NAME], 'readwrite');
-      const store = transaction.objectStore(STORE_NAME);
-      await new Promise((resolve, reject) => {
-        const request = store.clear();
-        request.onsuccess = () => resolve();
-        request.onerror = () => reject(request.error);
+      setImportProgress({ show: true, current: 0, total: jsonData.length, fileName: file.name });
+
+      const cleanAcc = (val) => {
+        if (!val) return '';
+        return String(val).replace(/\s/g, '').replace(/^0+/, '').toLowerCase();
+      };
+
+      // Отримуємо всіх клієнтів з БД для швидкого мапінгу існуючих
+      const allDbClients = await getAllClients();
+      const existingClientsMap = new Map();
+      allDbClients.forEach(c => {
+        if (c.accountNumber) {
+          existingClientsMap.set(cleanAcc(c.accountNumber), c);
+        }
       });
-      
+
       let imported = 0;
-      for (let i = 0; i < clients.length; i++) {
-        const c = clients[i];
+      let updated = 0;
 
-        if (!c || typeof c.fullName !== 'string' || typeof c.accountNumber !== 'string') {
-          continue;
+      // ⚡ Налаштування пакетного імпорту
+      const BATCH_SIZE = 500; // Оптимальний розмір пачки для мобілок
+      let newClientsBatch = [];
+
+      for (let i = 0; i < jsonData.length; i++) {
+        const row = jsonData[i];
+        const acc = row['Особовий рахунок'] || '';
+        const name = row['ПІБ'] || '';
+
+        const accStr = cleanAcc(acc);
+        if (!accStr || !name.toString().trim()) continue;
+
+        const client = {
+          fullName: (row['ПІБ'] || '').toString().trim(),
+          settlement: (row['Населений пункт'] || '').toString().trim(),
+          streetType: (row['Тип вулиці'] || '').toString().trim(),
+          street: (row['Вулиця'] || '').toString().trim(),
+          building: (row['Будинок'] || '').toString().trim(),
+          buildingLetter: (row['Літера буд.'] || '').toString().trim(),
+          apartment: (row['Квартира'] || '').toString().trim(),
+          apartmentLetter: (row['Літера кв.'] || '').toString().trim(),
+          accountNumber: acc.toString().trim(),
+          eic: (row['EIC'] || '').toString().trim(),
+          phone: (row['Телефон'] || '').toString().trim(),
+          meterBrand: (row['Марка лічильника'] || '').toString().trim(),
+          meterSize: (row['Типорозмір'] || '').toString().trim(),
+          meterNumber: (row['№ лічильника'] || '').toString().trim(),
+          meterYear: (row['Рік випуску'] || '').toString().trim(),
+          verificationDate: (row['Дата повірки'] || '').toString().trim(),
+          nextVerificationDate: (row['Наступна повірка'] || '').toString().trim(),
+          installationDate: (row['Дата встановлення'] || '').toString().trim(),
+          meterLocation: (row['Розташування лічильника'] || '').toString().trim(),
+          meterGroup: (row['Група ліч.'] || '').toString().trim(),
+          meterSubtype: (row['Підтип'] || '').toString().trim(),
+          meterOwnership: (row['Належність'] || '').toString().trim(),
+          serviceOrg: (row['Серв.орган.'] || '').toString().trim(),
+          mvnssh: (row['МВНСШ'] || '').toString().trim(),
+          rsp: (row['РСП'] || '').toString().trim(),
+          seal: (row['Пломба'] || '').toString().trim(),
+          stickerSeal: (row['Стікерна пломба'] || '').toString().trim(),
+          meterManufacturer: (row['Завод виробник'] || '').toString().trim(),
+          boilerBrand: '',
+          boilerCount: '',
+          stoveType: '',
+          stoveCount: '',
+          columnType: '',
+          columnCount: '',
+          area: (row['Площа'] || '').toString().trim(),
+          utilityType: (row['Комун. гос-во'] || '').toString().trim(),
+          utilityGroup: (row['Група'] || '').toString().trim(),
+          grs: (row['ГРС'] || '').toString().trim(),
+          gasDisconnected: (row['Газ вимкнено'] === 'Так' || row['Газ вимкнено'] === true),
+          disconnectMethod: (row['Метод відключення'] || '').toString().trim(),
+          disconnectSeal: (row['Пломба відкл.'] || '').toString().trim(),
+          disconnectDate: (row['Дата відкл.'] || '').toString().trim(),
+          connectDate: (row['Дата підкл.'] || '').toString().trim(),
+          dacha: row['Дача'] === 'Так' || row['Дача'] === true,
+          temporaryAbsent: row['Тимчасово відсутній'] === 'Так' || row['Тимчасово відсутній'] === true
+        };
+
+        const appliancesText = row['Прилади'] || row['прилади'] || row['Обладнання'] || row['обладнання'] || '';
+        if (appliancesText && appliancesText.toString().trim()) {
+          const parsed = parseAppliances(appliancesText.toString());
+          client.boilerBrand = parsed.boilerBrand;
+          client.boilerCount = parsed.boilerCount;
+          client.stoveType = parsed.stoveType;
+          client.stoveCount = parsed.stoveCount;
+          client.columnType = parsed.columnType;
+          client.columnCount = parsed.columnCount;
+        } else {
+          client.boilerBrand = (row['Котел марка'] || '').toString().trim();
+          client.boilerCount = (row['Котел кількість'] || '').toString().trim();
+          client.stoveType = (row['Газова плита тип'] || '').toString().trim();
+          client.stoveCount = (row['Кількість плит'] || '').toString().trim();
+          client.columnType = (row['ВПГ тип'] || '').toString().trim();
+          client.columnCount = (row['Кількість ВПГ'] || '').toString().trim();
         }
 
-        await addClient(c);
-        imported++;
-        if ((i + 1) % 50 === 0 || i === clients.length - 1) {
+        // Логіка розділення: Оновлення чи Додавання нового
+        if (existingClientsMap.has(accStr)) {
+          const existingClient = existingClientsMap.get(accStr);
+          const clientToUpdate = {
+            ...existingClient,
+            ...client,
+            id: existingClient.id
+          };
+          await updateClient(clientToUpdate);
+          updated++;
+        } else {
+          newClientsBatch.push(client);
+          imported++;
+        }
+
+        // 🚀 Зберігаємо пачку нових записів, коли досягли BATCH_SIZE або це останній елемент
+        if (newClientsBatch.length >= BATCH_SIZE || i === jsonData.length - 1) {
+          if (newClientsBatch.length > 0) {
+            await addClientsBatch(newClientsBatch);
+            newClientsBatch = []; // очищаємо буфер
+          }
+
+          // 🎨 Оновлюємо UI прогрес-бару
           setImportProgress(prev => ({ ...prev, current: i + 1 }));
+
+          // ☕ Пауза на 10мс, щоб мобільний браузер встиг перемалювати відсотки на екрані
+          await new Promise(resolve => setTimeout(resolve, 10));
         }
       }
-      
+
       await loadClients();
       await loadAllCounts();
       await loadSettlements();
       await loadStreets();
       await loadMeterData();
-      
-      showToast('success', `✅ Імпортовано ${imported} клієнтів з посилання!`);
-      setImportUrl('');
-      
-      setTimeout(() => {
-        setImportProgress({ show: false, current: 0, total: 0, fileName: '' });
-      }, 2000);
-      
-    } catch (error) {
-      console.error('Import from URL error:', error);
-      showToast('error', `Помилка імпорту: ${error.message}`);
+
       setImportProgress({ show: false, current: 0, total: 0, fileName: '' });
-    } finally {
-      setImportingFromUrl(false);
-      setLoading(false);
+      setIsInitialLoading(false);
+
+      showToast('success', `Готово! Нових: ${imported}, Оновлено: ${updated}`, 5000);
+    } catch (error) {
+      console.error('Import error:', error);
+      setImportProgress({ show: false, current: 0, total: 0, fileName: '' });
+      showToast('error', 'Помилка при імпорті файлу');
     }
+    setLoading(false);
   };
-
-  const handleImportExcel = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    
-    setLoading(true);
-    
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      try {
-        const data = new Uint8Array(event.target.result);
-        const workbook = XLSX.read(data, { type: 'array' });
-        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet);
-        
-        setImportProgress({ show: true, current: 0, total: jsonData.length, fileName: file.name });
-        
-        const cleanAcc = (val) => {
-          if (!val) return '';
-          return String(val).replace(/\s/g, '').replace(/^0+/, '').toLowerCase();
-        };
-
-        const allDbClients = await getAllClients();
-        
-        const existingClientsMap = new Map();
-        allDbClients.forEach(c => {
-          if (c.accountNumber) {
-            existingClientsMap.set(cleanAcc(c.accountNumber), c);
-          }
-        });
-        
-        let imported = 0;
-        let updated = 0;
-        
-        for (let i = 0; i < jsonData.length; i++) {
-          const row = jsonData[i];
-          const acc = row['Особовий рахунок'] || '';
-          const name = row['ПІБ'] || '';
-          
-          const accStr = cleanAcc(acc);
-          
-          if (!accStr || !name.toString().trim()) continue;
-          
-          const client = {
-            fullName: (row['ПІБ'] || '').toString().trim(),
-            settlement: (row['Населений пункт'] || '').toString().trim(),
-            streetType: (row['Тип вулиці'] || '').toString().trim(),
-            street: (row['Вулиця'] || '').toString().trim(),
-            building: (row['Будинок'] || '').toString().trim(),
-            buildingLetter: (row['Літера буд.'] || '').toString().trim(),
-            apartment: (row['Квартира'] || '').toString().trim(),
-            apartmentLetter: (row['Літера кв.'] || '').toString().trim(),
-            accountNumber: acc.toString().trim(),
-            eic: (row['EIC'] || '').toString().trim(),
-            phone: (row['Телефон'] || '').toString().trim(),
-            meterBrand: (row['Марка лічильника'] || '').toString().trim(),
-            meterSize: (row['Типорозмір'] || '').toString().trim(),
-            meterNumber: (row['№ лічильника'] || '').toString().trim(),
-            meterYear: (row['Рік випуску'] || '').toString().trim(),
-            verificationDate: (row['Дата повірки'] || '').toString().trim(),
-            nextVerificationDate: (row['Наступна повірка'] || '').toString().trim(),
-            installationDate: (row['Дата встановлення'] || '').toString().trim(),
-            meterLocation: (row['Розташування лічильника'] || '').toString().trim(),
-            meterGroup: (row['Група ліч.'] || '').toString().trim(),
-            meterSubtype: (row['Підтип'] || '').toString().trim(),
-            meterOwnership: (row['Належність'] || '').toString().trim(),
-            serviceOrg: (row['Серв.орган.'] || '').toString().trim(),
-            mvnssh: (row['МВНСШ'] || '').toString().trim(),
-            rsp: (row['РСП'] || '').toString().trim(),
-            seal: (row['Пломба'] || '').toString().trim(),
-            stickerSeal: (row['Стікерна пломба'] || '').toString().trim(),
-            meterManufacturer: (row['Завод виробник'] || '').toString().trim(),
-            boilerBrand: '',
-            boilerCount: '',
-            stoveType: '',
-            stoveCount: '',
-            columnType: '',
-            columnCount: '',
-            area: (row['Площа'] || '').toString().trim(),
-            utilityType: (row['Комун. гос-во'] || '').toString().trim(),
-            utilityGroup: (row['Група'] || '').toString().trim(),
-            grs: (row['ГРС'] || '').toString().trim(),
-            gasDisconnected: (row['Газ вимкнено'] === 'Так' || row['Газ вимкнено'] === true),
-            disconnectMethod: (row['Метод відключення'] || '').toString().trim(),
-            disconnectSeal: (row['Пломба відкл.'] || '').toString().trim(),
-            disconnectDate: (row['Дата відкл.'] || '').toString().trim(),
-            connectDate: (row['Дата підкл.'] || '').toString().trim(),
-            dacha: row['Дача'] === 'Так' || row['Дача'] === true,
-            temporaryAbsent: row['Тимчасово відсутній'] === 'Так' || row['Тимчасово відсутній'] === true
-          };
-          
-          const appliancesText = row['Прилади'] || row['прилади'] || row['Обладнання'] || row['обладнання'] || '';
-          if (appliancesText && appliancesText.toString().trim()) {
-            const parsed = parseAppliances(appliancesText.toString());
-            client.boilerBrand = parsed.boilerBrand;
-            client.boilerCount = parsed.boilerCount;
-            client.stoveType = parsed.stoveType;
-            client.stoveCount = parsed.stoveCount;
-            client.columnType = parsed.columnType;
-            client.columnCount = parsed.columnCount;
-          } else {
-            client.boilerBrand = (row['Котел марка'] || '').toString().trim();
-            client.boilerCount = (row['Котел кількість'] || '').toString().trim();
-            client.stoveType = (row['Газова плита тип'] || '').toString().trim();
-            client.stoveCount = (row['Кількість плит'] || '').toString().trim();
-            client.columnType = (row['ВПГ тип'] || '').toString().trim();
-            client.columnCount = (row['Кількість ВПГ'] || '').toString().trim();
-          }
-          
-          if (existingClientsMap.has(accStr)) {
-            const existingClient = existingClientsMap.get(accStr);
-            const clientToUpdate = {
-              ...existingClient,   
-              ...client,           
-              id: existingClient.id 
-            };
-            await updateClient(clientToUpdate);
-            updated++;
-          } else {
-            client.id = Date.now() + Math.random(); 
-            await addClient(client);
-            imported++;
-          }
-          
-          if ((i + 1) % 50 === 0 || i === jsonData.length - 1) {
-            setImportProgress(prev => ({ ...prev, current: i + 1 }));
-          }
-        }
-        
-        await loadClients();
-        await loadAllCounts();
-        await loadSettlements();
-        await loadStreets();
-        await loadMeterData();
-        
-        setImportProgress({ show: false, current: 0, total: 0, fileName: '' });
-        setIsInitialLoading(false); 
-        
-        showToast('success', `Готово! Нових: ${imported}, Оновлено: ${updated}`, 5000);
-      } catch (error) {
-        console.error('Import error:', error);
-        setImportProgress({ show: false, current: 0, total: 0, fileName: '' });
-        showToast('error', 'Помилка при імпорті файлу');
-      }
-      setLoading(false);
-    };
-    reader.readAsArrayBuffer(file);
-    e.target.value = '';
-  };
+  reader.readAsArrayBuffer(file);
+  e.target.value = '';
+};
 
   const formatAppliances = (client) => {
     const parts = [];
@@ -2005,7 +2015,16 @@ const checkAccountDuplicate = async (accNum) => {
               <div className="navbar-logo-icon"><Database size={15} /></div>
               <div className="nav-title-group">
                 <span className="navbar-title">Абоненти газу</span>
-                <span className="nav-subtitle">Всього абонентів: {!isInitialLoading && <strong className="count-fade-in">{totalCount}</strong>}</span>
+                <span className="nav-subtitle">
+                  {totalCount > 0 ? (
+                    <>   Всього абонентів: {!isInitialLoading && <strong className="count-fade-in">{totalCount}</strong>}
+                    </>
+                    ) : (
+                    <>
+                    Абоненти: <strong style={{ color: '#ef4444' }}>Відсутні</strong>
+                    </>
+                    )}
+                  </span>
               </div>
             </div>
             <div className="navbar-actions">
@@ -2099,7 +2118,7 @@ const checkAccountDuplicate = async (accNum) => {
           </div>
 
           {/* ===== ФІЛЬТРИ ===== */}
-          <div className="filters-panel">
+          <div className={`filters-panel ${totalCount === 0 ? 'disabled' : ''}`}>
             <div className="filters-panel-compact">
               <div className="search-row-compact">
                 <div className="search-box" style={{ flex: 1 }}>
@@ -2123,6 +2142,31 @@ const checkAccountDuplicate = async (accNum) => {
                   <SlidersHorizontal size={15} />
                   <span className="hidden sm:inline">Фільтри</span>
                 </button>
+                {hasActiveFilters && (
+                <button 
+                  className="btn-reset-icon"
+                  title="Скинути всі фільтри"
+                  onClick={() => {
+                    setSearchTerm(''); setDebouncedSearchTerm('');
+                    setSelectedSettlement([]); setSelectedStreet([]);
+                    setSelectedMeterBrand([]); setSelectedMeterSize([]);
+                    setSelectedMeterYear([]); setSelectedMeterGroups([]);
+                    setFilterDisconnected(false); setFilterDacha(false);
+                    setFilterAbsent(false); setFilterConnected(false);
+                    setFilterBuilding(''); setFilterApartment('');
+                    setDebouncedBuilding(''); setDebouncedApartment('');
+                    setSelectedGrs([]);
+                    setMeterYearFrom(''); setMeterYearTo('');
+                    setVerificationYearFrom(''); setVerificationYearTo('');
+                    setFilterSeal(''); setFilterStickerSeal('');
+
+                    setCurrentPage(0); setHasMore(true);
+                    clearScrollState(); loadClients();
+                   }}
+                  >
+                  <X size={16} />
+                </button>
+                )}
               </div>
 
             </div>
@@ -2235,54 +2279,33 @@ const checkAccountDuplicate = async (accNum) => {
             <div className="status-group">
               <span className="status-label">Статус:</span>
               
-              <button className={`status-chip status-off ${filterDisconnected ? 'active' : ''}`} onClick={() => setFilterDisconnected(!filterDisconnected)}>
-                <span className="chip-dot"></span>
-                <span className="chip-text">Відключений</span>
-                <span className={`chip-count ${!isInitialLoading && statusCounts.disconnected > 0 ? 'chip-count-visible' : 'chip-count-placeholder'}`}>
-                  ({isInitialLoading ? '000' : statusCounts.disconnected})
-                </span>
-              </button>
-
-              <button className={`status-chip status-dacha ${filterDacha ? 'active' : ''}`} onClick={() => setFilterDacha(!filterDacha)}>
-                <span className="chip-dot"></span>
-                <span className="chip-text">Дача</span>
-                <span className={`chip-count ${!isInitialLoading && statusCounts.dacha > 0 ? 'chip-count-visible' : 'chip-count-placeholder'}`}>
-                  ({isInitialLoading ? '0000' : statusCounts.dacha})
-                </span>
-              </button>
-
-              <button className={`status-chip status-absent ${filterAbsent ? 'active' : ''}`} onClick={() => setFilterAbsent(!filterAbsent)}>
-                <span className="chip-dot"></span>
-                <span className="chip-text">Не проживає</span>
-                <span className={`chip-count ${!isInitialLoading && statusCounts.absent > 0 ? 'chip-count-visible' : 'chip-count-placeholder'}`}>
-                  ({isInitialLoading ? '000' : statusCounts.absent})
-                </span>
-              </button>
-
-              <button className={`status-chip status-on ${filterConnected ? 'active' : ''}`} onClick={() => setFilterConnected(!filterConnected)}>
-                <span className="chip-dot"></span>
-                <span className="chip-text">Газ включений</span>
-              </button>
-
-              {hasActiveFilters && (
-                <button className="btn-reset-pill" onClick={() => {
-                  setSearchTerm(''); setDebouncedSearchTerm('');
-                  setSelectedSettlement([]); setSelectedStreet([]);
-                  setSelectedMeterBrand([]); setSelectedMeterSize([]);
-                  setSelectedMeterYear([]); setSelectedMeterGroups([]);
-                  setFilterDisconnected(false); setFilterDacha(false);
-                  setFilterAbsent(false); setFilterConnected(false);
-                  setFilterBuilding(''); setFilterApartment('');
-                  setDebouncedBuilding(''); setDebouncedApartment('');
-                  setSelectedGrs([]);
-                  setMeterYearFrom(''); setMeterYearTo('');
-                  setVerificationYearFrom(''); setVerificationYearTo('');
-                  setFilterSeal(''); setFilterStickerSeal('');
-
-                  setCurrentPage(0); setHasMore(true);
-                  clearScrollState(); loadClients();
-                }}><X size={12} /> Скинути</button>
-              )}
+              <div className="status-chips-scroll">
+                <button className={`status-chip status-off ${filterDisconnected ? 'active' : ''}`} onClick={() => setFilterDisconnected(!filterDisconnected)}>
+                  <span className="chip-dot"></span>
+                  <span className="chip-text">Відключений</span>
+                  <span className={`chip-count ${!isInitialLoading && statusCounts.disconnected > 0 ? 'chip-count-visible' : 'chip-count-placeholder'}`}>
+                    ({isInitialLoading ? '000' : statusCounts.disconnected})
+                  </span>
+                </button>
+                <button className={`status-chip status-dacha ${filterDacha ? 'active' : ''}`} onClick={() => setFilterDacha(!filterDacha)}>
+                  <span className="chip-dot"></span>
+                  <span className="chip-text">Дача</span>
+                  <span className={`chip-count ${!isInitialLoading && statusCounts.dacha > 0 ? 'chip-count-visible' : 'chip-count-placeholder'}`}>
+                    ({isInitialLoading ? '0000' : statusCounts.dacha})
+                  </span>
+                </button>
+                <button className={`status-chip status-absent ${filterAbsent ? 'active' : ''}`} onClick={() => setFilterAbsent(!filterAbsent)}>
+                  <span className="chip-dot"></span>
+                  <span className="chip-text">Не проживає</span>
+                  <span className={`chip-count ${!isInitialLoading && statusCounts.absent > 0 ? 'chip-count-visible' : 'chip-count-placeholder'}`}>
+                    ({isInitialLoading ? '000' : statusCounts.absent})
+                  </span>
+                </button>
+                <button className={`status-chip status-on ${filterConnected ? 'active' : ''}`} onClick={() => setFilterConnected(!filterConnected)}>
+                  <span className="chip-dot"></span>
+                  <span className="chip-text">Газ включений</span>
+                </button>
+              </div>
             </div>
           </div>
           </div>
@@ -2421,7 +2444,7 @@ const checkAccountDuplicate = async (accNum) => {
           </div>
 
           {/* ПРАВА ПАНЕЛЬ — ДЕТАЛІ (ДЕСКТОП) */}
-          {!isMobile() && (
+          {!isMobile() && totalCount > 0 && (
             <div className="detail-panel">
               {selectedClient ? (
                 <>

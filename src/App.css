@@ -586,8 +586,14 @@ body.dark .qa-icon-box.qa-orange {
   background: #f9fafb;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
-  padding: 7px 12px;
+  padding: 0 12px;
+  /* Прибрали вертикальний padding, щоб height рахувався чітко */
   height: 36px;
+  flex: 1;
+  min-width: 0;
+  /* Запобігає розриву ширини на мобілках */
+  box-sizing: border-box;
+  /* Гарантує, що рамка і падінги не збільшують 36px */
 }
 .search-box input {
   flex: 1;
@@ -1439,11 +1445,70 @@ body.dark .sk-meter-brand {
 .empty-search-title { font-size: 14px; font-weight: 500; color: #6b7280; }
 .empty-search-hint { font-size: 13px; color: #9ca3af; margin-top: 4px; }
 
-.empty-db { text-align: center; padding: 64px 16px; }
-.empty-db-icon { font-size: 48px; margin-bottom: 16px; }
-.empty-db-title { font-size: 16px; font-weight: 600; color: #1f2937; margin-bottom: 8px; }
-.empty-db-hint { font-size: 13px; color: #6b7280; margin-bottom: 20px; }
-.empty-db-btns { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.empty-db {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 64px 16px;
+  min-height: 380px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.empty-db-icon {
+  font-size: 56px;
+  margin-bottom: 16px;
+  /* М'яка мікро-анімація для іконки */
+  animation: floatIcon 3s ease-in-out infinite;
+}
+
+@keyframes floatIcon {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+.empty-db-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 6px;
+}
+
+.empty-db-hint {
+  font-size: 14px;
+  color: #64748b;
+  margin-bottom: 24px;
+}
+
+.empty-db-btns {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.filters-panel.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+  /* Забороняє будь-які кліки, ховер та ввід */
+  user-select: none;
+  cursor: disabled;
+}
+/* Підтримка темної теми */
+body.dark .empty-db-title {
+  color: #f8fafc;
+}
+
+body.dark .empty-db-hint {
+  color: #94a3b8;
+}
 
 /* ===== DROPDOWN ФІЛЬТР ===== */
 .dropdown-wrap { position: relative; }
@@ -2547,14 +2612,16 @@ body.dark .filters-panel-compact {
   display: flex;
   gap: 8px;
   align-items: center;
+  width: 100%;
 }
 
 .btn-toggle-filters {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 14px;
-  border-radius: 10px;
+  padding: 0 14px;
+  height: 36px;
+  border-radius: 8px;
   border: 1px solid #e2e8f0;
   background: #f8fafc;
   color: #334155;
@@ -2563,7 +2630,9 @@ body.dark .filters-panel-compact {
   cursor: pointer;
   white-space: nowrap;
   transition: all 0.2s;
-  height: 36px;
+  flex-shrink: 0;
+  /* Не стискається */
+  box-sizing: border-box;
 }
 
 .btn-toggle-filters.has-active {
@@ -2590,6 +2659,67 @@ body.dark .btn-toggle-filters.has-active {
   padding: 1px 6px;
   border-radius: 10px;
 }
+
+/* Кнопка-іконка скидання фільтрів у шапці */
+.btn-reset-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  border-radius: 8px;
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #dc2626;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  transition: all 0.15s ease-in-out;
+  animation: popIn 0.15s ease-out;
+}
+
+.btn-reset-icon:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #b91c1c;
+}
+
+.btn-reset-icon:active {
+  transform: scale(0.93);
+}
+
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Підтримка темної теми (body.dark) */
+-------------------------------------------------------------------------- */
+body.dark .search-box {
+  background: #1e293b;
+  border-color: #334155;
+}
+
+body.dark .btn-reset-icon {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #f87171;
+}
+
+body.dark .btn-reset-icon:hover {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #fca5a5;
+}
+
 
 /* ===== ШТОРКА (DRAWER) ===== */
 .drawer-backdrop {
@@ -2834,6 +2964,7 @@ body.dark .drawer-or-divider::after {
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+  width: 100%;
 }
 
 /* Лівий блок: Статистика */
@@ -2890,57 +3021,48 @@ body.dark .drawer-or-divider::after {
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
+}
+.status-chips-scroll {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 /* Мобільна адаптація: скрол в один рядок */
 @media (max-width: 768px) {
   .status-toolbar-left {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: nowrap; /* 👈 забороняємо переноси на новий рядок */
-    overflow-x: auto;  /* 👈 вмикаємо горизонтальний скрол */
-    -webkit-overflow-scrolling: touch; /* плавний скрол на iOS */
-    scrollbar-width: none; /* ховаємо дефолтний скролбар для Firefox */
+    flex-wrap: nowrap;
+    /* Сам тулбар не переноситься */
   }
 
-  .status-toolbar-left::-webkit-scrollbar {
-    display: none; /* ховаємо скролбар для Chrome/Safari */
+  /* Скролиться ТІЛЬКИ цей блок із кнопками */
+  .status-chips-scroll {
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    /* Плавність на iOS */
+    scrollbar-width: none;
+    /* Ховаємо скроллбар Firefox */
+    padding-right: 4px;
+    /* Мікро-відступ в кінці скролу */
   }
 
-  /* Захищаємо елементи від стискання */
-  .stats-left-group,
-  .toolbar-v-divider,
-  .status-group {
+  .status-chips-scroll::-webkit-scrollbar {
+    display: none;
+    /* Ховаємо скроллбар Chrome/Safari */
+  }
+
+  /* Забороняємо кнопкам стискатися */
+  .status-chips-scroll .status-chip {
     flex-shrink: 0;
   }
 
-  .status-chip {
-    white-space: nowrap; /* щоб текст статусів не рвався */
+  .status-label {
+    flex-shrink: 0;
+    /* Напис "Статус:" теж фіксований */
   }
 }
-
-/* Кнопка Скинути */
-.btn-reset-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-  border-radius: 6px;
-  border: none;
-  background: #fef2f2;
-  color: #ef4444;
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-  margin-left: 4px;
-  transition: background 0.15s ease;
-}
-
-.btn-reset-pill:hover {
-  background: #fee2e2;
-}
-
 /* Підтримка темної теми */ 
 body.dark .stats-left-group {
   background: #0f172a;
@@ -2955,18 +3077,6 @@ body.dark .stats-item strong {
 body.dark .toolbar-v-divider {
   background: #334155;
 }
-
-
-body.dark .btn-reset-pill {
-  background: rgba(239, 68, 68, 0.15);
-  color: #f87171;
-}
-
-body.dark .btn-reset-pill:hover {
-  background: rgba(239, 68, 68, 0.25);
-}
-
-
 /* =========================================
    ПОВНЕ ОНОВЛЕННЯ DARK MODE (ДЕСКТОП + МОБІЛКА)
    ========================================= */

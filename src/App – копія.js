@@ -5,96 +5,108 @@ import './App.css';
 import {METER_CATALOG, METER_SIZES, METER_SUBTYPE, METER_LOCATION, METER_OWNERSHIP, SERVICE_ORG, METER_GROUP, METER_MANUFACTURER, U_STREET_TYPE} from './data';
 
 // ⭐ ПАРСЕР ПРИЛАДІВ: розбирає текст типу "(Котел) АОГВ-16 - 1шт.; (Плита газова) ПГ-4 - 1шт.;"
-const parseAppliances = (text) => {
-  const result = {
-    boilerBrand: '', boilerCount: '',
-    stoveType: '', stoveCount: '',
-    columnType: '', columnCount: ''
-  };
+ // =========================================================================
+    // ОНОВЛЕНИЙ ПАРСЕР З ДОДАВАННЯМ ❌
+    // =========================================================================
+    const parseAppliances = (text) => {
+      const result = {
+        boilerBrand: '', boilerCount: '',
+        stoveType: '', stoveCount: '',
+        columnType: '', columnCount: ''
+      };
 
-  if (!text || typeof text !== 'string') return result;
+      if (!text || typeof text !== 'string') return result;
 
-  const items = text.split(';').map(s => s.trim()).filter(s => s);
+      const items = text.split(';').map(s => s.trim()).filter(s => s);
 
-  const boilers = [];
-  const stoves = [];
-  const columns = [];
+      const boilers = [];
+      const stoves = [];
+      const columns = [];
 
-  items.forEach(item => {
-    const isDisconnected = item.toUpperCase().includes('ВІДКЛ');
-    const icon = isDisconnected ? ' ❌' : '';
+      items.forEach(item => {
+        // 1. Перевіряємо, чи є в цьому блоці слово ВІДКЛ
+        const isDisconnected = item.toUpperCase().includes('ВІДКЛ');
+        const icon = isDisconnected ? ' ❌' : ''; // Готуємо іконку
 
-    if (item.includes('(Котел)') || item.includes('(котел)')) {
-      const match = item.match(/\((?:Котел|котел)\)\s*(.+?)(?:\s*-\s*(\d+)\s*шт\.?)?$/i);
-      if (match && match[1]) {
-        const boilerInfo = match[1].trim() + icon; 
-        const count = match[2] ? parseInt(match[2], 10) : 1; 
-        boilers.push({ name: boilerInfo, count: count });
-      }
-    }
-    
-    if (item.includes('(Плита') || item.includes('(плита)') || item.includes('ПГ')) {
-      const match = item.match(/\((?:Плита.*?|плита.*?)\)\s*(.+?)(?:\s*-\s*(\d+)\s*шт\.?)?$/i);
-      if (match && match[1]) {
-        const count = match[2] ? parseInt(match[2], 10) : 1;
-        for (let i = 0; i < count; i++) {
-          stoves.push(match[1].trim() + icon);
+        // Котел
+        if (item.includes('(Котел)') || item.includes('(котел)')) {
+          const match = item.match(/\((?:Котел|котел)\)\s*(.+?)(?:\s*-\s*(\d+)\s*шт\.?)?$/i);
+          if (match && match[1]) {
+            // 2. Додаємо іконку до назви
+            const boilerInfo = match[1].trim() + icon; 
+            const count = match[2] ? parseInt(match[2]) : 1; 
+            boilers.push({ name: boilerInfo, count: count });
+          }
         }
-      } else {
-        const pgMatch = item.match(/ПГ[- ]?(\d+)/i);
-        if (pgMatch) {
-          stoves.push('ПГ-' + pgMatch[1] + icon);
+        
+        // Плита
+        if (item.includes('(Плита') || item.includes('(плита)') || item.includes('ПГ')) {
+          const match = item.match(/\((?:Плита.*?|плита.*?)\)\s*(.+?)(?:\s*-\s*(\d+)\s*шт\.?)?$/i);
+          if (match && match[1]) {
+            const count = match[2] ? parseInt(match[2]) : 1;
+            for (let i = 0; i < count; i++) {
+              stoves.push(match[1].trim() + icon); // Додаємо іконку
+            }
+          } else {
+            const pgMatch = item.match(/ПГ[- ]?(\d+)/i);
+            if (pgMatch) {
+              stoves.push('ПГ-' + pgMatch[1] + icon); // Додаємо іконку
+            }
+          }
         }
-      }
-    }
-    
-    if (item.includes('(Колонка)') || item.includes('(колонка)') || item.includes('(ВПГ)') || item.includes('(впг)')) {
-      const match = item.match(/\((?:Колонка|колонка|ВПГ|впг)\)\s*(.+?)(?:\s*-\s*(\d+)\s*шт\.?)?$/i);
-      if (match && match[1]) {
-        const count = match[2] ? parseInt(match[2], 10) : 1;
-        for (let i = 0; i < count; i++) {
-          columns.push(match[1].trim() + icon);
+        
+        // ВПГ/Колонка
+        if (item.includes('(Колонка)') || item.includes('(колонка)') || item.includes('(ВПГ)') || item.includes('(впг)')) {
+          const match = item.match(/\((?:Колонка|колонка|ВПГ|впг)\)\s*(.+?)(?:\s*-\s*(\d+)\s*шт\.?)?$/i);
+          if (match && match[1]) {
+            const count = match[2] ? parseInt(match[2]) : 1;
+            for (let i = 0; i < count; i++) {
+              columns.push(match[1].trim() + icon); // Додаємо іконку
+            }
+          }
         }
+      });
+
+      // Об'єднуємо котли
+      if (boilers.length > 0) {
+        result.boilerBrand = boilers.map(b => b.name).join('; ');
+        const totalCount = boilers.reduce((sum, b) => sum + b.count, 0);
+        result.boilerCount = `${totalCount}шт.`;
       }
-    }
-  });
 
-  if (boilers.length > 0) {
-    result.boilerBrand = boilers.map(b => b.name).join('; ');
-    const totalCount = boilers.reduce((sum, b) => sum + b.count, 0);
-    result.boilerCount = `${totalCount}шт.`;
-  }
+      // Об'єднуємо плити
+      if (stoves.length > 0) {
+        const stoveCounts = {};
+        stoves.forEach(s => {
+          stoveCounts[s] = (stoveCounts[s] || 0) + 1;
+        });
+        
+        const uniqueStoves = Object.keys(stoveCounts);
+        result.stoveType = uniqueStoves.map(s => 
+          stoveCounts[s] > 1 ? `${s} (${stoveCounts[s]}шт)` : s
+        ).join(', ');
+        result.stoveCount = stoves.length.toString() + 'шт.';
+      }
 
-  if (stoves.length > 0) {
-    const stoveCounts = {};
-    stoves.forEach(s => {
-      stoveCounts[s] = (stoveCounts[s] || 0) + 1;
-    });
-    
-    const uniqueStoves = Object.keys(stoveCounts);
-    result.stoveType = uniqueStoves.map(s => 
-      stoveCounts[s] > 1 ? `${s} (${stoveCounts[s]}шт)` : s
-    ).join(', ');
-    result.stoveCount = stoves.length.toString() + 'шт.';
-  }
+      // Об'єднуємо колонки
+      if (columns.length > 0) {
+        const columnCounts = {};
+        columns.forEach(c => {
+          columnCounts[c] = (columnCounts[c] || 0) + 1;
+        });
+        
+        const uniqueColumns = Object.keys(columnCounts);
+        result.columnType = uniqueColumns.map(c => 
+          columnCounts[c] > 1 ? `${c} (${columnCounts[c]}шт)` : c
+        ).join(', ');
+        result.columnCount = columns.length.toString() + 'шт.';
+      }
 
-  if (columns.length > 0) {
-    const columnCounts = {};
-    columns.forEach(c => {
-      columnCounts[c] = (columnCounts[c] || 0) + 1;
-    });
-    
-    const uniqueColumns = Object.keys(columnCounts);
-    result.columnType = uniqueColumns.map(c => 
-      columnCounts[c] > 1 ? `${c} (${columnCounts[c]}шт)` : c
-    ).join(', ');
-    result.columnCount = columns.length.toString() + 'шт.';
-  }
-
-  return result;
-};
+      return result;
+    };
 
 // ==================== ALERT SYSTEM ====================
+// Context для Alert System
 const AlertContext = createContext();
 
 export const useAlert = () => {
@@ -105,6 +117,7 @@ export const useAlert = () => {
   return context;
 };
 
+// Progress Toast Component
 const ProgressToast = ({ type, message, duration, onClose }) => {
   const [isVisible, setIsVisible] = useState(true);
 
@@ -166,6 +179,7 @@ const ProgressToast = ({ type, message, duration, onClose }) => {
   );
 };
 
+// Modal Component
 const Modal = ({ type, title, message, onConfirm, onCancel, onClose }) => {
   const colors = {
     success: 'text-green-600',
@@ -259,6 +273,7 @@ const Modal = ({ type, title, message, onConfirm, onCancel, onClose }) => {
   );
 };
 
+// Snackbar Component
 const Snackbar = ({ message, actionText, onAction, onClose }) => {
   const [isVisible, setIsVisible] = useState(true);
 
@@ -299,6 +314,7 @@ const Snackbar = ({ message, actionText, onAction, onClose }) => {
   );
 };
 
+// Alert Provider Component
 const AlertProvider = ({ children }) => {
   const [toasts, setToasts] = useState([]);
   const [modal, setModal] = useState(null);
@@ -346,6 +362,7 @@ const AlertProvider = ({ children }) => {
     <AlertContext.Provider value={value}>
       {children}
       
+      {/* Toast Container */}
       <div className="fixed top-4 right-4 z-50 space-y-2">
         {toasts.map(toast => (
           <ProgressToast
@@ -358,6 +375,7 @@ const AlertProvider = ({ children }) => {
         ))}
       </div>
 
+      {/* Modal */}
       {modal && (
         <Modal
           type={modal.type}
@@ -369,6 +387,7 @@ const AlertProvider = ({ children }) => {
         />
       )}
 
+      {/* Snackbar */}
       {snackbar && (
         <Snackbar
           message={snackbar.message}
@@ -380,6 +399,8 @@ const AlertProvider = ({ children }) => {
     </AlertContext.Provider>
   );
 };
+// ==================== END ALERT SYSTEM ====================
+
 
 // IndexedDB ініціалізація
 const DB_NAME = 'ClientsDB';
@@ -405,6 +426,26 @@ const openDB = () => {
       }
     };
   });
+};
+
+// Функція для розбиття та форматування телефонів
+const formatPhones = (phoneString) => {
+  if (!phoneString) return null;
+  
+  // Розбиваємо по комі та прибираємо пробіли
+  const phones = phoneString.split(',').map(p => p.trim()).filter(p => p);
+  
+  return phones.map((phone, index) => (
+    <span key={index}>
+      <a 
+        href={`tel:${phone.replace(/[^\d+]/g, '')}`} 
+        className="text-blue-600 hover:text-blue-800 hover:underline"
+      >
+        {phone}
+      </a>
+      {index < phones.length - 1 && ', '}
+    </span>
+  ));
 };
 
 const addClient = async (client) => {
@@ -482,7 +523,17 @@ const getClientsByPage = async (page, pageSize) => {
   });
 };
 
-// ⭐ ВИПРАВЛЕНО: Пошукова функція зі строгим співставленням та перевіркою типів
+const countClients = async () => {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([STORE_NAME], 'readonly');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.count();
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+};
+
 const searchClients = async (
   searchTerm, settlements, streets, meterBrands, meterSizes, meterYears, meterGroups, 
   filterDisconnected, filterDacha, filterAbsent, filterConnected, filterBuilding, filterApartment,
@@ -507,18 +558,20 @@ const searchClients = async (
           client.meterNumber?.toLowerCase().includes(searchTerm.toLowerCase());
         
         const matchesSettlement = settlements.length === 0 || settlements.includes(client.settlement);
-        const clientStreetName = [client.streetType, client.street].filter(Boolean).join(' ');
+        const clientStreetName = [client.streetType, client.street].filter(s => s).join(' ');
         const matchesStreet = streets.length === 0 || streets.includes(clientStreetName);
 
         const matchesBuilding = !filterBuilding ||
-          (String(client.building || '') + String(client.buildingLetter || '')).toLowerCase().includes(filterBuilding.toLowerCase().trim());
+          (String(client.building || '') + String(client.buildingLetter || '')).toLowerCase() === filterBuilding.toLowerCase();
 
         const matchesApartment = !filterApartment ||
-          (String(client.apartment || '') + String(client.apartmentLetter || '')).toLowerCase().includes(filterApartment.toLowerCase().trim());
+          (String(client.apartment || '') + String(client.apartmentLetter || '')).toLowerCase() === filterApartment.toLowerCase();
         
         const matchesMeterBrand = meterBrands.length === 0 || meterBrands.includes(client.meterBrand);
         const matchesMeterSize = meterSizes.length === 0 || meterSizes.includes(client.meterSize);
         const matchesMeterGroup = meterGroups.length === 0 || meterGroups.includes(client.meterGroup);
+
+        // Фільтр по точково обраним рокам
         const matchesMeterYear = meterYears.length === 0 || meterYears.includes(client.meterYear);
 
         // Фільтр ГРС
@@ -526,14 +579,14 @@ const searchClients = async (
         const matchesGrs = selectedGrs.length === 0 || (clientGrs !== '' && selectedGrs.includes(clientGrs));
 
         // Перевірка діапазону років випуску
-        const year = client.meterYear ? parseInt(client.meterYear, 10) : null;
-        const matchesYearFrom = !meterYearFrom || (year !== null && !isNaN(year) && year >= parseInt(meterYearFrom, 10));
-        const matchesYearTo = !meterYearTo || (year !== null && !isNaN(year) && year <= parseInt(meterYearTo, 10));
+        const year = client.meterYear ? parseInt(client.meterYear) : null;
+        const matchesYearFrom = !meterYearFrom || (year !== null && !isNaN(year) && year >= parseInt(meterYearFrom));
+        const matchesYearTo = !meterYearTo || (year !== null && !isNaN(year) && year <= parseInt(meterYearTo));
 
         // Перевірка діапазону років повірки
-        const verYear = client.nextVerificationDate ? parseInt(client.nextVerificationDate.split('.').pop(), 10) : null;
-        const matchesVerYearFrom = !verificationYearFrom || (verYear !== null && !isNaN(verYear) && verYear >= parseInt(verificationYearFrom, 10));
-        const matchesVerYearTo = !verificationYearTo || (verYear !== null && !isNaN(verYear) && verYear <= parseInt(verificationYearTo, 10));
+        const verYear = client.nextVerificationDate ? parseInt(client.nextVerificationDate.split('.').pop()) : null;
+        const matchesVerYearFrom = !verificationYearFrom || (verYear !== null && !isNaN(verYear) && verYear >= parseInt(verificationYearFrom));
+        const matchesVerYearTo = !verificationYearTo || (verYear !== null && !isNaN(verYear) && verYear <= parseInt(verificationYearTo));
 
         // Пломби
         const matchesSeal = !filterSeal || 
@@ -592,6 +645,7 @@ const searchClientsPaginated = async (
 };
 
 function ClientDatabase() {
+  // ⭐ КОНФІГУРАЦІЯ
   const CONFIG = {
     PAGE_SIZE: 50,
     DEBOUNCE_DELAY: 500,
@@ -600,23 +654,24 @@ function ClientDatabase() {
     SCROLL_SAVE_DEBOUNCE: 200
   };
   
+  // ⭐ Alert System
   const { showToast, showModal } = useAlert();
   
   const [clients, setClients] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSettlement, setSelectedSettlement] = useState([]);
   const [selectedStreet, setSelectedStreet] = useState([]);
-
+  // ⭐ НОВІ ФІЛЬТРИ СТАТУСІВ
   const [filterDisconnected, setFilterDisconnected] = useState(false);
   const [filterDacha, setFilterDacha] = useState(false);
   const [filterAbsent, setFilterAbsent] = useState(false);
   const [filterConnected, setFilterConnected] = useState(false);
-
+  // ⭐ ФІЛЬТРИ АДРЕСИ: будинок і квартира
   const [filterBuilding, setFilterBuilding] = useState('');
   const [filterApartment, setFilterApartment] = useState('');
-
+  // 🟢 Відкриття/закриття шторки фільтрів
   const [showFilterDrawer, setShowFilterDrawer] = useState(false);
-
+  // 🟢 Нові фільтри
   const [selectedGrs, setSelectedGrs] = useState([]);
   const [meterYearFrom, setMeterYearFrom] = useState('');
   const [meterYearTo, setMeterYearTo] = useState('');
@@ -625,9 +680,14 @@ function ClientDatabase() {
   const [filterSeal, setFilterSeal] = useState('');
   const [filterStickerSeal, setFilterStickerSeal] = useState('');
 
+  // ⭐ Dropdown швидких дій
   const [showQuickActions, setShowQuickActions] = useState(false);
   const [showImportUrlModal, setShowImportUrlModal] = useState(false);
   
+  // DEBUG: Логування стану модалки
+  useEffect(() => {
+    console.log('🟣 showImportUrlModal changed:', showImportUrlModal);
+  }, [showImportUrlModal]);
   const [selectedMeterBrand, setSelectedMeterBrand] = useState([]);
   const [selectedMeterSize, setSelectedMeterSize] = useState([]);
   const [selectedMeterYear, setSelectedMeterYear] = useState([]);
@@ -635,11 +695,11 @@ function ClientDatabase() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState(null);
   const [totalCount, setTotalCount] = useState(0);
-  const [filteredTotalCount, setFilteredTotalCount] = useState(0);
+  const [filteredTotalCount, setFilteredTotalCount] = useState(0); // ⭐ Для фільтрованих даних
   const [currentPage, setCurrentPage] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
-  const [importProgress, setImportProgress] = useState({ show: false, current: 0, total: 0, fileName: '' });
+  const [isInitialLoading, setIsInitialLoading] = useState(true); // ⭐ Для онбордингу
+  const [importProgress, setImportProgress] = useState({ show: false, current: 0, total: 0, fileName: '' }); // ⭐ Для прогресу імпорту
   const [settlements, setSettlements] = useState(['Всі']);
   const [streets, setStreets] = useState(['Всі']);
   const [meterBrands, setMeterBrands] = useState(['Всі']);
@@ -648,22 +708,26 @@ function ClientDatabase() {
   const [meterGroups, setMeterGroups] = useState([]);
   const [grsList, setGrsList] = useState([]);
   
+  // ⭐ Лічильники для статусів
   const [statusCounts, setStatusCounts] = useState({ disconnected: 0, dacha: 0, absent: 0 });
   
+  // ⭐ INFINITE SCROLL: Додаткові state
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const isFirstRender = useRef(true);
   const stateRestored = useRef(false);
   
+  // ⭐ SessionStorage ключі для збереження стану
   const STORAGE_KEYS = {
     CLIENTS: 'clients_infinite_scroll',
     SCROLL_Y: 'clients_scroll_position',
     PAGE: 'clients_current_page',
     FILTERS: 'clients_filters',
     HAS_MORE: 'clients_has_more',
-    FILTERED_TOTAL: 'clients_filtered_total'
+    FILTERED_TOTAL: 'clients_filtered_total' // ⭐ Загальна кількість відфільтрованих
   };
   
+  // Додаємо ref для debounce таймера та debouncedSearchTerm
   const searchTimeoutRef = useRef(null);
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const buildingTimeoutRef = useRef(null);
@@ -671,79 +735,100 @@ function ClientDatabase() {
   const apartmentTimeoutRef = useRef(null);
   const [debouncedApartment, setDebouncedApartment] = useState('');
   
+  // State для відкритих dropdown
   const [openDropdown, setOpenDropdown] = useState(null);
+  
+  // State для згортання фільтрів лічильників на мобільних
+  const [showMeterFilters, setShowMeterFilters] = useState(false);
+  
+  // State для згортання фільтрів адреси на мобільних
+  const [showAddressFilters, setShowAddressFilters] = useState(false);
 
+    // ⭐ НОВІ СТАНИ: десктопна панель + тема + контекстне меню
   const [selectedClient, setSelectedClient] = useState(null);
 
-  const overlayRef = useRef(null);
-  const touchStartY = useRef(0);
-  const touchCurrentY = useRef(0);
-  const isDragging = useRef(false);
-  const rafId = useRef(null);
+  // 🟢 Додаємо стани для відстеження пальця
+ // 🟢 НОВІ РЕФИ ТА ФУНКЦІЇ ДЛЯ ПЛАВНОГО СВАЙПУ (GPU Accelerated)
+const overlayRef = useRef(null);
+const touchStartY = useRef(0);
+const touchCurrentY = useRef(0);
+const isDragging = useRef(false);
+const rafId = useRef(null);
 
-  const handleTouchStart = (e) => {
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    touchStartY.current = clientY;
-    touchCurrentY.current = 0;
-    isDragging.current = true;
+const handleTouchStart = (e) => {
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  touchStartY.current = clientY;
+  touchCurrentY.current = 0;
+  isDragging.current = true;
 
-    if (overlayRef.current) {
-      overlayRef.current.style.transition = 'none';
-    }
-  };
+  if (overlayRef.current) {
+    overlayRef.current.style.transition = 'none'; // Вимикаємо анімацію під час руху
+  }
+};
 
-  const handleTouchMove = (e) => {
-    if (!isDragging.current) return;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    const diff = clientY - touchStartY.current;
+const handleTouchMove = (e) => {
+  if (!isDragging.current) return;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  const diff = clientY - touchStartY.current;
 
-    if (diff > 0) {
-      touchCurrentY.current = diff;
-      
-      if (rafId.current) cancelAnimationFrame(rafId.current);
-      rafId.current = requestAnimationFrame(() => {
-        if (overlayRef.current) {
-          overlayRef.current.style.transform = `translate3d(0, ${diff}px, 0)`;
-        }
-      });
-    }
-  };
-
-  const handleTouchEnd = () => {
-    if (!isDragging.current) return;
-    isDragging.current = false;
-
+  if (diff > 0) {
+    touchCurrentY.current = diff;
+    
+    // Плавне переміщення через GPU без перевиклику setState
     if (rafId.current) cancelAnimationFrame(rafId.current);
-
-    if (touchCurrentY.current > 120) {
-      closeMobilePanel();
-    } else {
+    rafId.current = requestAnimationFrame(() => {
       if (overlayRef.current) {
-        overlayRef.current.style.transition = 'transform 0.2s cubic-bezier(0.32, 0.72, 0, 1)';
-        overlayRef.current.style.transform = 'translate3d(0, 0, 0)';
+        overlayRef.current.style.transform = `translate3d(0, ${diff}px, 0)`;
       }
+    });
+  }
+};
+
+const handleTouchEnd = () => {
+  if (!isDragging.current) return;
+  isDragging.current = false;
+
+  if (rafId.current) cancelAnimationFrame(rafId.current);
+
+  // Перевіряємо скільки пікселів користувач протягнув шторку вниз
+  if (touchCurrentY.current > 120) {
+    // ЯКЩО ПОТЯГНУЛИ БІЛЬШЕ 120px:
+    // Викликаємо функцію закриття. Вона сама анімує вихід до 100% і видалить стан.
+    // НЕ додаємо тут трансформ у 0, щоб уникнути конфлікту анімацій!
+    closeMobilePanel();
+  } else {
+    // ЯКЩО ПОТЯГНУЛИ МЕНШЕ 120px:
+    // Плавним відскоком повертаємо шторку у вихідне відкрите положення
+    if (overlayRef.current) {
+      overlayRef.current.style.transition = 'transform 0.2s cubic-bezier(0.32, 0.72, 0, 1)';
+      overlayRef.current.style.transform = 'translate3d(0, 0, 0)';
     }
+  }
 
-    touchCurrentY.current = 0;
+  // Скидаємо лічильник зсуву
+  touchCurrentY.current = 0;
+};
+
+// 🟢 Глобальні слухачі для мишки (щоб працювало і в DevTools / на ПК)
+useEffect(() => {
+  const onMouseMove = (e) => handleTouchMove(e);
+  const onMouseUp = () => handleTouchEnd();
+
+  window.addEventListener('mousemove', onMouseMove);
+  window.addEventListener('mouseup', onMouseUp);
+
+  return () => {
+    window.removeEventListener('mousemove', onMouseMove);
+    window.removeEventListener('mouseup', onMouseUp);
   };
+}, []);
 
-  useEffect(() => {
-    const onMouseMove = (e) => handleTouchMove(e);
-    const onMouseUp = () => handleTouchEnd();
-
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
-
-    return () => {
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
-    };
-  }, []);
 
   const [darkMode, setDarkMode] = useState(false);
   const [ctxMenu, setCtxMenu] = useState({ show: false, x: 0, y: 0, client: null });
   const isMobile = () => window.innerWidth < 960;
 
+  // ⭐ Темна тема — завантаження з localStorage
   useEffect(() => {
     const saved = localStorage.getItem('grm-theme');
     if (saved === 'dark') {
@@ -752,11 +837,13 @@ function ClientDatabase() {
     }
   }, []);
 
+  // ⭐ Темна тема — перемикання
   useEffect(() => {
     document.body.classList.toggle('dark', darkMode);
     localStorage.setItem('grm-theme', darkMode ? 'dark' : 'light');
   }, [darkMode]);
 
+  // ⭐ Контекстне меню — закриття при кліку поза ним
   useEffect(() => {
     const handleClick = () => setCtxMenu({ show: false, x: 0, y: 0, client: null });
     const handleEsc = (e) => { if (e.key === 'Escape') setCtxMenu({ show: false, x: 0, y: 0, client: null }); };
@@ -768,6 +855,7 @@ function ClientDatabase() {
     };
   }, []);
 
+  // useEffect для закриття модалки на ESC
   useEffect(() => {
     const handleEscape = (e) => {
       if (e.key === 'Escape' && isModalOpen) {
@@ -777,6 +865,7 @@ function ClientDatabase() {
 
     if (isModalOpen) {
       document.addEventListener('keydown', handleEscape);
+      // Блокуємо scroll body коли модалка відкрита
       document.body.style.overflow = 'hidden';
       document.documentElement.style.overflow = 'hidden';
     }
@@ -787,6 +876,8 @@ function ClientDatabase() {
       document.documentElement.style.overflow = '';
     };
   }, [isModalOpen]);
+
+  
 
   const [formData, setFormData] = useState({
     fullName: '', settlement: '', streetType: '', street: '', building: '', buildingLetter: '',
@@ -803,14 +894,19 @@ function ClientDatabase() {
 
   const [accountError, setAccountError] = useState('');
 
+  // useEffect для debounce пошуку
   useEffect(() => {
+    // Очищуємо попередній таймер
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
+
+    // Встановлюємо новий таймер
     searchTimeoutRef.current = setTimeout(() => {
       setDebouncedSearchTerm(searchTerm);
     }, CONFIG.DEBOUNCE_DELAY);
 
+    // Cleanup функція
     return () => {
       if (searchTimeoutRef.current) {
         clearTimeout(searchTimeoutRef.current);
@@ -818,6 +914,7 @@ function ClientDatabase() {
     };
   }, [searchTerm]);
 
+  // Debounce для будинку
   useEffect(() => {
     if (buildingTimeoutRef.current) clearTimeout(buildingTimeoutRef.current);
     buildingTimeoutRef.current = setTimeout(() => {
@@ -826,6 +923,7 @@ function ClientDatabase() {
     return () => clearTimeout(buildingTimeoutRef.current);
   }, [filterBuilding]);
 
+  // Debounce для квартири
   useEffect(() => {
     if (apartmentTimeoutRef.current) clearTimeout(apartmentTimeoutRef.current);
     apartmentTimeoutRef.current = setTimeout(() => {
@@ -834,7 +932,9 @@ function ClientDatabase() {
     return () => clearTimeout(apartmentTimeoutRef.current);
   }, [filterApartment]);
 
-  useEffect(() => {
+  // ⭐ СТАРИЙ useEffect ВИДАЛЕНО - тепер є правильний нижче!
+
+useEffect(() => {
     if (isFirstRender.current) {
       return;
     }
@@ -844,6 +944,7 @@ function ClientDatabase() {
       return;
     }
 
+    // Перевіряємо всі фільтри, включаючи нові зі шторки
     const hasActiveFilters = debouncedSearchTerm || selectedSettlement.length > 0 || selectedStreet.length > 0 || 
       selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || selectedMeterYear.length > 0 || selectedMeterGroups.length > 0 ||
       filterDisconnected || filterDacha || filterAbsent || filterConnected || debouncedBuilding || debouncedApartment ||
@@ -865,9 +966,11 @@ function ClientDatabase() {
     debouncedSearchTerm, selectedSettlement, selectedStreet, selectedMeterBrand, selectedMeterSize, 
     selectedMeterYear, selectedMeterGroups, filterDisconnected, filterDacha, filterAbsent, filterConnected, 
     debouncedBuilding, debouncedApartment,
+    // Додаємо нові стейти зі шторки у масив залежностей
     selectedGrs, meterYearFrom, meterYearTo, verificationYearFrom, verificationYearTo, filterSeal, filterStickerSeal
   ]);
 
+  // Динамічне оновлення фільтрів — каскадна логіка
   useEffect(() => {
     const updateDynamicFilters = async () => {
       const allClients = await getAllClients();
@@ -877,6 +980,8 @@ function ClientDatabase() {
       )].sort((a, b) => a.localeCompare(b, 'uk', { sensitivity: 'base' }));
       setGrsList(uniqueGrs);
 
+
+      // Базовий фільтр по адресі
       let byAddress = allClients;
       if (selectedSettlement.length > 0) {
         byAddress = byAddress.filter(c => selectedSettlement.includes(c.settlement));
@@ -888,6 +993,7 @@ function ClientDatabase() {
         });
       }
 
+      // Вулиці — тільки по населеному пункту
       let clientsForStreets = allClients;
       if (selectedSettlement.length > 0) {
         clientsForStreets = allClients.filter(c => selectedSettlement.includes(c.settlement));
@@ -897,10 +1003,14 @@ function ClientDatabase() {
       ).filter(s => s))].sort((a, b) => a.localeCompare(b, 'uk', { sensitivity: 'base' }));
       setStreets(uniqueStreets);
 
+      // ⭐ КАСКАД лічильників: адреса → група → марка → типорозмір → рік
+
+      // Групи — по адресі
       const uniqueGroups = [...new Set(byAddress.map(c => c.meterGroup).filter(g => g))]
         .sort((a, b) => a.localeCompare(b, 'uk', { sensitivity: 'base' }));
       setMeterGroups(uniqueGroups);
 
+      // Марки — по адресі + обрана група
       let byGroup = byAddress;
       if (selectedMeterGroups.length > 0) {
         byGroup = byGroup.filter(c => selectedMeterGroups.includes(c.meterGroup));
@@ -909,6 +1019,7 @@ function ClientDatabase() {
         .sort((a, b) => a.localeCompare(b, 'uk', { sensitivity: 'base' }));
       setMeterBrands(uniqueBrands);
 
+      // Типорозміри — по адресі + група + марка
       let byBrand = byGroup;
       if (selectedMeterBrand.length > 0) {
         byBrand = byBrand.filter(c => selectedMeterBrand.includes(c.meterBrand));
@@ -917,6 +1028,7 @@ function ClientDatabase() {
         .sort((a, b) => a.localeCompare(b, 'uk', { numeric: true, sensitivity: 'base' }));
       setMeterSizes(uniqueSizes);
 
+      // Роки — по адресі + група + марка + типорозмір
       let bySize = byBrand;
       if (selectedMeterSize.length > 0) {
         bySize = bySize.filter(c => selectedMeterSize.includes(c.meterSize));
@@ -929,12 +1041,14 @@ function ClientDatabase() {
     updateDynamicFilters();
   }, [selectedSettlement, selectedStreet, selectedMeterGroups, selectedMeterBrand, selectedMeterSize]);
 
+   // ⭐ INFINITE SCROLL: Слухач скролу
   useEffect(() => {
     let scrollSaveTimeout = null;
 
     const handleScroll = () => {
       let scrollTop, containerHeight, contentHeight;
 
+      // Визначаємо джерело скролу
       const listEl = document.querySelector('.clients-list');
       const isDesktop = window.innerWidth >= 960 && listEl;
 
@@ -960,6 +1074,7 @@ function ClientDatabase() {
 
     window.addEventListener('scroll', handleScroll);
 
+    // Додаємо слухач на список для десктопа
     const listEl = document.querySelector('.clients-list');
     if (listEl) {
       listEl.addEventListener('scroll', handleScroll);
@@ -975,28 +1090,33 @@ function ClientDatabase() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasMore, isLoadingMore]);
 
+  // ⭐ INFINITE SCROLL: Завантаження при зміні currentPage
   useEffect(() => {
     if (currentPage > 0) {
+      // Перевіряємо чи є фільтри
       const hasFilters = debouncedSearchTerm || selectedSettlement.length > 0 || selectedStreet.length > 0 || 
                         selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || 
                         selectedMeterYear.length > 0 || selectedMeterGroups.length > 0 ||
                         filterDisconnected || filterDacha || filterAbsent || filterConnected || debouncedBuilding || debouncedApartment;
       
       if (hasFilters) {
-        performSearch(true);
+        performSearch(true); // append = true для фільтрів
       } else {
-        loadClients(true);
+        loadClients(true); // append = true для всіх клієнтів
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage]);
 
+ // ⭐ Оптимізований єдиний підрахунок загальної кількості та статусів
   const loadAllCounts = useCallback(async () => {
     try {
       const allClients = await getAllClients();
       
+      // 1. Загальна кількість
       const total = allClients.length;
       
+      // 2. Фільтрація статусів
       const filteredClients = allClients.filter(client => {
         const matchesSettlement = selectedSettlement.length === 0 || selectedSettlement.includes(client.settlement);
         const matchesStreet = selectedStreet.length === 0 || selectedStreet.includes(client.street);
@@ -1014,6 +1134,7 @@ function ClientDatabase() {
         absent: filteredClients.filter(c => c.temporaryAbsent === true).length
       };
 
+      // Оновлюємо стейти одночасно
       setTotalCount(total);
       setStatusCounts(counts);
     } catch (error) {
@@ -1021,10 +1142,12 @@ function ClientDatabase() {
     }
   }, [selectedSettlement, selectedStreet, selectedMeterGroups, selectedMeterBrand, selectedMeterSize, selectedMeterYear]);
 
+// ⭐ INFINITE SCROLL: Відновлення стану при mount
   useEffect(() => {
     const initializeApp = async () => {
       const isPageReload = !sessionStorage.getItem('app_initialized');
       
+      // 🟢 Одночасне завантаження лічильників та фільтрів
       await loadAllCounts();
       loadSettlements();
       loadStreets();
@@ -1072,34 +1195,57 @@ function ClientDatabase() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ⭐ Оновлення статусів та кількості при зміні фільтрів
   useEffect(() => {
     if (!isFirstRender.current) {
       loadAllCounts();
     }
   }, [loadAllCounts]);
 
+  // ⭐ Закриття dropdown швидких дій при кліку поза ним
   useEffect(() => {
     const handleClickOutside = (event) => {
       const quickActionsButton = event.target.closest('button[title="Швидкі дії"]');
       const quickActionsMenu = event.target.closest('.absolute.right-0.mt-2.w-80');
       
+      console.log('🟠 showQuickActions mousedown:', {
+        hasButton: !!quickActionsButton,
+        hasMenu: !!quickActionsMenu,
+        target: event.target.tagName,
+        className: event.target.className
+      });
+      
+      // НЕ закривати якщо клік всередині меню
       if (showQuickActions && !quickActionsButton && !quickActionsMenu) {
+        console.log('🔴 Closing showQuickActions');
         setShowQuickActions(false);
       }
     };
 
     if (showQuickActions) {
+      console.log('✅ showQuickActions listener added');
+      // Використовуємо затримку як у dropdown
       const timer = setTimeout(() => {
         document.addEventListener('mousedown', handleClickOutside);
       }, 150);
       return () => {
         clearTimeout(timer);
+        console.log('🧹 showQuickActions listener removed');
         document.removeEventListener('mousedown', handleClickOutside);
       };
     }
   }, [showQuickActions]);
 
+  // ⭐ Оновлюємо лічильники статусів при зміні фільтрів
+  useEffect(() => {
+    if (!isFirstRender.current) {
+      loadAllCounts();
+    }
+  }, [loadAllCounts]);
+
+
   const loadClients = async (append = false) => {
+    // ⭐ INFINITE SCROLL: Якщо вже завантажуємо або немає більше - виходимо
     if (isLoadingMore || (!append && loading)) return;
     
     if (append) {
@@ -1112,13 +1258,17 @@ function ClientDatabase() {
       const data = await getClientsByPage(currentPage, CONFIG.PAGE_SIZE);
       
       if (append) {
+        // ⭐ INFINITE SCROLL: Додаємо до існуючих
         setClients(prev => [...prev, ...data]);
       } else {
+        // Звичайне завантаження
         setClients(data);
       }
       
+      // Перевіряємо чи є ще дані
       setHasMore(data.length === CONFIG.PAGE_SIZE);
       
+      // ⭐ Зберігаємо стан після рендеру (щоб не було конфлікту)
       setTimeout(() => {
         saveScrollState();
       }, 100);
@@ -1165,13 +1315,14 @@ function ClientDatabase() {
     setMeterGroups(uniqueGroups);
   };
 
+  // ⭐ INFINITE SCROLL: Збереження стану в SessionStorage
   const saveScrollState = () => {
     try {
       sessionStorage.setItem(STORAGE_KEYS.CLIENTS, JSON.stringify(clients));
       sessionStorage.setItem(STORAGE_KEYS.SCROLL_Y, window.scrollY.toString());
       sessionStorage.setItem(STORAGE_KEYS.PAGE, currentPage.toString());
       sessionStorage.setItem(STORAGE_KEYS.HAS_MORE, hasMore.toString());
-      sessionStorage.setItem(STORAGE_KEYS.FILTERED_TOTAL, filteredTotalCount.toString());
+      sessionStorage.setItem(STORAGE_KEYS.FILTERED_TOTAL, filteredTotalCount.toString()); // ⭐ Зберігаємо
       sessionStorage.setItem(STORAGE_KEYS.FILTERS, JSON.stringify({
         searchTerm,
         selectedSettlement,
@@ -1186,6 +1337,7 @@ function ClientDatabase() {
     }
   };
 
+  // ⭐ INFINITE SCROLL: Відновлення стану з SessionStorage
   const restoreScrollState = () => {
     try {
       const savedClients = sessionStorage.getItem(STORAGE_KEYS.CLIENTS);
@@ -1193,13 +1345,13 @@ function ClientDatabase() {
       const savedPage = sessionStorage.getItem(STORAGE_KEYS.PAGE);
       const savedFilters = sessionStorage.getItem(STORAGE_KEYS.FILTERS);
       const savedHasMore = sessionStorage.getItem(STORAGE_KEYS.HAS_MORE);
-      const savedFilteredTotal = sessionStorage.getItem(STORAGE_KEYS.FILTERED_TOTAL);
+      const savedFilteredTotal = sessionStorage.getItem(STORAGE_KEYS.FILTERED_TOTAL); // ⭐ Читаємо
 
       if (savedClients && savedPage) {
         setClients(JSON.parse(savedClients));
-        setCurrentPage(parseInt(savedPage, 10));
+        setCurrentPage(parseInt(savedPage));
         setHasMore(savedHasMore === 'true');
-        setFilteredTotalCount(parseInt(savedFilteredTotal, 10) || 0);
+        setFilteredTotalCount(parseInt(savedFilteredTotal) || 0); // ⭐ Відновлюємо
         
         if (savedFilters) {
           const filters = JSON.parse(savedFilters);
@@ -1212,13 +1364,16 @@ function ClientDatabase() {
           setSelectedMeterGroups(filters.selectedMeterGroups || []);
         }
         
+        // Відновлюємо позицію скролу після рендеру
         setTimeout(() => {
           if (savedScrollY) {
-            window.scrollTo(0, parseInt(savedScrollY, 10));
+            window.scrollTo(0, parseInt(savedScrollY));
           }
         }, CONFIG.STATE_RESTORE_DELAY);
         
+        // ⭐ Позначаємо що стан відновлено
         stateRestored.current = true;
+        
         return true;
       }
     } catch (e) {
@@ -1227,6 +1382,7 @@ function ClientDatabase() {
     return false;
   };
 
+  // ⭐ INFINITE SCROLL: Очищення стану (при зміні фільтрів)
   const clearScrollState = () => {
     try {
       sessionStorage.removeItem(STORAGE_KEYS.CLIENTS);
@@ -1234,17 +1390,19 @@ function ClientDatabase() {
       sessionStorage.removeItem(STORAGE_KEYS.PAGE);
       sessionStorage.removeItem(STORAGE_KEYS.FILTERS);
       sessionStorage.removeItem(STORAGE_KEYS.HAS_MORE);
-      sessionStorage.removeItem(STORAGE_KEYS.FILTERED_TOTAL);
+      sessionStorage.removeItem(STORAGE_KEYS.FILTERED_TOTAL); // ⭐ Очищуємо
     } catch (e) {
       console.error('Error clearing scroll state:', e);
     }
   };
 
+  // ⭐ Контекстне меню — обробник правого кліку
   const handleContextMenu = (e, client) => {
     e.preventDefault();
     setCtxMenu({ show: true, x: e.clientX, y: e.clientY, client });
   };
 
+  // ⭐ Контекстне меню — дії
   const handleCtxAction = (action) => {
     if (!ctxMenu.client) return;
     const c = ctxMenu.client;
@@ -1263,33 +1421,41 @@ function ClientDatabase() {
     setCtxMenu({ show: false, x: 0, y: 0, client: null });
   };
 
+  // ⭐ Обробка кліку по картці
   const handleClientCardClick = (clientId) => {
     const client = clients.find(c => c.id === clientId);
     saveScrollState();
     setSelectedClient(client);
   };
 
-  const closeMobilePanel = useCallback(() => {
+// ⭐ Закриття мобільної панелі
+// ⭐ Закриття мобільної панелі (і для свайпу, і для кнопки Х)
+const closeMobilePanel = useCallback(() => {
+  if (overlayRef.current) {
+    // 1. Спочатку знімаємо клас відкритого стану (якщо він використовується)
+    overlayRef.current.classList.remove('open');
+
+    // 2. Примусово задаємо анімацію зсуву вниз за межі екрана
+    overlayRef.current.style.transition = 'transform 0.25s cubic-bezier(0.32, 0.72, 0, 1)';
+    overlayRef.current.style.transform = 'translate3d(0, 100%, 0)';
+  }
+
+  // 3. Чекаємо точно 250 мс (поки шторка повністю сховається) і лише тоді скидаємо стан
+  setTimeout(() => {
+    setSelectedClient(null);
+
     if (overlayRef.current) {
-      overlayRef.current.classList.remove('open');
-      overlayRef.current.style.transition = 'transform 0.25s cubic-bezier(0.32, 0.72, 0, 1)';
-      overlayRef.current.style.transform = 'translate3d(0, 100%, 0)';
+      overlayRef.current.style.transform = '';
+      overlayRef.current.style.transition = '';
     }
 
-    setTimeout(() => {
-      setSelectedClient(null);
+    // Відновлюємо скрол, якщо він зберігався
+    const savedScrollY = sessionStorage.getItem(STORAGE_KEYS.SCROLL_Y);
+    if (savedScrollY) window.scrollTo(0, parseInt(savedScrollY, 10));
+  }, 250);
+}, []);
 
-      if (overlayRef.current) {
-        overlayRef.current.style.transform = '';
-        overlayRef.current.style.transition = '';
-      }
-
-      const savedScrollY = sessionStorage.getItem(STORAGE_KEYS.SCROLL_Y);
-      if (savedScrollY) window.scrollTo(0, parseInt(savedScrollY, 10));
-    }, 250);
-  }, []);
-
-  const performSearch = async (append = false) => {
+const performSearch = async (append = false) => {
     if (isLoadingMore || (!append && loading)) return;
     
     if (append) {
@@ -1332,27 +1498,28 @@ function ClientDatabase() {
   };
 
   const checkAccountDuplicate = (accNum) => {
-    const trimmed = accNum ? accNum.toString().trim() : '';
+  const trimmed = accNum ? accNum.toString().trim() : '';
 
-    if (!trimmed) {
-      setAccountError('');
-      return false;
-    }
+  if (!trimmed) {
+    setAccountError('');
+    return false;
+  }
 
-    const isDuplicate = clients.some(c => 
-      c.accountNumber && 
-      c.accountNumber.toString().trim() === trimmed &&
-      (!editingClient || c.id !== editingClient.id)
-    );
+  // Перевіряємо по масиву клієнтів. Якщо редагуємо існуючого — ігноруємо його власний ID
+  const isDuplicate = clients.some(c => 
+    c.accountNumber && 
+    c.accountNumber.toString().trim() === trimmed &&
+    (!editingClient || c.id !== editingClient.id)
+  );
 
-    if (isDuplicate) {
-      setAccountError('Абонент з таким особовим рахунком вже існує!');
-      return true;
-    } else {
-      setAccountError('');
-      return false;
-    }
-  };
+  if (isDuplicate) {
+    setAccountError('Абонент з таким особовим рахунком вже існує!');
+    return true;
+  } else {
+    setAccountError('');
+    return false;
+  }
+};
 
   const handleSubmit = async () => {
     if (!formData.accountNumber || !formData.fullName) {
@@ -1361,9 +1528,9 @@ function ClientDatabase() {
     }
         
     if (checkAccountDuplicate(formData.accountNumber)) {
-      showToast('warning', 'Абонент з таким особовим рахунком вже існує в базі!');
-      return;
-    }
+    showToast('warning', 'Абонент з таким особовим рахунком вже існує в базі!');
+    return;
+  }
 
     try {
       if (editingClient) {
@@ -1374,7 +1541,7 @@ function ClientDatabase() {
         showToast('success', 'Клієнта успішно додано!');
       }
       await loadClients();
-      await loadAllCounts();
+      await loadAllCounts(); // 🟢 Вставили замість loadTotalCount() та loadStatusCounts()
       await loadSettlements();
       await loadStreets();
       await loadMeterData();
@@ -1418,7 +1585,7 @@ function ClientDatabase() {
         try {
           await deleteClient(id);
           await loadClients();
-          await loadAllCounts();
+          await loadAllCounts(); // 🟢 Вставили замість loadStatusCounts() / loadTotalCount()
           await loadSettlements();
           await loadStreets();
           await loadMeterData();
@@ -1428,10 +1595,13 @@ function ClientDatabase() {
           showToast('error', 'Помилка при видаленні клієнта');
         }
       },
-      () => {}
+      () => {
+        // Скасовано
+      }
     );
   };
 
+  // ⭐ Імпорт за URL (для слабких телефонів)
   const [importUrl, setImportUrl] = useState('');
   const [importingFromUrl, setImportingFromUrl] = useState(false);
 
@@ -1449,6 +1619,7 @@ function ClientDatabase() {
       
       let finalUrl = importUrl.trim();
       
+      // 🔥 АВТОМАТИЧНА КОНВЕРТАЦІЯ Google Drive URL
       if (finalUrl.includes('drive.google.com/file')) {
         const match = finalUrl.match(/\/d\/([^\/]+)/);
         if (match && match[1]) {
@@ -1458,18 +1629,24 @@ function ClientDatabase() {
         }
       }
       
+      // 🔥 АВТОМАТИЧНА КОНВЕРТАЦІЯ Dropbox URL
       if (finalUrl.includes('dropbox.com')) {
         finalUrl = finalUrl.replace('?dl=0', '?dl=1').replace('www.dropbox.com', 'dl.dropboxusercontent.com');
         showToast('info', '🔄 Конвертую Dropbox URL...', 1000);
       }
+            
+      console.log('🌐 Final URL:', finalUrl);
       
+      // 🔥 Fetch БЕЗ Service Worker (обхід SW кешу)
       const response = await fetch(finalUrl, {
         method: 'GET',
-        cache: 'no-store',
+        cache: 'no-store', // Обходимо Service Worker
         headers: {
           'Accept': 'application/json',
         }
       });
+      
+      console.log('✅ Response received:', response.status, response.statusText);
       
       if (!response.ok) {
         throw new Error(`Помилка завантаження: ${response.status} ${response.statusText}`);
@@ -1477,29 +1654,43 @@ function ClientDatabase() {
       
       const text = await response.text();
 
-      if (text.length > 5 * 1024 * 1024) {
-        throw new Error('Файл занадто великий');
-      }
+// 🔒 обмеження розміру (~5MB)
+if (text.length > 5 * 1024 * 1024) {
+  throw new Error('Файл занадто великий');
+}
 
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        throw new Error('Невалідний JSON');
-      }
+let data;
+try {
+  data = JSON.parse(text);
+} catch {
+  throw new Error('Невалідний JSON');
+}
       
+      console.log('📦 Data loaded:', {
+        isArray: Array.isArray(data),
+        hasClients: !!data.clients,
+        length: Array.isArray(data) ? data.length : (data.clients ? data.clients.length : 0),
+        firstItem: Array.isArray(data) ? data[0] : (data.clients ? data.clients[0] : null)
+      });
+      
+      // Перевірка формату
       if (!Array.isArray(data) && (!data || !Array.isArray(data.clients))) {
+        console.error('❌ Invalid format:', data);
         throw new Error('Неправильний формат файлу. Очікується масив клієнтів або об\'єкт з полем "clients"');
       }
       
       const clients = Array.isArray(data) ? data : data.clients;
       
+      console.log('👥 Clients to import:', clients.length);
+      
       if (clients.length === 0) {
         throw new Error('Файл не містить клієнтів');
       }
       
+      // Встановлюємо прогрес
       setImportProgress({ show: true, current: 0, total: clients.length, fileName: 'import-url.json' });
       
+      // Очищаємо базу
       const db = await openDB();
       const transaction = db.transaction([STORE_NAME], 'readwrite');
       const store = transaction.objectStore(STORE_NAME);
@@ -1509,21 +1700,25 @@ function ClientDatabase() {
         request.onerror = () => reject(request.error);
       });
       
+      // Додаємо клієнтів
       let imported = 0;
-      for (let i = 0; i < clients.length; i++) {
-        const c = clients[i];
+for (let i = 0; i < clients.length; i++) {
+  const c = clients[i];
 
-        if (!c || typeof c.fullName !== 'string' || typeof c.accountNumber !== 'string') {
-          continue;
-        }
+  // 🔒 базова валідація
+  if (!c || typeof c.fullName !== 'string' || typeof c.accountNumber !== 'string') {
+    continue;
+  }
 
-        await addClient(c);
-        imported++;
+  await addClient(c);
+  imported++;
+        // Оновлюємо прогрес кожні 50 записів або на останньому
         if ((i + 1) % 50 === 0 || i === clients.length - 1) {
           setImportProgress(prev => ({ ...prev, current: i + 1 }));
         }
       }
       
+      // Оновлюємо дані
       await loadClients();
       await loadAllCounts();
       await loadSettlements();
@@ -1531,8 +1726,9 @@ function ClientDatabase() {
       await loadMeterData();
       
       showToast('success', `✅ Імпортовано ${imported} клієнтів з посилання!`);
-      setImportUrl('');
+      setImportUrl(''); // Очищаємо поле
       
+      // Закриваємо прогрес через 2 сек
       setTimeout(() => {
         setImportProgress({ show: false, current: 0, total: 0, fileName: '' });
       }, 2000);
@@ -1547,7 +1743,11 @@ function ClientDatabase() {
     }
   };
 
-  const handleImportExcel = async (e) => {
+  // ТУТ БУВ ПАРСЕР //
+
+
+
+const handleImportExcel = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     
@@ -1563,13 +1763,16 @@ function ClientDatabase() {
         
         setImportProgress({ show: true, current: 0, total: jsonData.length, fileName: file.name });
         
+        // ⭐ СУВОРЕ ОЧИЩЕННЯ РАХУНКУ (видаляє пробіли і нулі на початку)
         const cleanAcc = (val) => {
           if (!val) return '';
           return String(val).replace(/\s/g, '').replace(/^0+/, '').toLowerCase();
         };
 
+        // ⭐ ВИПРАВЛЕННЯ: Беремо ВСІХ клієнтів прямо з бази даних (IndexedDB), а не з екрану!
         const allDbClients = await getAllClients();
         
+        // Створюємо словник для миттєвого пошуку
         const existingClientsMap = new Map();
         allDbClients.forEach(c => {
           if (c.accountNumber) {
@@ -1577,15 +1780,15 @@ function ClientDatabase() {
           }
         });
         
-        let imported = 0;
-        let updated = 0;
+        let imported = 0; // Лічильник нових
+        let updated = 0;  // Лічильник оновлених
         
         for (let i = 0; i < jsonData.length; i++) {
           const row = jsonData[i];
           const acc = row['Особовий рахунок'] || '';
           const name = row['ПІБ'] || '';
           
-          const accStr = cleanAcc(acc);
+          const accStr = cleanAcc(acc); // Чистимо рахунок з Excel перед перевіркою
           
           if (!accStr || !name.toString().trim()) continue;
           
@@ -1598,7 +1801,7 @@ function ClientDatabase() {
             buildingLetter: (row['Літера буд.'] || '').toString().trim(),
             apartment: (row['Квартира'] || '').toString().trim(),
             apartmentLetter: (row['Літера кв.'] || '').toString().trim(),
-            accountNumber: acc.toString().trim(),
+            accountNumber: acc.toString().trim(), // В базу пишемо оригінал
             eic: (row['EIC'] || '').toString().trim(),
             phone: (row['Телефон'] || '').toString().trim(),
             meterBrand: (row['Марка лічильника'] || '').toString().trim(),
@@ -1637,6 +1840,7 @@ function ClientDatabase() {
             temporaryAbsent: row['Тимчасово відсутній'] === 'Так' || row['Тимчасово відсутній'] === true
           };
           
+          // АВТОПАРСИНГ ПРИЛАДІВ
           const appliancesText = row['Прилади'] || row['прилади'] || row['Обладнання'] || row['обладнання'] || '';
           if (appliancesText && appliancesText.toString().trim()) {
             const parsed = parseAppliances(appliancesText.toString());
@@ -1655,6 +1859,7 @@ function ClientDatabase() {
             client.columnCount = (row['Кількість ВПГ'] || '').toString().trim();
           }
           
+          // ⭐ ЛОГІКА ОНОВЛЕННЯ (ТЕПЕР БАЧИТЬ ВСЮ БАЗУ!)
           if (existingClientsMap.has(accStr)) {
             const existingClient = existingClientsMap.get(accStr);
             const clientToUpdate = {
@@ -1675,6 +1880,7 @@ function ClientDatabase() {
           }
         }
         
+        // Оновлюємо стан на екрані після завершення бази
         await loadClients();
         await loadAllCounts();
         await loadSettlements();
@@ -1696,15 +1902,23 @@ function ClientDatabase() {
     e.target.value = '';
   };
 
+  // ⭐ ФОРМАТУВАННЯ ПРИЛАДІВ для експорту: об'єднує окремі поля назад в текст
   const formatAppliances = (client) => {
     const parts = [];
     
     if (client.boilerBrand) {
+      // Якщо поле boilerCount тепер містить кількість (наприклад, "1шт" або просто число)
+      // ми додаємо його як кількість
       const count = client.boilerCount ? `${client.boilerCount}шт.` : '1шт.';
+      
+      // Якщо ви перейменували поле, використовуйте його:
+      // const count = client.boilerCount ? `${client.boilerCount}шт.` : '1шт.';
+
       parts.push(`(Котел) ${client.boilerBrand} - ${count}`); 
     }
     
     if (client.stoveType) {
+      // Якщо в назві вже є кількість - використовуємо як є
       if (client.stoveType.includes('(') && client.stoveType.includes('шт)')) {
         parts.push(`(Плита газова) ${client.stoveType};`);
       } else {
@@ -1756,6 +1970,7 @@ function ClientDatabase() {
     setLoading(false);
   };
 
+  // ⭐ Експорт в JSON (для імпорту за URL)
   const handleExportJSON = async () => {
     setLoading(true);
     showToast('info', 'Експорт в JSON...', 2000);
@@ -1769,13 +1984,16 @@ function ClientDatabase() {
         return;
       }
       
+      // 🔥 Очищаємо від службових полів IndexedDB (id, createdAt, etc)
       const cleanClients = allClients.map(client => {
-        const { id, ...cleanData } = client;
+        const { id, ...cleanData } = client; // Видаляємо id
         return cleanData;
       });
       
+      // Створюємо JSON з форматуванням
       const jsonData = JSON.stringify(cleanClients, null, 2);
       
+      // Створюємо і завантажуємо файл
       const blob = new Blob([jsonData], { type: 'application/json;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -1812,7 +2030,7 @@ function ClientDatabase() {
       'Дата відкл.': '', 'Дата підкл.': '', 'Дача': 'Ні', 'Тимчасово відсутній': 'Ні'
     }];
     const ws = XLSX.utils.json_to_sheet(template);
-    ws['!cols'] = Array(41).fill({ wch: 15 });
+    ws['!cols'] = Array(41).fill({ wch: 15 }); // Зменшено з 45 до 41 (видалено 5 стовпців, додано 1)
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Шаблон');
     XLSX.writeFile(wb, 'Шаблон_Абоненти.xlsx');
@@ -1836,6 +2054,7 @@ function ClientDatabase() {
     setIsModalOpen(false);
   };
 
+  // Функції для обробки множинного вибору
   const toggleSelection = (array, setArray, value) => {
     if (array.includes(value)) {
       setArray(array.filter(v => v !== value));
@@ -1845,6 +2064,13 @@ function ClientDatabase() {
     setCurrentPage(0);
   };
 
+  const getFilterLabel = (selectedArray, allArray, label) => {
+    if (selectedArray.length === 0) return label;
+    if (selectedArray.length === 1) return selectedArray[0];
+    return `${label} (${selectedArray.length})`;
+  };
+
+  // Компонент MultiSelectDropdown - обгорнутий в React.memo для оптимізації
   const MultiSelectDropdown = React.memo(({ options, selected, onChange, label, name }) => {
     const isOpen = openDropdown === name;
     const dropdownRef = useRef(null);
@@ -1862,7 +2088,7 @@ function ClientDatabase() {
 
     const toggleOption = useCallback((option) => {
       toggleSelection(selected, onChange, option);
-    }, [selected, onChange]);
+    }, [selected, onChange, name]);
 
     const labelText = selected.length === 0 ? label
       : selected.length === 1 ? selected[0]
@@ -1913,32 +2139,19 @@ function ClientDatabase() {
     );
   });
 
-  // ⭐ ВИПРАВЛЕНО: Розрахунок активності фільтрів із перевіркою .length > 0
+
+// ⭐ Перевірка, чи активований бодай один фільтр
   const hasActiveFilters = Boolean(
-    debouncedSearchTerm || 
-    selectedSettlement.length > 0 || 
-    selectedStreet.length > 0 ||
-    selectedMeterBrand.length > 0 || 
-    selectedMeterSize.length > 0 || 
-    selectedMeterYear.length > 0 ||
-    selectedMeterGroups.length > 0 || 
-    selectedGrs.length > 0 || 
-    filterDisconnected || 
-    filterDacha || 
-    filterAbsent ||
-    filterConnected || 
-    filterBuilding.trim() || 
-    filterApartment.trim() || 
-    meterYearFrom || 
-    meterYearTo || 
-    verificationYearFrom || 
-    verificationYearTo || 
-    filterSeal.trim() || 
-    filterStickerSeal.trim()
+    debouncedSearchTerm || selectedSettlement.length || selectedStreet.length ||
+    selectedMeterBrand.length || selectedMeterSize.length || selectedMeterYear.length ||
+    selectedMeterGroups.length || filterDisconnected || filterDacha || filterAbsent ||
+    filterConnected || filterBuilding || filterApartment || selectedGrs || meterYearFrom || 
+    meterYearTo || verificationYearFrom || verificationYearTo || filterSeal || filterStickerSeal
   );
 
   return (
     <div className="app-wrapper">
+      {/* IMPORT PROGRESS MODAL */}
       {importProgress.show && (
         <div className="import-progress-overlay">
           <div className="import-progress-card">
@@ -1985,12 +2198,15 @@ function ClientDatabase() {
               </div>
             </div>
             <div className="navbar-actions">
+              {/* Кнопка теми */}
               <button className="btn-theme" onClick={() => setDarkMode(!darkMode)} title="Перемкнути тему">
                 {darkMode ? <Sun size={18} /> : <Moon size={18} />}
               </button>
 
+              {/* 🟢 Вертикальний розділювач */}
               <div className="nav-divider"></div>
 
+              {/* Dropdown з швидкими діями */}
               <div className="relative">
                 <button 
                   title="Швидкі дії"
@@ -2002,6 +2218,7 @@ function ClientDatabase() {
                   <ChevronDown size={14} className={showQuickActions ? 'rotate-180' : ''} style={{ transition: 'transform 0.2s' }} />
                 </button>
                 
+                {/* Випадаюче меню */}
                 {showQuickActions && (
                   <div 
                     className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden" 
@@ -2009,6 +2226,8 @@ function ClientDatabase() {
                     onMouseDown={(e) => e.stopPropagation()}
                   >
                     <div className="p-1.5 flex flex-col gap-0.5">
+                      
+                      {/* === СТВОРЕННЯ === */}
                       <button 
                         onClick={(e) => { e.preventDefault(); handleAdd(); setShowQuickActions(false); }} 
                         className="w-full text-left px-3 py-2.5 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 rounded-lg flex items-center gap-3 transition-colors font-medium"
@@ -2019,6 +2238,7 @@ function ClientDatabase() {
                       
                       <div className="h-px bg-gray-100 my-1 mx-2"></div>
                       
+                      {/* === ІМПОРТ === */}
                       <label 
                         className="w-full cursor-pointer text-left px-3 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 rounded-lg flex items-center gap-3 transition-colors font-medium m-0"
                       >
@@ -2043,6 +2263,7 @@ function ClientDatabase() {
                       
                       <div className="h-px bg-gray-100 my-1 mx-2"></div>
                       
+                      {/* === ЕКСПОРТ === */}
                       <button 
                         onClick={(e) => { e.preventDefault(); handleExportExcel(); setShowQuickActions(false); }} 
                         className="w-full text-left px-3 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg flex items-center gap-3 transition-colors font-medium"
@@ -2061,6 +2282,7 @@ function ClientDatabase() {
 
                       <div className="h-px bg-gray-100 my-1 mx-2"></div>
 
+                      {/* === ШАБЛОН === */}
                       <button 
                         onClick={(e) => { e.preventDefault(); handleDownloadTemplate(); setShowQuickActions(false); }}
                         className="w-full text-left px-3 py-2.5 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-700 rounded-lg flex items-center gap-3 transition-colors font-medium"
@@ -2073,7 +2295,7 @@ function ClientDatabase() {
                   </div>
                 )}
               </div>
-            </div>
+          </div>
           </div>
 
           {/* ===== ФІЛЬТРИ ===== */}
@@ -2093,9 +2315,9 @@ function ClientDatabase() {
                   )}
                 </div>
 
-                {/* ⭐ ВИПРАВЛЕНО: Кнопка відкриття шторки тепер корректно перевіряє active стан */}
+                {/* Кнопка виклику шторки */}
                 <button 
-                  className={`btn-toggle-filters ${(selectedSettlement.length > 0 || selectedStreet.length > 0 || filterBuilding || filterApartment || selectedGrs.length > 0 || selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || selectedMeterGroups.length > 0 || meterYearFrom || meterYearTo || verificationYearFrom || verificationYearTo || filterSeal || filterStickerSeal) ? 'has-active' : ''}`}
+                  className={`btn-toggle-filters ${(selectedSettlement.length || selectedStreet.length || filterBuilding || filterApartment || selectedGrs.length > 0 || selectedMeterBrand.length || selectedMeterSize.length || selectedMeterGroups.length || meterYearFrom || meterYearTo || verificationYearFrom || verificationYearTo || filterSeal || filterStickerSeal) ? 'has-active' : ''}`}
                   onClick={() => setShowFilterDrawer(true)}
                 >
                   <SlidersHorizontal size={15} />
@@ -2105,7 +2327,7 @@ function ClientDatabase() {
 
             </div>
 
-          {/* ===== БІЧНА ШТОРКА (DRAWER) ===== */}
+{/* ===== БІЧНА ШТОРКА (DRAWER) ===== */}
           {showFilterDrawer && (
             <div className="drawer-backdrop" onClick={() => setShowFilterDrawer(false)}>
               <div className="drawer-panel" onClick={e => e.stopPropagation()}>
@@ -2120,6 +2342,7 @@ function ClientDatabase() {
                 </div>
 
                 <div className="drawer-body">
+                  {/* 1. АДРЕСА ТА ГРС */}
                   <div className="drawer-section">
                     <div className="drawer-section-title">Адреса та ГРС</div>
                     <div className="drawer-grid-2">
@@ -2133,14 +2356,15 @@ function ClientDatabase() {
                     </div>
 
                     <MultiSelectDropdown 
-                      options={grsList} 
-                      selected={selectedGrs} 
-                      onChange={setSelectedGrs} 
-                      label="ГРС" 
-                      name="grs" 
-                    />
+  options={grsList} 
+  selected={selectedGrs} 
+  onChange={setSelectedGrs} 
+  label="ГРС" 
+  name="grs" 
+/>
                   </div>
 
+                  {/* 2. ЛІЧИЛЬНИК ТА ДІАПАЗОНИ */}
                   <div className="drawer-section">
                     <div className="drawer-section-title">Параметри лічильника</div>
                     <MultiSelectDropdown options={meterGroups} selected={selectedMeterGroups} onChange={setSelectedMeterGroups} label="Група ліч." name="meterGroup" />
@@ -2150,6 +2374,7 @@ function ClientDatabase() {
                       <MultiSelectDropdown options={meterSizes} selected={selectedMeterSize} onChange={setSelectedMeterSize} label="Розмір" name="meterSize" />
                     </div>
 
+                    {/* ОБ'ЄДНАНИЙ БЛОК РОКІВ */}
                     <div className="drawer-card-box">
                       <span className="drawer-card-title">Рік випуску</span>
                       
@@ -2165,6 +2390,7 @@ function ClientDatabase() {
                       </div>
                     </div>
 
+                    {/* Повірка */}
                     <div>
                       <label className="drawer-label">Рік повірки (від — до)</label>
                       <div className="drawer-grid-2">
@@ -2174,6 +2400,7 @@ function ClientDatabase() {
                     </div>
                   </div>
 
+                  {/* 3. НОМЕРИ ПЛОМБ */}
                   <div className="drawer-section">
                     <div className="drawer-section-title">Пошук за номерами пломб</div>
                     <input className="drawer-input" type="text" placeholder="№ пломби (напр. R261)" value={filterSeal} onChange={e => setFilterSeal(e.target.value)} />
@@ -2190,208 +2417,228 @@ function ClientDatabase() {
             </div>
           )}
 
-          <div className="status-toolbar-left">
-            <div className="stats-left-group">
-              <div className="stats-item">
-                <Users size={14} className="stats-icon" />
-                {hasActiveFilters ? (
-                  <>
-                    <span>Знайдено:</span> 
-                    {!isInitialLoading && <strong className="count-fade-in" style={{ color: '#0d9488' }}>{filteredTotalCount}</strong>}
-                  </>
-                ) : (
-                  <>
-                    <span>Всього:</span> 
-                    {!isInitialLoading && <strong className="count-fade-in">{totalCount}</strong>}
-                  </>
-                )}
-              </div>
-            </div>
-
-            <div className="toolbar-v-divider"></div>
-
-            <div className="status-group">
-              <span className="status-label">Статус:</span>
+          {/* ===== ОБ'ЄДНАНИЙ ТУЛБАР: СТАТИСТИКА ЗЛІВА + СТАТУСИ ===== */}
+            <div className="status-toolbar-left">
               
-              <button className={`status-chip status-off ${filterDisconnected ? 'active' : ''}`} onClick={() => setFilterDisconnected(!filterDisconnected)}>
-                <span className="chip-dot"></span>
-                <span className="chip-text">Відключений</span>
-                <span className={`chip-count ${!isInitialLoading && statusCounts.disconnected > 0 ? 'chip-count-visible' : 'chip-count-placeholder'}`}>
-                  ({isInitialLoading ? '000' : statusCounts.disconnected})
-                </span>
-              </button>
-
-              <button className={`status-chip status-dacha ${filterDacha ? 'active' : ''}`} onClick={() => setFilterDacha(!filterDacha)}>
-                <span className="chip-dot"></span>
-                <span className="chip-text">Дача</span>
-                <span className={`chip-count ${!isInitialLoading && statusCounts.dacha > 0 ? 'chip-count-visible' : 'chip-count-placeholder'}`}>
-                  ({isInitialLoading ? '0000' : statusCounts.dacha})
-                </span>
-              </button>
-
-              <button className={`status-chip status-absent ${filterAbsent ? 'active' : ''}`} onClick={() => setFilterAbsent(!filterAbsent)}>
-                <span className="chip-dot"></span>
-                <span className="chip-text">Не проживає</span>
-                <span className={`chip-count ${!isInitialLoading && statusCounts.absent > 0 ? 'chip-count-visible' : 'chip-count-placeholder'}`}>
-                  ({isInitialLoading ? '000' : statusCounts.absent})
-                </span>
-              </button>
-
-              <button className={`status-chip status-on ${filterConnected ? 'active' : ''}`} onClick={() => setFilterConnected(!filterConnected)}>
-                <span className="chip-dot"></span>
-                <span className="chip-text">Газ включений</span>
-              </button>
-
-              {hasActiveFilters && (
-                <button className="btn-reset-pill" onClick={() => {
-                  setSearchTerm(''); setDebouncedSearchTerm('');
-                  setSelectedSettlement([]); setSelectedStreet([]);
-                  setSelectedMeterBrand([]); setSelectedMeterSize([]);
-                  setSelectedMeterYear([]); setSelectedMeterGroups([]);
-                  setFilterDisconnected(false); setFilterDacha(false);
-                  setFilterAbsent(false); setFilterConnected(false);
-                  setFilterBuilding(''); setFilterApartment('');
-                  setDebouncedBuilding(''); setDebouncedApartment('');
-                  setSelectedGrs([]);
-                  setMeterYearFrom(''); setMeterYearTo('');
-                  setVerificationYearFrom(''); setVerificationYearTo('');
-                  setFilterSeal(''); setFilterStickerSeal('');
-
-                  setCurrentPage(0); setHasMore(true);
-                  clearScrollState(); loadClients();
-                }}><X size={12} /> Скинути</button>
-              )}
-            </div>
-          </div>
-          </div>
-        </div>
-
-        {/* ===== ОСНОВНИЙ КОНТЕНТ ===== */}
-        <div className="main-content">
-          <div className="list-panel">
-            <div className="clients-list">
-              {isInitialLoading ? (
-                <div className="skeleton-list">
-                  {[...Array(12)].map((_, i) => (
-                    <div key={i} className="skeleton-client-card">
-                      <div className="sk-avatar"></div>
-                      <div className="sk-body">
-                        <div className="sk-name" style={{ width: `${60 + (i % 3) * 10}%` }}></div>
-                        <div className="sk-address-row">
-                          <div className="sk-icon-dot"></div>
-                          <div className="sk-address" style={{ width: `${70 + (i % 2) * 15}%` }}></div>
-                        </div>
-                        <div className="sk-tags">
-                          <div className="sk-badge-account"></div>
-                          <div className="sk-badge-dot"></div>
-                          <div className="sk-badge-meter"></div>
-                        </div>
-                      </div>
-                      <div className="sk-right">
-                        <div className="sk-meter-brand"></div>
-                        <div className="sk-meter-num"></div>
-                      </div>
-                      <div className="sk-chevron"></div>
-                    </div>
-                  ))}
-                </div>
+          {/* 1. Лічильник зліва (не розсуває фільтри) */}
+          <div className="stats-left-group">
+            <div className="stats-item">
+              <Users size={14} className="stats-icon" />
+              {hasActiveFilters ? (
+                <>
+                  <span>Знайдено:</span> 
+                  {!isInitialLoading && <strong className="count-fade-in" style={{ color: '#0d9488' }}>{filteredTotalCount}</strong>}
+                </>
               ) : (
                 <>
-                  <div className="clients-inner">
-                    {clients.map(c => {
-                      const dotClass = c.gasDisconnected === true ? 'suspended' : 'active';
-                      const addr = [c.settlement, [c.streetType, c.street].filter(Boolean).join(' '), c.building ? `буд. ${c.building}${c.buildingLetter || ''}` : '', c.apartment ? `кв. ${c.apartment}${c.apartmentLetter || ''}` : ''].filter(Boolean).join(', ');
-                      const initials = (c.fullName || '?').split(' ').slice(0, 2).map(w => w[0]).join('');
-                      const meterShort = c.meterNumber ? `${c.meterBrand ? c.meterBrand.split(' ')[0] : ''} G${c.meterSize || ''} №${c.meterNumber}` : '';
-
-                      return (
-                        <div
-                          key={c.id}
-                          className={`client-item ${selectedClient?.id === c.id && !isMobile() ? 'selected' : ''}`}
-                          onClick={() => handleClientCardClick(c.id)}
-                          onContextMenu={(e) => handleContextMenu(e, c)}
-                        >
-                          <div className="item-avatar">{initials}</div>
-                          <div className="item-body">
-                            <div className="item-name">{c.fullName || '—'}</div>
-                            <div className="item-address"><div className="meta-icon"><MapPin size={11} /></div> {addr}</div>
-                            <div className="item-tags">
-                              <span className="account">о/р: {c.accountNumber || '—'}</span>
-                              <span className={`status-indicator ${dotClass}`}></span>
-                              {meterShort && <span className="meter-badge"><i className="fas fa-tachometer-alt"></i> {meterShort}</span>}
-                              {c.dacha && <span className="badge-chip badge-dacha">Дача</span>}
-                              {c.temporaryAbsent && <span className="badge-chip badge-absent">Не прож.</span>}
-                              {c.gasDisconnected && <span className="badge-chip badge-off">× Відключений</span>}
-                            </div>
-                          </div>
-                          <div className="item-right">
-                            <div className="meter-brand">{c.meterBrand || ''}</div>
-                            <div className="meter-num">№ {c.meterNumber || '—'}</div>
-                          </div>
-                          <ChevronRight size={24} color="#d1d5db" />
-                        </div>
-                      );
-                    })}
-
-                    {isLoadingMore && (
-                      <div className="load-more-spinner">
-                        <div className="spinner"></div>
-                        <p className="load-more-text">Завантаження...</p>
-                      </div>
-                    )}
-
-                    {!hasMore && clients.length > 0 && (
-                      <div className="list-end-text">
-                        {hasActiveFilters
-                          ? `Знайдено ${filteredTotalCount} клієнтів`
-                          : `Переглянуто всіх ${totalCount} клієнтів`}
-                      </div>
-                    )}
-
-                    {clients.length === 0 && !loading && (
-                      <div>
-                        {hasActiveFilters ? (
-                          <div className="empty-search">
-                            <div className="empty-search-icon">🔍</div>
-                            <p className="empty-search-title">Нічого не знайдено</p>
-                            <p className="empty-search-hint">Спробуйте змінити параметри пошуку</p>
-                          </div>
-                        ) : totalCount === 0 ? (
-                          <div className="empty-db">
-                            <div className="empty-db-icon">📋</div>
-                            <h2 className="empty-db-title">База порожня</h2>
-                            <p className="empty-db-hint">Додайте першого абонента або імпортуйте з Excel</p>
-                            <div className="empty-db-btns">
-                              <label className="btn" onMouseDown={(e) => {e.stopPropagation();}}><Upload size={13} />Імпорт XLS
-                                <input type="file" accept=".xlsx,.xls" onChange={(e) => { handleImportExcel(e); setShowQuickActions(false); }} className="hidden" disabled={loading} />
-                              </label>
-                              <button className="btn" onClick={() => setShowImportUrlModal(true)}><Upload size={14} /> Імпорт JSON по URL </button>
-                              <button onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleDownloadTemplate(); 
-                                setShowQuickActions(false); 
-                              }}
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                              }}
-                              className="btn"><FileText size={13} />Шаблон XLS</button>
-                              <button className="btn-primary" onClick={handleAdd}><Plus size={14} /> Додати абонента</button>
-                            </div>
-                          </div>
-                        ) : !isInitialLoading ? (
-                          <div className="list-end-text">Немає клієнтів</div>
-                        ) : null}
-                      </div>
-                    )}
-                  </div>
+                  <span>Всього:</span> 
+                  {!isInitialLoading && <strong className="count-fade-in">{totalCount}</strong>}
                 </>
               )}
             </div>
           </div>
 
-          {/* ПРАВА ПАНЕЛЬ — ДЕТАЛІ (ДЕСКТОП) */}
+              <div className="toolbar-v-divider"></div>
+
+              {/* 2. Статуси та кнопка Скинути (справа від статистики) */}
+              <div className="status-group">
+                <span className="status-label">Статус:</span>
+                
+                {/* Відключений */}
+                <button className={`status-chip status-off ${filterDisconnected ? 'active' : ''}`} onClick={() => setFilterDisconnected(!filterDisconnected)}>
+                  <span className="chip-dot"></span>
+                  <span className="chip-text">Відключений</span>
+                  <span className={`chip-count ${!isInitialLoading && statusCounts.disconnected > 0 ? 'chip-count-visible' : 'chip-count-placeholder'}`}>
+                    ({isInitialLoading ? '000' : statusCounts.disconnected})
+                  </span>
+                </button>
+
+                {/* Дача */}
+                <button className={`status-chip status-dacha ${filterDacha ? 'active' : ''}`} onClick={() => setFilterDacha(!filterDacha)}>
+                  <span className="chip-dot"></span>
+                  <span className="chip-text">Дача</span>
+                  <span className={`chip-count ${!isInitialLoading && statusCounts.dacha > 0 ? 'chip-count-visible' : 'chip-count-placeholder'}`}>
+                    ({isInitialLoading ? '0000' : statusCounts.dacha})
+                  </span>
+                </button>
+
+                {/* Не проживає */}
+                <button className={`status-chip status-absent ${filterAbsent ? 'active' : ''}`} onClick={() => setFilterAbsent(!filterAbsent)}>
+                  <span className="chip-dot"></span>
+                  <span className="chip-text">Не проживає</span>
+                  <span className={`chip-count ${!isInitialLoading && statusCounts.absent > 0 ? 'chip-count-visible' : 'chip-count-placeholder'}`}>
+                    ({isInitialLoading ? '000' : statusCounts.absent})
+                  </span>
+                </button>
+
+                {/* Газ включений */}
+                <button className={`status-chip status-on ${filterConnected ? 'active' : ''}`} onClick={() => setFilterConnected(!filterConnected)}>
+                  <span className="chip-dot"></span>
+                  <span className="chip-text">Газ включений</span>
+                </button>
+
+                {/* Кнопка Скинути */}
+                {hasActiveFilters && (
+                  <button className="btn-reset-pill" onClick={() => {
+                    setSearchTerm(''); setDebouncedSearchTerm('');
+                    setSelectedSettlement([]); setSelectedStreet([]);
+                    setSelectedMeterBrand([]); setSelectedMeterSize([]);
+                    setSelectedMeterYear([]); setSelectedMeterGroups([]);
+                    setFilterDisconnected(false); setFilterDacha(false);
+                    setFilterAbsent(false); setFilterConnected(false);
+                    setFilterBuilding(''); setFilterApartment('');
+                    setDebouncedBuilding(''); setDebouncedApartment('');
+                    setSelectedGrs([]);
+                    setMeterYearFrom(''); setMeterYearTo('');
+                    setVerificationYearFrom(''); setVerificationYearTo('');
+                    setFilterSeal(''); setFilterStickerSeal('');
+
+                    setCurrentPage(0); setHasMore(true);
+                    clearScrollState(); loadClients();
+                  }}><X size={12} /> Скинути</button>
+                )}
+              </div>
+            </div>
+          
+
+          </div>
+
+        </div>
+
+        {/* ⭐ ОСНОВНИЙ КОНТЕНТ: список + бічна панель */}
+        <div className="main-content">
+          {/* ЛІВА ПАНЕЛЬ — список */}
+          <div className="list-panel">
+            {/* ===== СПИСОК КЛІЄНТІВ ===== */}
+        <div className="clients-list">
+          {isInitialLoading ? (
+            <div className="skeleton-list">
+              {[...Array(12)].map((_, i) => (
+                <div key={i} className="skeleton-client-card">
+                  <div className="sk-avatar"></div>
+                  <div className="sk-body">
+                    <div className="sk-name" style={{ width: `${60 + (i % 3) * 10}%` }}></div>
+                    <div className="sk-address-row">
+                      <div className="sk-icon-dot"></div>
+                      <div className="sk-address" style={{ width: `${70 + (i % 2) * 15}%` }}></div>
+                    </div>
+                    <div className="sk-tags">
+                      <div className="sk-badge-account"></div>
+                      <div className="sk-badge-dot"></div>
+                      <div className="sk-badge-meter"></div>
+                    </div>
+                  </div>
+                  <div className="sk-right">
+                    <div className="sk-meter-brand"></div>
+                    <div className="sk-meter-num"></div>
+                  </div>
+                  <div className="sk-chevron"></div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <>
+              <div className="clients-inner">
+                            {clients.map(c => {
+                const dotClass = c.gasDisconnected === true ? 'suspended' : 'active';
+                const addr = [c.settlement, [c.streetType, c.street].filter(Boolean).join(' '), c.building ? `буд. ${c.building}${c.buildingLetter || ''}` : '', c.apartment ? `кв. ${c.apartment}${c.apartmentLetter || ''}` : ''].filter(Boolean).join(', ');
+                const initials = (c.fullName || '?').split(' ').slice(0, 2).map(w => w[0]).join('');
+                const meterShort = c.meterNumber ? `${c.meterBrand ? c.meterBrand.split(' ')[0] : ''} G${c.meterSize || ''} №${c.meterNumber}` : '';
+                const badges = [];
+                if (c.dacha) badges.push('<span class="badge-sm warning">Дача</span>');
+                if (c.temporaryAbsent) badges.push('<span class="badge-sm danger">Не прож.</span>');
+
+                return (
+                  <div
+                    key={c.id}
+                    className={`client-item ${selectedClient?.id === c.id && !isMobile() ? 'selected' : ''}`}
+                    onClick={() => handleClientCardClick(c.id)}
+                    onContextMenu={(e) => handleContextMenu(e, c)}
+                  >
+                    <div className="item-avatar">{initials}</div>
+                    <div className="item-body">
+                      <div className="item-name">{c.fullName || '—'}</div>
+                      <div className="item-address"><div className="meta-icon"><MapPin size={11} /></div> {addr}</div>
+                      <div className="item-tags">
+                        <span className="account">о/р: {c.accountNumber || '—'}</span>
+                        <span className={`status-indicator ${dotClass}`}></span>
+                        {meterShort && <span className="meter-badge"><i className="fas fa-tachometer-alt"></i> {meterShort}</span>}
+                        {c.dacha && <span className="badge-chip badge-dacha">Дача</span>}
+                        {c.temporaryAbsent && <span className="badge-chip badge-absent">Не прож.</span>}
+                        {c.gasDisconnected && <span className="badge-chip badge-off">× Відключений</span>}
+                      </div>
+                    </div>
+                    <div className="item-right">
+                      <div className="meter-brand">{c.meterBrand || ''}</div>
+                      <div className="meter-num">№ {c.meterNumber || '—'}</div>
+                    </div>
+                    <ChevronRight size={24} color="#d1d5db" />
+
+                  </div>
+                );
+              })}
+
+              {isLoadingMore && (
+                <div className="load-more-spinner">
+                  <div className="spinner"></div>
+                  <p className="load-more-text">Завантаження...</p>
+                </div>
+              )}
+
+              {!hasMore && clients.length > 0 && (
+                <div className="list-end-text">
+                  {(debouncedSearchTerm || selectedSettlement.length > 0 || selectedStreet.length > 0 ||
+                    selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || selectedMeterYear.length > 0 || selectedMeterGroups.length > 0)
+                    ? `Знайдено ${filteredTotalCount} клієнтів`
+                    : `Переглянуто всіх ${totalCount} клієнтів`}
+                </div>
+              )}
+
+              {clients.length === 0 && !loading && (
+                <div>
+                  {searchTerm || selectedSettlement.length > 0 || selectedStreet.length > 0 ||
+                   selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || selectedMeterYear.length > 0 || selectedMeterGroups.length > 0 ? (
+                    <div className="empty-search">
+                      <div className="empty-search-icon">🔍</div>
+                      <p className="empty-search-title">Нічого не знайдено</p>
+                      <p className="empty-search-hint">Спробуйте змінити параметри пошуку</p>
+                    </div>
+                  ) : totalCount === 0 ? (
+                    <div className="empty-db">
+                      <div className="empty-db-icon">📋</div>
+                      <h2 className="empty-db-title">База порожня</h2>
+                      <p className="empty-db-hint">Додайте першого абонента або імпортуйте з Excel</p>
+                      <div className="empty-db-btns">
+                        <label  className="btn" onMouseDown={(e) => {e.stopPropagation();}}><Upload size={13} />Імпорт XLS
+                          <input type="file" accept=".xlsx,.xls" onChange={(e) => { handleImportExcel(e); setShowQuickActions(false); }} className="hidden" disabled={loading} />
+                        </label>
+                        <button className="btn" onClick={() => setShowImportUrlModal(true)}><Upload size={14} /> Імпорт JSON по URL </button>
+                        <button onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleDownloadTemplate(); 
+                setShowQuickActions(false); 
+                }}
+                onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                }}
+                className="btn"><FileText size={13} />Шаблон XLS</button>
+                        <button className="btn-primary" onClick={handleAdd}><Plus size={14} /> Додати абонента</button>
+                      </div>
+                    </div>
+                  ) : !isInitialLoading ? (
+                    <div className="list-end-text">Немає клієнтів</div>
+                  ) : null}
+                </div>
+              )}
+              </div> {/* кінець clients-inner */}
+            </>
+          )}
+        </div> {/* кінець clients-list */}
+      </div> {/* кінець list-panel */}
+
+      {/* ⭐ ПРАВА ПАНЕЛЬ — деталі клієнта (тільки десктоп) */}
           {!isMobile() && (
             <div className="detail-panel">
               {selectedClient ? (
@@ -2401,16 +2648,17 @@ function ClientDatabase() {
                     <button className="btn-icon" onClick={() => setSelectedClient(null)}><X size={18} /></button>
                   </div>
                   <div className="detail-panel-body">
+                    {/* Особові дані */}
                     <div className="detail-info-block">
                       <h4><UserCircle size={14} /> Особові дані</h4>
                       <div className="detail-row"><span className="dlbl">ПІБ</span><span className="dval"><strong>{selectedClient.fullName}</strong></span></div>
                       <div className="detail-row"><span className="dlbl">Особовий рахунок</span><span className="dval">{selectedClient.accountNumber}</span></div>
                       <div className="detail-row"><span className="dlbl">EIC</span><span className="dval">{selectedClient.eic || '—'}</span></div>
                       <div className="detail-row"><span className="dlbl">Телефон</span><span className="dval">{selectedClient.phone ? (
-                        <a href={`tel:${selectedClient.phone.replace(/[^\d+]/g, '')}`} style={{color: '#2563eb', textDecoration: 'none', fontWeight: 500}}>
-                          {selectedClient.phone}
-                        </a>
-                      ) : '—'}</span></div>
+      <a href={`tel:${selectedClient.phone.replace(/[^\d+]/g, '')}`} style={{color: '#2563eb', textDecoration: 'none', fontWeight: 500}}>
+        {selectedClient.phone}
+      </a>
+    ) : '—'}</span></div>
                       <div className="detail-row">
                         <span className="dlbl">Адреса</span>
                         <span className="dval" style={{fontSize:'0.75rem'}}>
@@ -2431,7 +2679,7 @@ function ClientDatabase() {
                         </div>
                       )}
                     </div>
-                    
+                    {/* Об'єкт */}
                     <div className="detail-info-block">
                       <h4><Home size={14} /> Об'єкт</h4>
                       <div className="detail-row"><span className="dlbl">Площа</span><span className="dval">{selectedClient.area ? `${selectedClient.area} м²` : '—'}</span></div>
@@ -2440,7 +2688,7 @@ function ClientDatabase() {
                       <div className="detail-row"><span className="dlbl">ГРС</span><span className="dval">{selectedClient.grs || '—'}</span></div>
                       <div className="detail-row"><span className="dlbl">Дата підкл.</span><span className="dval">{selectedClient.connectDate || '—'}</span></div>
                     </div>
-
+                    {/* Лічильник */}
                     <div className="detail-info-block">
                       <h4><Gauge size={14} /> Лічильник</h4>
                       {selectedClient.meterNumber ? (
@@ -2459,7 +2707,7 @@ function ClientDatabase() {
                         </>
                       ) : <p style={{fontSize:12,color:'#9ca3af'}}>Немає даних</p>}
                     </div>
-
+                    {/* Прилади */}
                     <div className="detail-info-block">
                       <h4><Flame size={14} /> Прилади</h4>
                       {selectedClient.boilerBrand && <div className="detail-row"><span className="dlbl">Котел</span><span className="dval">{selectedClient.boilerBrand}</span></div>}
@@ -2467,7 +2715,7 @@ function ClientDatabase() {
                       {selectedClient.columnType && <div className="detail-row"><span className="dlbl">ВПГ</span><span className="dval">{selectedClient.columnType}{selectedClient.columnCount ? ` (${selectedClient.columnCount})` : ''}</span></div>}
                       {!selectedClient.boilerBrand && !selectedClient.stoveType && !selectedClient.columnType && <div className="detail-row"><span className="dlbl">Прилади</span><span className="dval">—</span></div>}
                     </div>
-
+                    {/* Відключення */}
                     <div className="detail-info-block">
                       <h4><AlertTriangle size={14} />  Відключення</h4>
                       <div className="detail-row">
@@ -2484,7 +2732,7 @@ function ClientDatabase() {
                         </>
                       )}
                     </div>
-
+                    {/* Кнопки дій */}
                     <div style={{display:'flex', gap:'0.5rem', marginTop:'0.5rem'}}>
                       <button className="btn-save" onClick={() => handleEdit(selectedClient)} style={{flex:1}}>✎ Редагувати</button>
                       <button className="btn-cancel" onClick={() => handleDelete(selectedClient.id)} style={{flex:1, color:'#dc2626'}}>🗑 Видалити</button>
@@ -2498,478 +2746,467 @@ function ClientDatabase() {
               )}
             </div>
           )}
+        </div>{/* кінець main-content */}
+
+{/* ⭐ МОБІЛЬНА ПАНЕЛЬ — виїжджає знизу з підтримкою свайпу */}
+<div
+  ref={overlayRef}
+  className={`mobile-overlay ${selectedClient && isMobile() ? 'open' : ''}`}>
+  {selectedClient && (
+    <>
+      <div className="mobile-header"onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onMouseDown={handleTouchStart}>
+        <div className="sheet-grabber"></div>
+        <div className="mobile-header-top">
+          <h2>{selectedClient.fullName}</h2>
+          <button 
+            type="button" 
+            className="btn-back" 
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              closeMobilePanel();
+            }}
+            >
+             <X size={18} />
+          </button>
+        </div>
+      </div>
+      <div className="mobile-body">
+        
+        {/* Особові дані */}
+        <div className="info-block">
+          <h4><UserCircle size={14} /> Особові дані</h4>
+          <div className="detail-row"><span className="dlbl">Особовий рахунок</span><span className="dval">{selectedClient.accountNumber}</span></div>
+          <div className="detail-row"><span className="dlbl">ПІБ</span><span className="dval"><strong>{selectedClient.fullName}</strong></span></div>
+          <div className="detail-row">
+            <span className="dlbl">Адреса</span>
+            <span className="dval" style={{fontSize:'0.75rem'}}>
+              {[selectedClient.settlement, selectedClient.streetType, selectedClient.street, selectedClient.building && `буд. ${selectedClient.building}${selectedClient.buildingLetter || ''}`, selectedClient.apartment && `кв. ${selectedClient.apartment}${selectedClient.apartmentLetter || ''}`].filter(Boolean).join(', ')}
+            </span>
+          </div>
+          <div className="detail-row"><span className="dlbl">EIC</span><span className="dval">{selectedClient.eic || '—'}</span></div>
+          <div className="detail-row">
+            <span className="dlbl">Телефон</span>
+            <span className="dval">
+              {selectedClient.phone ? (
+                <a href={`tel:${selectedClient.phone.replace(/[^\d+]/g, '')}`} style={{color: '#2563eb', textDecoration: 'none'}}>
+                  {selectedClient.phone}
+                </a>
+              ) : '—'}
+            </span>
+          </div>
+
         </div>
 
-        {/* МОБІЛЬНА ПАНЕЛЬ */}
-        <div
-          ref={overlayRef}
-          className={`mobile-overlay ${selectedClient && isMobile() ? 'open' : ''}`}>
-          {selectedClient && (
+        {/* Лічильник */}
+        <div className="info-block">
+          <h4><Gauge size={14} /> Лічильник</h4>
+          {selectedClient.meterNumber ? (
             <>
-              <div className="mobile-header" onTouchStart={handleTouchStart}
-                onTouchMove={handleTouchMove}
-                onTouchEnd={handleTouchEnd}
-                onMouseDown={handleTouchStart}>
-                <div className="sheet-grabber"></div>
-                <div className="mobile-header-top">
-                  <h2>{selectedClient.fullName}</h2>
-                  <button 
-                    type="button" 
-                    className="btn-back" 
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      closeMobilePanel();
-                    }}
-                  >
-                    <X size={18} />
-                  </button>
-                </div>
-              </div>
-              <div className="mobile-body">
-                <div className="info-block">
-                  <h4><UserCircle size={14} /> Особові дані</h4>
-                  <div className="detail-row"><span className="dlbl">Особовий рахунок</span><span className="dval">{selectedClient.accountNumber}</span></div>
-                  <div className="detail-row"><span className="dlbl">ПІБ</span><span className="dval"><strong>{selectedClient.fullName}</strong></span></div>
-                  <div className="detail-row">
-                    <span className="dlbl">Адреса</span>
-                    <span className="dval" style={{fontSize:'0.75rem'}}>
-                      {[selectedClient.settlement, selectedClient.streetType, selectedClient.street, selectedClient.building && `буд. ${selectedClient.building}${selectedClient.buildingLetter || ''}`, selectedClient.apartment && `кв. ${selectedClient.apartment}${selectedClient.apartmentLetter || ''}`].filter(Boolean).join(', ')}
-                    </span>
-                  </div>
-                  <div className="detail-row"><span className="dlbl">EIC</span><span className="dval">{selectedClient.eic || '—'}</span></div>
-                  <div className="detail-row">
-                    <span className="dlbl">Телефон</span>
-                    <span className="dval">
-                      {selectedClient.phone ? (
-                        <a href={`tel:${selectedClient.phone.replace(/[^\d+]/g, '')}`} style={{color: '#2563eb', textDecoration: 'none'}}>
-                          {selectedClient.phone}
-                        </a>
-                      ) : '—'}
-                    </span>
-                  </div>
-                </div>
+              <div className="detail-row"><span className="dlbl">Марка / Тип</span><span className="dval">{selectedClient.meterBrand || '—'} G{selectedClient.meterSize || '—'}</span></div>
+              <div className="detail-row"><span className="dlbl">№ лічильника</span><span className="dval">{selectedClient.meterNumber}</span></div>
+              <div className="detail-row"><span className="dlbl">Рік випуску</span><span className="dval">{selectedClient.meterYear || '—'}</span></div>
+              <div className="detail-row"><span className="dlbl">Наступна повірка</span><span className="dval">{selectedClient.nextVerificationDate || '—'}</span></div>
+              <div className="detail-row"><span className="dlbl">Завод-виробник</span><span className="dval" style={{fontSize:'0.7rem'}}>{selectedClient.meterManufacturer || '—'}</span></div>
+              <div className="detail-row"><span className="dlbl">Група / Підтип</span><span className="dval">{selectedClient.meterGroup || '—'} / {selectedClient.meterSubtype || '—'}</span></div>
+              <div className="detail-row"><span className="dlbl">Належність</span><span className="dval">{selectedClient.meterOwnership || '—'}</span></div>
+              <div className="detail-row"><span className="dlbl">Розташування</span><span className="dval" style={{fontSize:'0.7rem'}}>{selectedClient.meterLocation || '—'}</span></div>
+              <div className="detail-row"><span className="dlbl">МВНСШ / РСП</span><span className="dval">{selectedClient.mvnssh || '—'} / {selectedClient.rsp || '—'}</span></div>
+              <div className="detail-row"><span className="dlbl">Пломба</span><span className="dval">{selectedClient.seal || '—'}</span></div>
+              <div className="detail-row"><span className="dlbl">Стікерна пломба</span><span className="dval">{selectedClient.stickerSeal || '—'}</span></div>
+            </>
+          ) : <p style={{fontSize:12,color:'#9ca3af'}}>Немає даних</p>}
+        </div>
 
-                <div className="info-block">
-                  <h4><Gauge size={14} /> Лічильник</h4>
-                  {selectedClient.meterNumber ? (
-                    <>
-                      <div className="detail-row"><span className="dlbl">Марка / Тип</span><span className="dval">{selectedClient.meterBrand || '—'} G{selectedClient.meterSize || '—'}</span></div>
-                      <div className="detail-row"><span className="dlbl">№ лічильника</span><span className="dval">{selectedClient.meterNumber}</span></div>
-                      <div className="detail-row"><span className="dlbl">Рік випуску</span><span className="dval">{selectedClient.meterYear || '—'}</span></div>
-                      <div className="detail-row"><span className="dlbl">Наступна повірка</span><span className="dval">{selectedClient.nextVerificationDate || '—'}</span></div>
-                      <div className="detail-row"><span className="dlbl">Завод-виробник</span><span className="dval" style={{fontSize:'0.7rem'}}>{selectedClient.meterManufacturer || '—'}</span></div>
-                      <div className="detail-row"><span className="dlbl">Група / Підтип</span><span className="dval">{selectedClient.meterGroup || '—'} / {selectedClient.meterSubtype || '—'}</span></div>
-                      <div className="detail-row"><span className="dlbl">Належність</span><span className="dval">{selectedClient.meterOwnership || '—'}</span></div>
-                      <div className="detail-row"><span className="dlbl">Розташування</span><span className="dval" style={{fontSize:'0.7rem'}}>{selectedClient.meterLocation || '—'}</span></div>
-                      <div className="detail-row"><span className="dlbl">МВНСШ / РСП</span><span className="dval">{selectedClient.mvnssh || '—'} / {selectedClient.rsp || '—'}</span></div>
-                      <div className="detail-row"><span className="dlbl">Пломба</span><span className="dval">{selectedClient.seal || '—'}</span></div>
-                      <div className="detail-row"><span className="dlbl">Стікерна пломба</span><span className="dval">{selectedClient.stickerSeal || '—'}</span></div>
-                    </>
-                  ) : <p style={{fontSize:12,color:'#9ca3af'}}>Немає даних</p>}
-                </div>
+        {/* Прилади */}
+        <div className="info-block">
+          <h4><Flame size={14} /> Прилади</h4>
+          {selectedClient.boilerBrand && <div className="detail-row"><span className="dlbl">Котел</span><span className="dval">{selectedClient.boilerBrand}</span></div>}
+          {selectedClient.stoveType && <div className="detail-row"><span className="dlbl">Плита</span><span className="dval">{selectedClient.stoveType}{selectedClient.stoveCount ? ` (${selectedClient.stoveCount})` : ''}</span></div>}
+          {selectedClient.columnType && <div className="detail-row"><span className="dlbl">ВПГ</span><span className="dval">{selectedClient.columnType}{selectedClient.columnCount ? ` (${selectedClient.columnCount})` : ''}</span></div>}
+          {!selectedClient.boilerBrand && !selectedClient.stoveType && !selectedClient.columnType && <div className="detail-row"><span className="dlbl">Прилади</span><span className="dval">—</span></div>}
+        </div>
 
-                <div className="info-block">
-                  <h4><Flame size={14} /> Прилади</h4>
-                  {selectedClient.boilerBrand && <div className="detail-row"><span className="dlbl">Котел</span><span className="dval">{selectedClient.boilerBrand}</span></div>}
-                  {selectedClient.stoveType && <div className="detail-row"><span className="dlbl">Плита</span><span className="dval">{selectedClient.stoveType}{selectedClient.stoveCount ? ` (${selectedClient.stoveCount})` : ''}</span></div>}
-                  {selectedClient.columnType && <div className="detail-row"><span className="dlbl">ВПГ</span><span className="dval">{selectedClient.columnType}{selectedClient.columnCount ? ` (${selectedClient.columnCount})` : ''}</span></div>}
-                  {!selectedClient.boilerBrand && !selectedClient.stoveType && !selectedClient.columnType && <div className="detail-row"><span className="dlbl">Прилади</span><span className="dval">—</span></div>}
-                </div>
-
-                <div className="info-block">
-                  <h4><AlertTriangle size={14} /> Відключення</h4>
-                  <div className="detail-row">
-                    <span className="dlbl">Газ відключено</span>
-                    <span className="dval" style={{color: selectedClient.gasDisconnected ? '#dc2626' : '#16a34a', fontWeight: 600}}>
-                      {selectedClient.gasDisconnected ? 'ТАК' : 'Ні'}
-                    </span>
-                  </div>
-                  {selectedClient.gasDisconnected && (
-                    <>
-                      <div className="detail-row"><span className="dlbl">Метод</span><span className="dval">{selectedClient.disconnectMethod || '—'}</span></div>
-                      <div className="detail-row"><span className="dlbl">Пломба</span><span className="dval">{selectedClient.disconnectSeal || '—'}</span></div>
-                      <div className="detail-row"><span className="dlbl">Дата</span><span className="dval">{selectedClient.disconnectDate || '—'}</span></div>
-                    </>
-                  )}
-                </div>
-
-              </div>
-
-              <div className="mobile-actions">
-                <button 
-                  className="btn-sm primary" 
-                  onClick={() => { closeMobilePanel(); handleEdit(selectedClient); }}
-                >
-                  <Edit2 size={16} /> Редагувати
-                </button>
-                <button 
-                  className="btn-sm danger" 
-                  onClick={() => { closeMobilePanel(); handleDelete(selectedClient.id); }}
-                >
-                  <Trash2 size={16} /> Видалити
-                </button>
-              </div>
+        {/* Відключення */}
+        <div className="info-block">
+          <h4><AlertTriangle size={14} /> Відключення</h4>
+          <div className="detail-row">
+            <span className="dlbl">Газ відключено</span>
+            <span className="dval" style={{color: selectedClient.gasDisconnected ? '#dc2626' : '#16a34a', fontWeight: 600}}>
+              {selectedClient.gasDisconnected ? 'ТАК' : 'Ні'}
+            </span>
+          </div>
+          {selectedClient.gasDisconnected && (
+            <>
+              <div className="detail-row"><span className="dlbl">Метод</span><span className="dval">{selectedClient.disconnectMethod || '—'}</span></div>
+              <div className="detail-row"><span className="dlbl">Пломба</span><span className="dval">{selectedClient.disconnectSeal || '—'}</span></div>
+              <div className="detail-row"><span className="dlbl">Дата</span><span className="dval">{selectedClient.disconnectDate || '—'}</span></div>
             </>
           )}
         </div>
 
-        {/* МОДАЛКА СТВОРЕННЯ / РЕДАГУВАННЯ */}
-        {isModalOpen && (
-          <div className="modal-overlay" onClick={resetForm}>
-            <div className="modal-center">
-              <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-                <div className="modal-header">
-                  <h2 className="modal-title">{editingClient ? 'Редагувати клієнта' : 'Новий клієнт'}</h2>
-                  <button className="modal-close" onClick={resetForm}><X size={24} /></button>
-                </div>
-                <div className="modal-body">
+      </div>
 
-                  <div className="modal-section-blue">
-                    <h3 className="modal-section-title modal-section-title-blue"><Home size={18} /> ПІБ, Адреса, Особові дані</h3>
-                    <div className="modal-grid-3">
-                      
-                      <div className="name-account-fields modal-col-3">
-                        <div>
-                          <label className="form-label">ПІБ *</label>
-                          <input className="form-input" type="text" value={formData.fullName} onChange={(e) => setFormData({...formData, fullName: e.target.value})} />
-                        </div>
-                        <div>
-                          <label className="form-label">Особовий рахунок *</label>
-                          <input 
-                            className={`form-input ${accountError ? 'input-error' : ''}`} 
-                            type="text" 
-                            maxLength="10" 
-                            value={formData.accountNumber} 
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setFormData({...formData, accountNumber: val});
-                              checkAccountDuplicate(val);
-                            }} 
-                          />
-                          {accountError && (
-                            <div style={{ color: '#ef4444', fontSize: '11px', marginTop: '4px', fontWeight: 600 }}>
-                              ⚠️ {accountError}
-                            </div>
-                          )}
-                        </div>
-                      </div>
+      {/* Нижні кнопки дій */}
+      <div className="mobile-actions">
+        <button 
+          className="btn-sm primary" 
+          onClick={() => { closeMobilePanel(); handleEdit(selectedClient); }}
+        >
+          <Edit2 size={16} /> Редагувати
+        </button>
+        <button 
+          className="btn-sm danger" 
+          onClick={() => { closeMobilePanel(); handleDelete(selectedClient.id); }}
+        >
+          <Trash2 size={16} /> Видалити
+        </button>
+      </div>
+    </>
+  )}
+</div>
 
-                      <div className="address-compact-grid modal-col-3">
-                        <div>
-                          <label className="form-label">Населений пункт *</label>
-                          <input className="form-input" type="text" value={formData.settlement} onChange={(e) => setFormData({...formData, settlement: e.target.value})} />
-                        </div>
-                        <div>
-                          <label className="form-label">Вулиця (тип/назва) *</label>
-                          <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '8px' }}>
-                            <select className="form-input" value={formData.streetType} onChange={(e) => setFormData({...formData, streetType: e.target.value})}>
-                              {U_STREET_TYPE.map((type, idx) => (
-                                <option key={idx} value={type}>{type}</option>
-                              ))}
-                            </select>
-                            <input className="form-input" type="text" value={formData.street} onChange={(e) => setFormData({...formData, street: e.target.value})} />
-                          </div>
-                        </div>
-                        <div className="address-numbers-grid">
-                          <div>
-                            <label className="form-label" title="Будинок">Буд. *</label>
-                            <input className="form-input" type="text" value={formData.building} onChange={(e) => setFormData({...formData, building: e.target.value})} />
-                          </div>
-                          <div>
-                            <label className="form-label" title="Літера">літ. Буд. *</label>
-                            <input className="form-input" type="text" value={formData.buildingLetter} onChange={(e) => setFormData({...formData, buildingLetter: e.target.value})} />
-                          </div>
-                          <div>
-                            <label className="form-label" title="Квартира">Кв.</label>
-                            <input className="form-input" type="text" value={formData.apartment} onChange={(e) => setFormData({...formData, apartment: e.target.value})} />
-                          </div>
-                          <div>
-                            <label className="form-label" title="Літера кв.">літ. Кв.</label>
-                            <input className="form-input" type="text" value={formData.apartmentLetter} onChange={(e) => setFormData({...formData, apartmentLetter: e.target.value})} />
-                          </div>
-                        </div>
-                      </div>
-                      
+
+
+      {isModalOpen && (
+        <div className="modal-overlay" onClick={resetForm}>
+          <div className="modal-center">
+            <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2 className="modal-title">{editingClient ? 'Редагувати клієнта' : 'Новий клієнт'}</h2>
+                <button className="modal-close" onClick={resetForm}><X size={24} /></button>
+              </div>
+              <div className="modal-body">
+
+                {/* Особові дані */}
+                <div className="modal-section-blue">
+                  <h3 className="modal-section-title modal-section-title-blue"><Home size={18} /> ПІБ, Адреса, Особові дані</h3>
+                  <div className="modal-grid-3">
+                    
+                    {/* 1 РЯДОК: ПІБ + Особовий рахунок */}
+                    <div className="name-account-fields modal-col-3">
                       <div>
-                        <label className="form-label">EIC *</label>
-                        <input className="form-input" type="text" value={formData.eic} onChange={(e) => setFormData({...formData, eic: e.target.value})} />
+                        <label className="form-label">ПІБ *</label>
+                        <input className="form-input" type="text" value={formData.fullName} onChange={(e) => setFormData({...formData, fullName: e.target.value})} />
                       </div>
-
                       <div>
-                        <label className="form-label">Телефон</label>
-                        <input className="form-input" type="tel" placeholder="+380..." value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} />
-                      </div>
-                      
-                      <div className="flex-checkbox-wrapper">
-                        {/* Чекбокс 1: Дача */}
-                        <div className="custom-checkbox-wrapper">
-                          <input 
-                            type="checkbox" 
-                            id="dacha"
-                            className="custom-checkbox-input" 
-                            checked={formData.dacha || false} 
-                            onChange={(e) => setFormData(prev => ({ ...prev, dacha: e.target.checked }))} 
-                          />
-                          <label htmlFor="dacha" className="custom-checkbox-label">
-                            <span className="custom-checkbox-box"></span>
-                            <span>Дача</span>
-                          </label>
-                        </div>
-
-                        {/* Чекбокс 2: Тимчасово не проживає */}
-                        <div className="custom-checkbox-wrapper">
-                          <input 
-                            type="checkbox" 
-                            id="temporaryAbsent"
-                            className="custom-checkbox-input" 
-                            checked={formData.temporaryAbsent || false} 
-                            onChange={(e) => setFormData(prev => ({ ...prev, temporaryAbsent: e.target.checked }))} 
-                          />
-                          <label htmlFor="temporaryAbsent" className="custom-checkbox-label">
-                            <span className="custom-checkbox-box"></span>
-                            <span>Тимчасово не проживає</span>
-                          </label>
-                        </div>
+                        <label className="form-label">Особовий рахунок *</label>
+                        <input 
+                          className={`form-input ${accountError ? 'input-error' : ''}`} 
+                          type="text" 
+                          maxLength="10" 
+                          value={formData.accountNumber} 
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setFormData({...formData, accountNumber: val});
+                            checkAccountDuplicate(val); // викликає перевірку при кожному сивмолі
+                          }} 
+                        />
+                        {accountError && (
+                          <div style={{ color: '#ef4444', fontSize: '11px', marginTop: '4px', fontWeight: 600 }}>
+                            ⚠️ {accountError}
+                          </div>
+                        )}
                       </div>
                     </div>
-                    <div style={{ width: '100%', height: '1px', backgroundColor: '#bfdbfe', margin: '20px 0 10px' }}></div>
-                    <h3 className="modal-section-title modal-section-title-blue">Інша інформація про об'єкт</h3>
-                    <div className="modal-grid-4">
-                      <div><label className="form-label">Площа (м²)</label><input className="form-input" type="text" value={formData.area} onChange={(e) => setFormData({...formData, area: e.target.value})} /></div>
-                      <div><label className="form-label">Комун. гос-во</label><input className="form-input" type="text" value={formData.utilityType} onChange={(e) => setFormData({...formData, utilityType: e.target.value})} /></div>
-                      <div><label className="form-label">Група</label><input className="form-input" type="text" value={formData.utilityGroup} onChange={(e) => setFormData({...formData, utilityGroup: e.target.value})} /></div>
-                      <div><label className="form-label">ГРС</label>
-                          <select 
-                            className="form-input" 
-                            value={formData.grs || ''} 
-                            onChange={(e) => setFormData({ ...formData, grs: e.target.value })}
-                          >
-                            <option value="">— оберіть ГРС —</option>
-                            {formData.grs && !grsList.includes(String(formData.grs).trim()) && (
-                              <option value={String(formData.grs).trim()}>{String(formData.grs).trim()}</option>
-                            )}
-                            {grsList.map((grsName, index) => (
-                              <option key={index} value={grsName}>
-                                {grsName}
-                              </option> 
+
+                    {/* 2 РЯДОК: Населений пункт + Тип вул. + Вулиця + Будинок + Літ. + Кв. + Літ. */}
+                    <div className="address-compact-grid modal-col-3">
+                      <div>
+                        <label className="form-label">Населений пункт *</label>
+                        <input className="form-input" type="text" value={formData.settlement} onChange={(e) => setFormData({...formData, settlement: e.target.value})} />
+                      </div>
+                      <div>
+                        <label className="form-label">Вулиця (тип/назва) *</label>
+                        <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '8px' }}>
+                          <select className="form-input" value={formData.streetType} onChange={(e) => setFormData({...formData, streetType: e.target.value})}>
+                            {U_STREET_TYPE.map((type, idx) => (
+                              <option key={idx} value={type}>{type}</option>
                             ))}
                           </select>
-                      </div>
-                      <div><label className="form-label">Дата підкл.</label><input className="form-input" type="text" placeholder="ДД.ММ.РРРР" value={formData.connectDate} onChange={(e) => setFormData({...formData, connectDate: e.target.value})} /></div>
-                    </div>
-
-                  </div>
-
-                  <div className="modal-section-purple">
-                    <h3 className="modal-section-title modal-section-title-purple"><Gauge size={18} /> Лічильник</h3>
-                    
-                    <div className="form-grid-row" style={{ gridTemplateColumns: 'repeat(6, 1fr)' }}>
-                      <div style={{ gridColumn: 'span 2' }}>
-                        <label className="form-label">Марка лічильника</label>
-                        <select className="form-input" value={formData.meterBrand} onChange={(e) => {
-                          const brand = e.target.value;
-                          const found = METER_CATALOG.find(m => m.brand === brand);
-                          let detectedSize = formData.meterSize;
-                          if (found) {
-                              const normalizedBrand = brand.replace(',', '.').replace('G ', 'G');
-                              const match = METER_SIZES.find(size => normalizedBrand.includes(size));
-                              if (match) detectedSize = match.replace('G', '');
-                          } else if (brand === "") detectedSize = "";
-                          setFormData({ ...formData, meterBrand: brand, meterManufacturer: found ? found.manufacturer : '', meterGroup: found ? found.group : '', meterSize: detectedSize });
-                        }}>
-                          <option value="">— оберіть марку —</option>
-                          {METER_CATALOG.map(m => <option key={m.brand} value={m.brand}>{m.brand}</option>)}
-                        </select>
-                      </div>
-                      <div><label className="form-label">Типорозмір</label><input className="form-input" type="text" value={formData.meterSize} onChange={(e) => setFormData({...formData, meterSize: e.target.value})} /></div>
-                      <div><label className="form-label">№ лічильника</label><input className="form-input" type="text" value={formData.meterNumber} onChange={(e) => setFormData({...formData, meterNumber: e.target.value})} /></div>
-                      <div><label className="form-label">Рік вип.</label><input className="form-input" type="text" value={formData.meterYear} onChange={(e) => setFormData({...formData, meterYear: e.target.value})} /></div>
-                      <div><label className="form-label">Наст. повірка</label><input className="form-input" type="text" placeholder="ДД.ММ.РРРР" value={formData.nextVerificationDate} onChange={(e) => setFormData({...formData, nextVerificationDate: e.target.value})} /></div>
-                    </div>
-
-                    <div className="form-grid-row" style={{ gridTemplateColumns: 'repeat(6, 1fr)' }}>
-                      <div style={{ gridColumn: 'span 2' }}>
-                        <label className="form-label">Завод виробник</label>
-                        <select className="form-input" value={formData.meterManufacturer} onChange={(e) => setFormData({...formData, meterManufacturer: e.target.value})}>
-                          <option value="">— оберіть завод —</option>
-                          {METER_MANUFACTURER.map((man, idx) => <option key={idx} value={man}>{man}</option>)}
-                        </select>
-                      </div>
-                      <div><label className="form-label">Група ліч.</label><select className="form-input" value={formData.meterGroup} onChange={(e) => setFormData({...formData, meterGroup: e.target.value})}>
-                          <option value="">— оберіть групу —</option>
-                          {METER_GROUP.map((group, idx) => <option key={idx} value={group}>{group}</option>)}
-                      </select></div>
-                      <div><label className="form-label">Підтип</label><select className="form-input" value={formData.meterSubtype} onChange={(e) => setFormData({...formData, meterSubtype: e.target.value})}>
-                          <option value="">— оберіть підтип —</option>
-                          {METER_SUBTYPE.map((sub, idx) => <option key={idx} value={sub}>{sub}</option>)}
-                      </select></div>
-                      <div><label className="form-label">Належність</label><select className="form-input" value={formData.meterOwnership} onChange={(e) => setFormData({...formData, meterOwnership: e.target.value})}>
-                          <option value="">— належність —</option>
-                          {METER_OWNERSHIP.map((own, idx) => <option key={idx} value={own}>{own}</option>)}
-                      </select></div>
-                      <div><label className="form-label">Серв. орган</label><select className="form-input" value={formData.serviceOrg} onChange={(e) => setFormData({...formData, serviceOrg: e.target.value})}>
-                          <option value="">— серв. орган —</option>
-                          {SERVICE_ORG.map((org, idx) => <option key={idx} value={org}>{org}</option>)}
-                      </select></div>
-                    </div>
-
-                    <div className="form-grid-row" style={{ gridTemplateColumns: 'repeat(6, 1fr)' }}>
-                      <div style={{ gridColumn: 'span 2' }}>
-                        <label className="form-label">Розташування</label>
-                        <select className="form-input" value={formData.meterLocation} onChange={(e) => setFormData({...formData, meterLocation: e.target.value})}>
-                          <option value="">— розташування —</option>
-                          {METER_LOCATION.map((loc, idx) => <option key={idx} value={loc}>{loc}</option>)}
-                        </select>
-                      </div>
-                      <div><label className="form-label">МВНСШ</label><input className="form-input" type="text" value={formData.mvnssh} onChange={(e) => setFormData({...formData, mvnssh: e.target.value})} /></div>
-                      <div><label className="form-label">РСП</label><input className="form-input" type="text" value={formData.rsp} onChange={(e) => setFormData({...formData, rsp: e.target.value})} /></div>
-                      <div><label className="form-label">Пломба</label><input className="form-input" type="text" value={formData.seal} onChange={(e) => setFormData({...formData, seal: e.target.value})} /></div>
-                      <div><label className="form-label">Стікерна пломба</label><input className="form-input" type="text" value={formData.stickerSeal} onChange={(e) => setFormData({...formData, stickerSeal: e.target.value})} /></div>
-                    </div>
-                  </div>
-
-                  <div className="modal-section-orange">
-                    <h3 className="modal-section-title modal-section-title-orange">Прилади</h3>
-                    <div className="modal-grid-2">
-                      <div><label className="form-label">Котел — марка</label><input className="form-input" type="text" value={formData.boilerBrand} onChange={(e) => setFormData({...formData, boilerBrand: e.target.value})} /></div>
-                      <div><label className="form-label">Котел — кількість</label><input className="form-input" type="text" value={formData.boilerCount} onChange={(e) => setFormData({...formData, boilerCount: e.target.value})} /></div>
-                      <div><label className="form-label">Плита — тип</label><input className="form-input" type="text" value={formData.stoveType} onChange={(e) => setFormData({...formData, stoveType: e.target.value})} /></div>
-                      <div><label className="form-label">Кількість плит</label><input className="form-input" type="text" value={formData.stoveCount} onChange={(e) => setFormData({...formData, stoveCount: e.target.value})} /></div>
-                      <div><label className="form-label">ВПГ — тип</label><input className="form-input" type="text" value={formData.columnType} onChange={(e) => setFormData({...formData, columnType: e.target.value})} /></div>
-                      <div><label className="form-label">Кількість ВПГ</label><input className="form-input" type="text" value={formData.columnCount} onChange={(e) => setFormData({...formData, columnCount: e.target.value})} /></div>
-                    </div>
-                  </div>
-                  
-                  <div className="modal-section-red">
-                    <h3 className="modal-section-title modal-section-title-red">Відключення</h3>
-                    <div className="modal-col-3">
-                      <div className="form-checkbox-row"> 
-                        <div className="custom-checkbox-wrapper">
-                          <input 
-                            type="checkbox" 
-                            id="gasDisconnected"
-                            className="custom-checkbox-input" 
-                            checked={formData.gasDisconnected || false} 
-                            onChange={(e) => setFormData(prev => ({ ...prev, gasDisconnected: e.target.checked }))} 
-                          />
-                          <label htmlFor="gasDisconnected" className="custom-checkbox-label">
-                            <span className="custom-checkbox-box"></span>
-                            <span>Газ відключено</span>
-                          </label>
+                          <input className="form-input" type="text" value={formData.street} onChange={(e) => setFormData({...formData, street: e.target.value})} />
                         </div>
                       </div>
-                    </div><br/>
-                    <div className="modal-grid-3">
-                      <div><label className="form-label">Метод відкл.</label><input className="form-input" type="text" value={formData.disconnectMethod} onChange={(e) => setFormData({...formData, disconnectMethod: e.target.value})} /></div>
-                      <div><label className="form-label">Пломба відкл.</label><input className="form-input" type="text" value={formData.disconnectSeal} onChange={(e) => setFormData({...formData, disconnectSeal: e.target.value})} /></div>
-                      <div><label className="form-label">Дата відкл.</label><input className="form-input" type="text" placeholder="ДД.ММ.РРРР" value={formData.disconnectDate} onChange={(e) => setFormData({...formData, disconnectDate: e.target.value})} /></div>
+                      <div className="address-numbers-grid">
+                        <div>
+                          <label className="form-label" title="Будинок">Буд. *</label>
+                          <input className="form-input" type="text" value={formData.building} onChange={(e) => setFormData({...formData, building: e.target.value})} />
+                        </div>
+                        <div>
+                          <label className="form-label" title="Літера">літ. Буд. *</label>
+                          <input className="form-input" type="text" value={formData.buildingLetter} onChange={(e) => setFormData({...formData, buildingLetter: e.target.value})} />
+                        </div>
+                        <div>
+                          <label className="form-label" title="Квартира">Кв.</label>
+                          <input className="form-input" type="text" value={formData.apartment} onChange={(e) => setFormData({...formData, apartment: e.target.value})} />
+                        </div>
+                        <div>
+                          <label className="form-label" title="Літера кв.">літ. Кв.</label>
+                          <input className="form-input" type="text" value={formData.apartmentLetter} onChange={(e) => setFormData({...formData, apartmentLetter: e.target.value})} />
+                        </div>
+                      </div>
                     </div>
+                    
+                    <div>
+                      <label className="form-label">EIC *</label>
+                      <input className="form-input" type="text" value={formData.eic} onChange={(e) => setFormData({...formData, eic: e.target.value})} />
+                    </div>
+
+                    {/* 4 РЯДОК: Телефон + Чекбокси */}
+                    <div>
+                      <label className="form-label">Телефон</label>
+                      <input className="form-input" type="tel" placeholder="+380..." value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} />
+                    </div>
+                    
+                    <div className="flex-checkbox-wrapper">
+                      <label className="form-checkbox-label custom-checkbox-label">
+                        <input type="checkbox" className="custom-checkbox-input" checked={formData.dacha} onChange={(e) => setFormData({...formData, dacha: e.target.checked})}/>
+                        <span className="custom-checkbox-box"></span>
+                        <span>Дача</span></label>
+                      <label className="form-checkbox-label custom-checkbox-label">
+                        <input type="checkbox" className="custom-checkbox-input" checked={formData.temporaryAbsent} onChange={(e) => setFormData({...formData, temporaryAbsent: e.target.checked})}/>
+                        <span className="custom-checkbox-box"></span>
+                        <span>Тимчасово не проживає</span></label>
+                    </div>
+                  </div>
+                  <div style={{ width: '100%', height: '1px', backgroundColor: '#bfdbfe', margin: '20px 0 10px' }}></div>
+                  <h3 className="modal-section-title modal-section-title-blue">Інша інформація про об'єкт</h3>
+                  <div className="modal-grid-4">
+                    <div><label className="form-label">Площа (м²)</label><input className="form-input" type="text" value={formData.area} onChange={(e) => setFormData({...formData, area: e.target.value})} /></div>
+                    <div><label className="form-label">Комун. гос-во</label><input className="form-input" type="text" value={formData.utilityType} onChange={(e) => setFormData({...formData, utilityType: e.target.value})} /></div>
+                    <div><label className="form-label">Група</label><input className="form-input" type="text" value={formData.utilityGroup} onChange={(e) => setFormData({...formData, utilityGroup: e.target.value})} /></div>
+                    <div><label className="form-label">ГРС</label>
+                        <select 
+                          className="form-input" 
+                          value={formData.grs || ''} 
+                          onChange={(e) => setFormData({ ...formData, grs: e.target.value })}
+                        >
+                          <option value="">— оберіть ГРС —</option>
+                          
+                          {/* ⭐ Захист: якщо у клієнта є ГРС, якої чомусь немає в загальному списку — додаємо її */}
+                          {formData.grs && !grsList.includes(String(formData.grs).trim()) && (
+                            <option value={String(formData.grs).trim()}>{String(formData.grs).trim()}</option>
+                          )}
+
+                          {grsList.map((grsName, index) => (
+                            <option key={index} value={grsName}>
+                              {grsName}
+                            </option> 
+                          ))}
+                        </select>
+                    </div>
+                    <div><label className="form-label">Дата підкл.</label><input className="form-input" type="text" placeholder="ДД.ММ.РРРР" value={formData.connectDate} onChange={(e) => setFormData({...formData, connectDate: e.target.value})} /></div>
                   </div>
 
                 </div>
-                <div className="modal-footer">
-                  <button 
-                    className="btn-save" 
-                    onClick={handleSubmit}
-                    disabled={!!accountError}
-                    style={{
-                      opacity: accountError ? 0.5 : 1,
-                      cursor: accountError ? 'not-allowed' : 'pointer'
-                    }}
-                  >
-                    <Save size={18} /> {editingClient ? 'Зберегти зміни' : 'Додати клієнта'}
-                  </button>
-                  <button className="btn-cancel" onClick={resetForm}>Скасувати</button>
+
+                {/* Лічильник */}
+                <div className="modal-section-purple">
+                  <h3 className="modal-section-title modal-section-title-purple"><Gauge size={18} /> Лічильник</h3>
+                  
+                  {/* РЯДОК 1 */}
+                  <div className="form-grid-row" style={{ gridTemplateColumns: 'repeat(6, 1fr)' }}>
+                    <div style={{ gridColumn: 'span 2' }}>
+                      <label className="form-label">Марка лічильника</label>
+                      <select className="form-input" value={formData.meterBrand} onChange={(e) => {
+                        const brand = e.target.value;
+                        const found = METER_CATALOG.find(m => m.brand === brand);
+                        let detectedSize = formData.meterSize;
+                        if (found) {
+                            const normalizedBrand = brand.replace(',', '.').replace('G ', 'G');
+                            const match = METER_SIZES.find(size => normalizedBrand.includes(size));
+                            if (match) detectedSize = match.replace('G', '');
+                        } else if (brand === "") detectedSize = "";
+                        setFormData({ ...formData, meterBrand: brand, meterManufacturer: found ? found.manufacturer : '', meterGroup: found ? found.group : '', meterSize: detectedSize });
+                      }}>
+                        <option value="">— оберіть марку —</option>
+                        {METER_CATALOG.map(m => <option key={m.brand} value={m.brand}>{m.brand}</option>)}
+                      </select>
+                    </div>
+                    <div><label className="form-label">Типорозмір</label><input className="form-input" type="text" value={formData.meterSize} onChange={(e) => setFormData({...formData, meterSize: e.target.value})} /></div>
+                    <div><label className="form-label">№ лічильника</label><input className="form-input" type="text" value={formData.meterNumber} onChange={(e) => setFormData({...formData, meterNumber: e.target.value})} /></div>
+                    <div><label className="form-label">Рік вип.</label><input className="form-input" type="text" value={formData.meterYear} onChange={(e) => setFormData({...formData, meterYear: e.target.value})} /></div>
+                    <div><label className="form-label">Наст. повірка</label><input className="form-input" type="text" placeholder="ДД.ММ.РРРР" value={formData.nextVerificationDate} onChange={(e) => setFormData({...formData, nextVerificationDate: e.target.value})} /></div>
+                  </div>
+
+                  {/* РЯДОК 2 */}
+                  <div className="form-grid-row" style={{ gridTemplateColumns: 'repeat(6, 1fr)' }}>
+                    <div style={{ gridColumn: 'span 2' }}>
+                      <label className="form-label">Завод виробник</label>
+                      <select className="form-input" value={formData.meterManufacturer} onChange={(e) => setFormData({...formData, meterManufacturer: e.target.value})}>
+                        <option value="">— оберіть завод —</option>
+                        {METER_MANUFACTURER.map((man, idx) => <option key={idx} value={man}>{man}</option>)}
+                      </select>
+                    </div>
+                    <div><label className="form-label">Група ліч.</label><select className="form-input" value={formData.meterGroup} onChange={(e) => setFormData({...formData, meterGroup: e.target.value})}>
+                        <option value="">— оберіть групу —</option>
+                        {METER_GROUP.map((group, idx) => <option key={idx} value={group}>{group}</option>)}
+                    </select></div>
+                    <div><label className="form-label">Підтип</label><select className="form-input" value={formData.meterSubtype} onChange={(e) => setFormData({...formData, meterSubtype: e.target.value})}>
+                        <option value="">— оберіть підтип —</option>
+                        {METER_SUBTYPE.map((sub, idx) => <option key={idx} value={sub}>{sub}</option>)}
+                    </select></div>
+                    <div><label className="form-label">Належність</label><select className="form-input" value={formData.meterOwnership} onChange={(e) => setFormData({...formData, meterOwnership: e.target.value})}>
+                        <option value="">— належність —</option>
+                        {METER_OWNERSHIP.map((own, idx) => <option key={idx} value={own}>{own}</option>)}
+                    </select></div>
+                    <div><label className="form-label">Серв. орган</label><select className="form-input" value={formData.serviceOrg} onChange={(e) => setFormData({...formData, serviceOrg: e.target.value})}>
+                        <option value="">— серв. орган —</option>
+                        {SERVICE_ORG.map((org, idx) => <option key={idx} value={org}>{org}</option>)}
+                    </select></div>
+                  </div>
+
+                  {/* РЯДОК 3 */}
+                  <div className="form-grid-row" style={{ gridTemplateColumns: 'repeat(6, 1fr)' }}>
+                    <div style={{ gridColumn: 'span 2' }}>
+                      <label className="form-label">Розташування</label>
+                      <select className="form-input" value={formData.meterLocation} onChange={(e) => setFormData({...formData, meterLocation: e.target.value})}>
+                        <option value="">— розташування —</option>
+                        {METER_LOCATION.map((loc, idx) => <option key={idx} value={loc}>{loc}</option>)}
+                      </select>
+                    </div>
+                    <div><label className="form-label">МВНСШ</label><input className="form-input" type="text" value={formData.mvnssh} onChange={(e) => setFormData({...formData, mvnssh: e.target.value})} /></div>
+                    <div><label className="form-label">РСП</label><input className="form-input" type="text" value={formData.rsp} onChange={(e) => setFormData({...formData, rsp: e.target.value})} /></div>
+                    <div><label className="form-label">Пломба</label><input className="form-input" type="text" value={formData.seal} onChange={(e) => setFormData({...formData, seal: e.target.value})} /></div>
+                    <div><label className="form-label">Стікерна пломба</label><input className="form-input" type="text" value={formData.stickerSeal} onChange={(e) => setFormData({...formData, stickerSeal: e.target.value})} /></div>
+                  </div>
                 </div>
+
+                {/* Прилади */}
+                <div className="modal-section-orange">
+                  <h3 className="modal-section-title modal-section-title-orange">Прилади</h3>
+                  <div className="modal-grid-2">
+                    <div><label className="form-label">Котел — марка</label><input className="form-input" type="text" value={formData.boilerBrand} onChange={(e) => setFormData({...formData, boilerBrand: e.target.value})} /></div>
+                    <div><label className="form-label">Котел — кількість</label><input className="form-input" type="text" value={formData.boilerCount} onChange={(e) => setFormData({...formData, boilerCount: e.target.value})} /></div>
+                    <div><label className="form-label">Плита — тип</label><input className="form-input" type="text" value={formData.stoveType} onChange={(e) => setFormData({...formData, stoveType: e.target.value})} /></div>
+                    <div><label className="form-label">Кількість плит</label><input className="form-input" type="text" value={formData.stoveCount} onChange={(e) => setFormData({...formData, stoveCount: e.target.value})} /></div>
+                    <div><label className="form-label">ВПГ — тип</label><input className="form-input" type="text" value={formData.columnType} onChange={(e) => setFormData({...formData, columnType: e.target.value})} /></div>
+                    <div><label className="form-label">Кількість ВПГ</label><input className="form-input" type="text" value={formData.columnCount} onChange={(e) => setFormData({...formData, columnCount: e.target.value})} /></div>
+                  </div>
+                </div>
+                <div className="modal-section-red">
+                  <h3 className="modal-section-title modal-section-title-red">Відключення</h3>
+                  <div className="modal-col-3">
+                    <div className="form-checkbox-row"> 
+                      <label className="form-checkbox-label custom-checkbox-label">
+                        <input type="checkbox" className="custom-checkbox-input" checked={formData.gasDisconnected || false} onChange={(e) => setFormData({...formData, gasDisconnected: e.target.checked})} />
+                        <span className="custom-checkbox-box"></span>
+                        <span>Газ відключено</span>
+                      </label> 
+                    </div>
+                  </div><br/>
+                  <div className="modal-grid-3">
+                    <div><label className="form-label">Метод відкл.</label><input className="form-input" type="text" value={formData.disconnectMethod} onChange={(e) => setFormData({...formData, disconnectMethod: e.target.value})} /></div>
+                    <div><label className="form-label">Пломба відкл.</label><input className="form-input" type="text" value={formData.disconnectSeal} onChange={(e) => setFormData({...formData, disconnectSeal: e.target.value})} /></div>
+                    <div><label className="form-label">Дата відкл.</label><input className="form-input" type="text" placeholder="ДД.ММ.РРРР" value={formData.disconnectDate} onChange={(e) => setFormData({...formData, disconnectDate: e.target.value})} /></div>
+                  </div>
+                </div>
+
+              </div>
+              <div className="modal-footer">
+                <button 
+                  className="btn-save" 
+                  onClick={handleSubmit}
+                  disabled={!!accountError}
+                  style={{
+                    opacity: accountError ? 0.5 : 1,
+                    cursor: accountError ? 'not-allowed' : 'pointer'
+                  }}
+                  ><Save size={18} /> {editingClient ? 'Зберегти зміни' : 'Додати клієнта'}</button>
+                <button className="btn-cancel" onClick={resetForm}>Скасувати</button>
               </div>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {showImportUrlModal && (
-          <div className="url-modal-overlay"
-            onClick={(e) => { if (e.target === e.currentTarget) { setShowImportUrlModal(false); setImportUrl(''); } }}
-            onMouseDown={(e) => { if (e.target === e.currentTarget) e.stopPropagation(); }}>
-            <div className="url-modal-card" onClick={(e) => e.stopPropagation()}>
-              <div className="url-modal-body">
-                <div className="url-modal-header">
-                  <h2 className="url-modal-title">
-                    <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" style={{color:'#0d9488'}} viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                    </svg>
-                    Імпорт за посиланням
-                  </h2>
-                  <button className="url-modal-close" onClick={() => { setShowImportUrlModal(false); setImportUrl(''); }} disabled={importingFromUrl}><X size={22} /></button>
-                </div>
+      {showImportUrlModal && (
+        <div className="url-modal-overlay"
+          onClick={(e) => { if (e.target === e.currentTarget) { setShowImportUrlModal(false); setImportUrl(''); } }}
+          onMouseDown={(e) => { if (e.target === e.currentTarget) e.stopPropagation(); }}>
+          <div className="url-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="url-modal-body">
+              <div className="url-modal-header">
+                <h2 className="url-modal-title">
+                  <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" style={{color:'#0d9488'}} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                  </svg>
+                  Імпорт за посиланням
+                </h2>
+                <button className="url-modal-close" onClick={() => { setShowImportUrlModal(false); setImportUrl(''); }} disabled={importingFromUrl}><X size={22} /></button>
+              </div>
 
-                <div className="info-box">
-                  <div className="info-box-inner">
-                    <Info size={18} style={{color:'#3b82f6', flexShrink:0, marginTop:2}} />
-                    <div className="info-box-text">
-                      <p><b>💡 Для слабких телефонів</b></p>
-                      <p>Введіть посилання на JSON файл замість завантаження файлу.</p>
-                      <p><b>Де розмістити файл:</b></p>
-                      <ul>
-                        <li>GitHub (рекомендовано)</li>
-                        <li>Google Drive — публічне посилання</li>
-                        <li>Свій сервер — FTP</li>
-                      </ul>
-                    </div>
+              <div className="info-box">
+                <div className="info-box-inner">
+                  <Info size={18} style={{color:'#3b82f6', flexShrink:0, marginTop:2}} />
+                  <div className="info-box-text">
+                    <p><b>💡 Для слабких телефонів</b></p>
+                    <p>Введіть посилання на JSON файл замість завантаження файлу.</p>
+                    <p><b>Де розмістити файл:</b></p>
+                    <ul>
+                      <li>GitHub (рекомендовано)</li>
+                      <li>Google Drive — публічне посилання</li>
+                      <li>Свій сервер — FTP</li>
+                    </ul>
                   </div>
                 </div>
+              </div>
 
-                <div style={{marginBottom:16}}>
-                  <label className="url-input-label">Посилання на файл JSON:</label>
-                  <input className="url-input" type="url" value={importUrl} onChange={(e) => setImportUrl(e.target.value)}
-                    placeholder="https://raw.githubusercontent.com/your-name/repo/main/backup.json"
-                    disabled={importingFromUrl} />
-                  <p className="url-input-hint">Приклад: https://raw.githubusercontent.com/Snoopak/gas-local-db/main/backups/clients.json</p>
-                </div>
+              <div style={{marginBottom:16}}>
+                <label className="url-input-label">Посилання на файл JSON:</label>
+                <input className="url-input" type="url" value={importUrl} onChange={(e) => setImportUrl(e.target.value)}
+                  placeholder="https://raw.githubusercontent.com/your-name/repo/main/backup.json"
+                  disabled={importingFromUrl} />
+                <p className="url-input-hint">Приклад: https://raw.githubusercontent.com/Snoopak/gas-local-db/main/backups/clients.json</p>
+              </div>
 
-                <div className="code-box">
-                  <p className="code-box-title">📄 Очікуваний формат файлу:</p>
-                  <pre className="code-pre">{`[
+              <div className="code-box">
+                <p className="code-box-title">📄 Очікуваний формат файлу:</p>
+                <pre className="code-pre">{`[
   {
     "fullName": "Іванов Іван",
     "settlement": "Київ",
     ...
   }
 ]`}</pre>
-                  <p className="code-hint">Або об'єкт з полем "clients": {"{ clients: [...] }"}</p>
-                </div>
+                <p className="code-hint">Або об'єкт з полем "clients": {"{ clients: [...] }"}</p>
+              </div>
 
-                <div className="url-modal-footer">
-                  <button className="btn-import-url" onClick={handleImportFromURL} disabled={importingFromUrl || !importUrl.trim()}>
-                    {importingFromUrl ? (
-                      <><div className="spinner" style={{borderColor:'white',borderTopColor:'transparent',width:18,height:18}}></div> Завантаження...</>
-                    ) : (
-                      <><Upload size={16} /> Імпортувати</>
-                    )}
-                  </button>
-                  <button className="btn-cancel-url" onClick={() => { setShowImportUrlModal(false); setImportUrl(''); }} disabled={importingFromUrl}>
-                    Скасувати
-                  </button>
-                </div>
+              <div className="url-modal-footer">
+                <button className="btn-import-url" onClick={handleImportFromURL} disabled={importingFromUrl || !importUrl.trim()}>
+                  {importingFromUrl ? (
+                    <><div className="spinner" style={{borderColor:'white',borderTopColor:'transparent',width:18,height:18}}></div> Завантаження...</>
+                  ) : (
+                    <><Upload size={16} /> Імпортувати</>
+                  )}
+                </button>
+                <button className="btn-cancel-url" onClick={() => { setShowImportUrlModal(false); setImportUrl(''); }} disabled={importingFromUrl}>
+                  Скасувати
+                </button>
               </div>
             </div>
           </div>
-        )}
-
-        {ctxMenu.show && (
-          <div className="ctx-menu" style={{position:'fixed', left: ctxMenu.x, top: ctxMenu.y, zIndex: 9999}}>
-            <button className="ctx-item" onClick={() => handleCtxAction('edit')}><Edit2 size={14} /> Редагувати</button>
-            <button className="ctx-item" onClick={() => handleCtxAction('copy')}><Copy size={14} /> Копіювати адресу</button>
-            <button className="ctx-item" onClick={() => handleCtxAction('call')}><Phone size={14} /> Подзвонити</button>
-            <div className="ctx-divider"></div>
-            <button className="ctx-item ctx-item-danger" onClick={() => handleCtxAction('delete')}><Trash2 size={14} /> Видалити</button>
-          </div>
-        )}
-      </div>
+        </div>
+      )}
+{/* ⭐ Контекстне меню */}
+      {ctxMenu.show && (
+        <div className="ctx-menu" style={{position:'fixed', left: ctxMenu.x, top: ctxMenu.y, zIndex: 9999}}>
+          <button className="ctx-item" onClick={() => handleCtxAction('edit')}><Edit2 size={14} /> Редагувати</button>
+          <button className="ctx-item" onClick={() => handleCtxAction('copy')}><Copy size={14} /> Копіювати адресу</button>
+          <button className="ctx-item" onClick={() => handleCtxAction('call')}><Phone size={14} /> Подзвонити</button>
+          <div className="ctx-divider"></div>
+          <button className="ctx-item ctx-item-danger" onClick={() => handleCtxAction('delete')}><Trash2 size={14} /> Видалити</button>
+        </div>
+      )}
+      </div> {/* Це закриває app-container */}
     </div> 
   );
 }
 
+// Обгортаємо ClientDatabase в AlertProvider
 export default function AppWithAlerts() {
   return (
     <AlertProvider>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, createContext, useContext, useCallback } from 'react';
-import { Search, Plus, Edit2, Trash2, X, Save, Phone, Home, Gauge, Upload, Download, FileText, CheckCircle, AlertCircle, Info, AlertTriangle, Database, Activity, Flame, MapPin, ChevronUp, ChevronDown, Users, Sun, Moon, Copy, ChevronRight, UserCircle, Pointer, SlidersHorizontal } from 'lucide-react';
+import { Search, Plus, Edit2, Trash2, X, Save, Phone, Home, Gauge, Upload, Download, FileText, CheckCircle, AlertCircle, Info, AlertTriangle, Database, Activity, Flame, MapPin, ChevronUp, ChevronDown, Users, Sun, Moon, Copy, ChevronRight, UserCircle, Pointer, SlidersHorizontal, Globe } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import './App.css';
 import {METER_CATALOG, METER_SIZES, METER_SUBTYPE, METER_LOCATION, METER_OWNERSHIP, SERVICE_ORG, METER_GROUP, METER_MANUFACTURER, U_STREET_TYPE} from './data';
@@ -447,6 +447,23 @@ const addClientsBatch = async (clientsBatch) => {
   });
 };
 
+// ⚡ Пакетне оновлення масиву існуючих клієнтів (через put)
+const updateClientsBatch = async (clientsBatch) => {
+  if (!clientsBatch || clientsBatch.length === 0) return;
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([STORE_NAME], 'readwrite');
+    const store = transaction.objectStore(STORE_NAME);
+
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = (e) => reject(e.target.error);
+
+    for (let i = 0; i < clientsBatch.length; i++) {
+      store.put(clientsBatch[i]);
+    }
+  });
+};
+
 const deleteClient = async (id) => {
   const db = await openDB();
   return new Promise((resolve, reject) => {
@@ -504,7 +521,7 @@ const getClientsByPage = async (page, pageSize) => {
 const searchClients = async (
   searchTerm, settlements, streets, meterBrands, meterSizes, meterYears, meterGroups, 
   filterDisconnected, filterDacha, filterAbsent, filterConnected, filterBuilding, filterApartment,
-  selectedGrs, meterYearFrom, meterYearTo, verificationYearFrom, verificationYearTo, filterSeal, filterStickerSeal
+  selectedGrs, meterYearFrom, meterYearTo, verificationYearFrom, verificationYearTo, filterSeal, filterStickerSeal, filterHasIot
 ) => {
   const db = await openDB();
   return new Promise((resolve, reject) => {
@@ -559,6 +576,8 @@ const searchClients = async (
 
         const matchesStickerSeal = !filterStickerSeal || 
           (client.stickerSeal && client.stickerSeal.toString().toLowerCase().includes(filterStickerSeal.toLowerCase().trim()));
+
+        const matchesIot = !filterHasIot || (client.iotBrand || client.iotNumber || (client.iotHistory && client.iotHistory.length > 0));
         
         let matchesStatus = true;
         if (filterDisconnected || filterDacha || filterAbsent) {
@@ -575,7 +594,7 @@ const searchClients = async (
             matchesMeterBrand && matchesMeterSize && matchesMeterGroup && matchesMeterYear &&
             matchesYearFrom && matchesYearTo && matchesVerYearFrom && matchesVerYearTo &&
             matchesSeal && matchesStickerSeal &&
-            matchesStatus && matchesConnected) {
+            matchesStatus && matchesConnected && matchesIot) {
           results.push(client);
         }
         cursor.continue();
@@ -590,13 +609,13 @@ const searchClients = async (
 const searchClientsPaginated = async (
   searchTerm, settlements, streets, meterBrands, meterSizes, meterYears, meterGroups, 
   filterDisconnected, filterDacha, filterAbsent, filterConnected, filterBuilding, filterApartment,
-  selectedGrs, meterYearFrom, meterYearTo, verificationYearFrom, verificationYearTo, filterSeal, filterStickerSeal,
+  selectedGrs, meterYearFrom, meterYearTo, verificationYearFrom, verificationYearTo, filterSeal, filterStickerSeal, filterHasIot,
   page, pageSize
 ) => {
   const allResults = await searchClients(
     searchTerm, settlements, streets, meterBrands, meterSizes, meterYears, meterGroups, 
     filterDisconnected, filterDacha, filterAbsent, filterConnected, filterBuilding, filterApartment,
-    selectedGrs, meterYearFrom, meterYearTo, verificationYearFrom, verificationYearTo, filterSeal, filterStickerSeal
+    selectedGrs, meterYearFrom, meterYearTo, verificationYearFrom, verificationYearTo, filterSeal, filterStickerSeal, filterHasIot
   );
   
   const start = page * pageSize;
@@ -633,6 +652,8 @@ function ClientDatabase() {
   const [filterBuilding, setFilterBuilding] = useState('');
   const [filterApartment, setFilterApartment] = useState('');
 
+  const [filterHasIot, setFilterHasIot] = useState(false);
+
   const [showFilterDrawer, setShowFilterDrawer] = useState(false);
 
   const [selectedGrs, setSelectedGrs] = useState([]);
@@ -665,6 +686,8 @@ function ClientDatabase() {
   const [meterYears, setMeterYears] = useState(['Всі']);
   const [meterGroups, setMeterGroups] = useState([]);
   const [grsList, setGrsList] = useState([]);
+
+  const [iotHistoryModalClient, setIotHistoryModalClient] = useState(null);
   
   const [statusCounts, setStatusCounts] = useState({ disconnected: 0, dacha: 0, absent: 0 });
   
@@ -692,6 +715,7 @@ function ClientDatabase() {
   const [openDropdown, setOpenDropdown] = useState(null);
 
   const [selectedClient, setSelectedClient] = useState(null);
+  const closingTimer = useRef(null);
 
   const overlayRef = useRef(null);
   const touchStartY = useRef(0);
@@ -816,7 +840,10 @@ function ClientDatabase() {
     boilerBrand: '', boilerCount: '', stoveType: '', stoveCount: '', columnType: '', columnCount: '',
     area: '', utilityType: '', utilityGroup: '', grs: '',
     gasDisconnected: false, disconnectMethod: '', disconnectSeal: '', disconnectDate: '',
-    connectDate: '', dacha: false, temporaryAbsent: false
+    connectDate: '', dacha: false, temporaryAbsent: false,
+    // --- НОВІ ПОЛЯ ІОТ ---
+    iotBrand: '', iotNumber: '', iotSeal: '', iotInstallDate: '',
+    iotHistory: [], iotLastDate: '', iotLastTime: '', iotLastReading: '', iotProcessed: ''
   });
 
   const [accountError, setAccountError] = useState('');
@@ -865,7 +892,7 @@ function ClientDatabase() {
     const hasActiveFilters = debouncedSearchTerm || selectedSettlement.length > 0 || selectedStreet.length > 0 || 
       selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || selectedMeterYear.length > 0 || selectedMeterGroups.length > 0 ||
       filterDisconnected || filterDacha || filterAbsent || filterConnected || debouncedBuilding || debouncedApartment ||
-      selectedGrs.length > 0 || meterYearFrom || meterYearTo || verificationYearFrom || verificationYearTo || filterSeal || filterStickerSeal;
+      selectedGrs.length > 0 || meterYearFrom || meterYearTo || verificationYearFrom || verificationYearTo || filterSeal || filterStickerSeal || filterHasIot;
 
     if (hasActiveFilters) {
       clearScrollState();
@@ -883,7 +910,7 @@ function ClientDatabase() {
     debouncedSearchTerm, selectedSettlement, selectedStreet, selectedMeterBrand, selectedMeterSize, 
     selectedMeterYear, selectedMeterGroups, filterDisconnected, filterDacha, filterAbsent, filterConnected, 
     debouncedBuilding, debouncedApartment,
-    selectedGrs, meterYearFrom, meterYearTo, verificationYearFrom, verificationYearTo, filterSeal, filterStickerSeal
+    selectedGrs, meterYearFrom, meterYearTo, verificationYearFrom, verificationYearTo, filterSeal, filterStickerSeal, filterHasIot
   ]);
 
   useEffect(() => {
@@ -998,7 +1025,8 @@ function ClientDatabase() {
       const hasFilters = debouncedSearchTerm || selectedSettlement.length > 0 || selectedStreet.length > 0 || 
                         selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || 
                         selectedMeterYear.length > 0 || selectedMeterGroups.length > 0 ||
-                        filterDisconnected || filterDacha || filterAbsent || filterConnected || debouncedBuilding || debouncedApartment;
+                        filterDisconnected || filterDacha || filterAbsent || filterConnected || debouncedBuilding || debouncedApartment ||
+                        selectedGrs.length > 0 || meterYearFrom || meterYearTo || verificationYearFrom || verificationYearTo || filterSeal || filterStickerSeal || filterHasIot;
       
       if (hasFilters) {
         performSearch(true);
@@ -1282,24 +1310,41 @@ function ClientDatabase() {
   };
 
   const handleClientCardClick = (clientId) => {
+    // 1. Вбиваємо таймер закриття, якщо ми тапнули дуже швидко після свайпу
+    if (closingTimer.current) clearTimeout(closingTimer.current);
+    
+    // 2. Примусово знімаємо стилі, якщо шторка зависла посеред закритого стану
+    if (overlayRef.current) {
+      overlayRef.current.style.transform = '';
+      overlayRef.current.style.transition = '';
+      overlayRef.current.style.pointerEvents = '';
+    }
+
     const client = clients.find(c => c.id === clientId);
     saveScrollState();
     setSelectedClient(client);
   };
 
-  const closeMobilePanel = useCallback(() => {
+const closeMobilePanel = useCallback(() => {
     if (overlayRef.current) {
+      // Дозволяємо CSS-анімації відпрацювати плавно без ривків
       overlayRef.current.classList.remove('open');
       overlayRef.current.style.transition = 'transform 0.25s cubic-bezier(0.32, 0.72, 0, 1)';
       overlayRef.current.style.transform = 'translate3d(0, 100%, 0)';
+      // Блокуємо фантомні кліки по невидимій шторці
+      overlayRef.current.style.pointerEvents = 'none'; 
     }
 
-    setTimeout(() => {
+    // Очищаємо попередній таймер, якщо він був
+    if (closingTimer.current) clearTimeout(closingTimer.current);
+
+    closingTimer.current = setTimeout(() => {
       setSelectedClient(null);
 
       if (overlayRef.current) {
         overlayRef.current.style.transform = '';
         overlayRef.current.style.transition = '';
+        overlayRef.current.style.pointerEvents = ''; // Повертаємо кліки
       }
 
       const savedScrollY = sessionStorage.getItem(STORAGE_KEYS.SCROLL_Y);
@@ -1321,7 +1366,7 @@ function ClientDatabase() {
         debouncedSearchTerm, selectedSettlement, selectedStreet,
         selectedMeterBrand, selectedMeterSize, selectedMeterYear, selectedMeterGroups,
         filterDisconnected, filterDacha, filterAbsent, filterConnected, debouncedBuilding, debouncedApartment,
-        selectedGrs, meterYearFrom, meterYearTo, verificationYearFrom, verificationYearTo, filterSeal, filterStickerSeal,
+        selectedGrs, meterYearFrom, meterYearTo, verificationYearFrom, verificationYearTo, filterSeal, filterStickerSeal, filterHasIot,
         currentPage, CONFIG.PAGE_SIZE
       );
       
@@ -1440,7 +1485,10 @@ const checkAccountDuplicate = async (accNum) => {
       boilerBrand: '', boilerCount: '', stoveType: '', stoveCount: '', columnType: '', columnCount: '',
       area: '', utilityType: '', utilityGroup: '', grs: '',
       gasDisconnected: false, disconnectMethod: '', disconnectSeal: '', disconnectDate: '',
-      connectDate: '', dacha: false, temporaryAbsent: false
+      connectDate: '', dacha: false, temporaryAbsent: false,
+      // --- НОВІ ПОЛЯ ІОТ ---
+      iotBrand: '', iotNumber: '', iotSeal: '', iotInstallDate: '',
+      iotHistory: [], iotLastDate: '', iotLastTime: '', iotLastReading: '', iotProcessed: ''
     });
     setIsModalOpen(true);
   };
@@ -1603,7 +1651,30 @@ const handleImportExcel = async (e) => {
         if (!val) return '';
         return String(val).replace(/\s/g, '').replace(/^0+/, '').toLowerCase();
       };
-
+      // --- ОНОВЛЕНИЙ БЛОК ---
+      const formatExcelDate = (val) => {
+        if (!val) return '';
+        
+        const strVal = String(val).trim();
+        
+        // Якщо в тексті вже є крапки або тире (напр. "15.05.2024" або "2024-05-15") - не чіпаємо
+        if (strVal.includes('.') || strVal.includes('-')) return strVal;
+        
+        // Пробуємо перетворити на число (спрацює і для 46142, і для "46142")
+        const numVal = Number(strVal);
+        
+        // Якщо це якийсь звичайний текст і не число - повертаємо як є
+        if (isNaN(numVal)) return strVal;
+        
+        // Конвертуємо Excel-число в дату
+        const date = new Date(Date.UTC(0, 0, numVal - 1));
+        const d = String(date.getUTCDate()).padStart(2, '0');
+        const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+        const y = date.getUTCFullYear();
+        
+        return `${d}.${m}.${y}`;
+      };
+      // ----------------------
       const allDbClients = await getAllClients();
       const existingClientsMap = new Map();
       allDbClients.forEach(c => {
@@ -1642,9 +1713,9 @@ const handleImportExcel = async (e) => {
           meterSize: (row['Типорозмір'] || '').toString().trim(),
           meterNumber: (row['№ лічильника'] || '').toString().trim(),
           meterYear: (row['Рік випуску'] || '').toString().trim(),
-          verificationDate: (row['Дата повірки'] || '').toString().trim(),
-          nextVerificationDate: (row['Наступна повірка'] || '').toString().trim(),
-          installationDate: (row['Дата встановлення'] || '').toString().trim(),
+          verificationDate: formatExcelDate(row['Дата повірки']),
+          nextVerificationDate: formatExcelDate(row['Наступна повірка']),
+          installationDate: formatExcelDate(row['Дата встановлення']),
           meterLocation: (row['Розташування лічильника'] || '').toString().trim(),
           meterGroup: (row['Група ліч.'] || '').toString().trim(),
           meterSubtype: (row['Підтип'] || '').toString().trim(),
@@ -1663,10 +1734,16 @@ const handleImportExcel = async (e) => {
           gasDisconnected: (row['Газ вимкнено'] === 'Так' || row['Газ вимкнено'] === true),
           disconnectMethod: (row['Метод відключення'] || '').toString().trim(),
           disconnectSeal: (row['Пломба відкл.'] || '').toString().trim(),
-          disconnectDate: (row['Дата відкл.'] || '').toString().trim(),
-          connectDate: (row['Дата підкл.'] || '').toString().trim(),
+          disconnectDate: formatExcelDate(row['Дата відкл.']),
+          connectDate: formatExcelDate(row['Дата підкл.']),
           dacha: row['Дача'] === 'Так' || row['Дача'] === true,
-          temporaryAbsent: row['Тимчасово відсутній'] === 'Так' || row['Тимчасово відсутній'] === true
+          temporaryAbsent: row['Тимчасово відсутній'] === 'Так' || row['Тимчасово відсутній'] === true,
+          // Додаємо ІоТ поля (назви в row[] зміни на ті, що у твоєму головному шаблоні Excel)
+          iotBrand: (row['ІоТ Марка'] || '').toString().trim(),
+          iotNumber: (row['ІоТ Серійний №'] || '').toString().trim(),
+          iotSeal: (row['ІоТ Пломба'] || '').toString().trim(),
+          iotInstallDate: formatExcelDate(row['ІоТ Дата встанов.']),
+          iotHistory: [],
         };
 
         const appliancesText = row['Прилади'] || row['прилади'] || row['Обладнання'] || row['обладнання'] || '';
@@ -1752,6 +1829,90 @@ const handleImportExcel = async (e) => {
     
     return parts.join(' ');
   };
+
+// 🚀 Функція імпорту файлу з історією зв'язку ІоТ
+const handleImportIoT = async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  setLoading(true);
+  try {
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    const data = new Uint8Array(await file.arrayBuffer());
+    const workbook = XLSX.read(data, { type: 'array' });
+    const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+
+    const cleanStr = (val) => val ? String(val).replace(/\s/g, '').toLowerCase() : '';
+    const allDbClients = await getAllClients();
+    const existingClientsMap = new Map();
+    
+    allDbClients.forEach(c => {
+      if (c.accountNumber) existingClientsMap.set(`ACC_${cleanStr(c.accountNumber)}`, c);
+      if (c.meterNumber) existingClientsMap.set(`MET_${cleanStr(c.meterNumber)}`, c);
+    });
+
+    let updatedCount = 0;
+    const BATCH_SIZE = 500;
+    let updateBatch = [];
+
+    const parseUaDate = (d, t) => {
+      if (!d) return 0;
+      const parts = d.split('.');
+      return parts.length === 3 
+        ? new Date(`${parts[2]}-${parts[1]}-${parts[0]}T${t || '00:00:00'}`).getTime() 
+        : new Date(`${d}T${t || '00:00:00'}`).getTime();
+    };
+
+    for (let i = 0; i < jsonData.length; i++) {
+      const row = jsonData[i];
+      const accKey = `ACC_${cleanStr(row['Особ.Рах.'])}`;
+      const meterKey = `MET_${cleanStr(row['Сер.номер лічильника'])}`;
+
+      let clientToUpdate = existingClientsMap.get(accKey) || existingClientsMap.get(meterKey);
+
+      if (clientToUpdate) {
+        if (!clientToUpdate.iotHistory) clientToUpdate.iotHistory = [];
+
+        const newLog = {
+          date: (row['Дата надходження'] || '').toString().trim(),
+          time: (row['Час надходження'] || '').toString().trim(),
+          reading: (row['Показник Лічильника'] || '').toString().trim(),
+          processed: (row['Оброблений'] || '').toString().trim()
+        };
+
+        const isDuplicate = clientToUpdate.iotHistory.some(h => h.date === newLog.date && h.time === newLog.time);
+
+        if (!isDuplicate && newLog.date) {
+          clientToUpdate.iotHistory.push(newLog);
+          clientToUpdate.iotHistory.sort((a, b) => parseUaDate(b.date, b.time) - parseUaDate(a.date, a.time));
+          
+          clientToUpdate.iotLastDate = clientToUpdate.iotHistory[0].date;
+          clientToUpdate.iotLastTime = clientToUpdate.iotHistory[0].time;
+          clientToUpdate.iotLastReading = clientToUpdate.iotHistory[0].reading;
+
+          updateBatch.push(clientToUpdate);
+          updatedCount++;
+        }
+
+        if (updateBatch.length >= BATCH_SIZE || i === jsonData.length - 1) {
+          if (updateBatch.length > 0) {
+            await updateClientsBatch(updateBatch);
+            updateBatch = []; 
+          }
+        }
+      }
+    }
+    
+    await loadClients();
+    showToast('success', `Готово! Додано нових записів ІоТ: ${updatedCount}`);
+  } catch (error) {
+    showToast('error', `Помилка: ${error.message}`);
+  } finally {
+    setLoading(false);
+  }
+  e.target.value = '';
+};
 
   const handleExportExcel = async () => {
     setLoading(true);
@@ -1861,7 +2022,10 @@ const handleImportExcel = async (e) => {
       boilerBrand: '', boilerCount: '', stoveType: '', stoveCount: '', columnType: '', columnCount: '',
       area: '', utilityType: '', utilityGroup: '', grs: '',
       gasDisconnected: false, disconnectMethod: '', disconnectSeal: '', disconnectDate: '',
-      connectDate: '', dacha: false, temporaryAbsent: false
+      connectDate: '', dacha: false, temporaryAbsent: false,
+      // --- НОВІ ПОЛЯ ІОТ ---
+      iotBrand: '', iotNumber: '', iotSeal: '', iotInstallDate: '',
+      iotHistory: [], iotLastDate: '', iotLastTime: '', iotLastReading: '', iotProcessed: ''
     });
     setEditingClient(null);
     setAccountError('');
@@ -1966,7 +2130,8 @@ const handleImportExcel = async (e) => {
     verificationYearFrom || 
     verificationYearTo || 
     filterSeal.trim() || 
-    filterStickerSeal.trim()
+    filterStickerSeal.trim() ||
+    filterHasIot
   );
 
   return (
@@ -2110,6 +2275,17 @@ const handleImportExcel = async (e) => {
                       <div className="qa-icon-box qa-orange"><FileText size={14} /></div>
                       <span>Шаблон XLS</span>
                     </button>
+                    {/* Знайди свої кнопки імпорту і додай цю поруч */}
+                    <label className="qa-item">
+                      <div className="qa-icon-box qa-indigo">📡</div>
+                      <span>Імпорт логів ІоТ (Excel)</span>
+                      <input 
+                        type="file" 
+                        accept=".xlsx, .xls" 
+                        onChange={handleImportIoT} 
+                        style={{ display: 'none' }} 
+                      />
+                    </label>
                   </div>
                 </div>
               )}
@@ -2160,6 +2336,7 @@ const handleImportExcel = async (e) => {
                     setMeterYearFrom(''); setMeterYearTo('');
                     setVerificationYearFrom(''); setVerificationYearTo('');
                     setFilterSeal(''); setFilterStickerSeal('');
+                    setFilterHasIot(false);
 
                     setCurrentPage(0); setHasMore(true);
                     clearScrollState(); loadClients();
@@ -2238,6 +2415,23 @@ const handleImportExcel = async (e) => {
                         <input className="drawer-input" style={{ textAlign: 'center' }} type="number" placeholder="2024" value={verificationYearFrom} onChange={e => setVerificationYearFrom(e.target.value)} />
                         <input className="drawer-input" style={{ textAlign: 'center' }} type="number" placeholder="2028" value={verificationYearTo} onChange={e => setVerificationYearTo(e.target.value)} />
                       </div>
+                    </div>
+                  </div>
+
+                  <div className="drawer-section">
+                    <div className="drawer-section-title">Телеметрія</div>
+                    <div className="custom-checkbox-wrapper" style={{ marginTop: '8px' }}>
+                      <input 
+                        type="checkbox" 
+                        id="filterIot"
+                        className="custom-checkbox-input" 
+                        checked={filterHasIot} 
+                        onChange={(e) => setFilterHasIot(e.target.checked)} 
+                      />
+                      <label htmlFor="filterIot" className="custom-checkbox-label">
+                        <span className="custom-checkbox-box"></span>
+                        <span style={{ fontWeight: 500, color: '#4338ca' }}>Абоненти з ІоТ модулем</span>
+                      </label>
                     </div>
                   </div>
 
@@ -2366,6 +2560,13 @@ const handleImportExcel = async (e) => {
                               <span className="account">о/р: {c.accountNumber || '—'}</span>
                               <span className={`status-indicator ${dotClass}`}></span>
                               {meterShort && <span className="meter-badge"><i className="fas fa-tachometer-alt"></i> {meterShort}</span>}
+                              {/* --- ПОЧАТОК: БЕЙДЖ ІОТ (ПРОСТИЙ СІРИЙ) --- */}
+                              {(c.iotBrand || c.iotNumber) && (
+                                <div className="meta-icon" title={`ІоТ: ${c.iotBrand || '—'} №${c.iotNumber || '—'}`}>
+                                  <Globe size={12} style={{ color: '#6b7280' }} />
+                                </div>
+                              )}
+                              {/* --- КІНЕЦЬ: БЕЙДЖ ІОТ --- */}
 
                               {/* Рядок 2 (на мобілці) / Продовження (на десктопі): Всі статусні беджі */}
                               {(c.dacha || c.temporaryAbsent || c.gasDisconnected) && (
@@ -2524,6 +2725,44 @@ const handleImportExcel = async (e) => {
                       {!selectedClient.boilerBrand && !selectedClient.stoveType && !selectedClient.columnType && <div className="detail-row"><span className="dlbl">Прилади</span><span className="dval">—</span></div>}
                     </div>
                     
+                    {/* --- ПОЧАТОК БЛОКУ ІОТ (ДЕСКТОП) --- */}
+                    {(selectedClient.iotBrand || selectedClient.iotNumber || (selectedClient.iotHistory && selectedClient.iotHistory.length > 0)) && (
+                      <div className="detail-info-block">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                          <h4><Globe size={14} /> Телеметрія (ІоТ)</h4>
+                          {selectedClient.iotHistory && selectedClient.iotHistory.length > 0 && (
+                            <button 
+                              onClick={() => setIotHistoryModalClient(selectedClient)}
+                              style={{ background: '#e0e7ff', color: '#4338ca', border: 'none', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: '600', cursor: 'pointer' }}
+                            >
+                              Історія ({selectedClient.iotHistory.length})
+                            </button>
+                          )}
+                        </div>
+                        
+                        <div className="detail-row"><span className="dlbl">Модель</span><span className="dval">{selectedClient.iotBrand || '—'}</span></div>
+                        <div className="detail-row"><span className="dlbl">Серійний №</span><span className="dval">{selectedClient.iotNumber || '—'}</span></div>
+                        <div className="detail-row"><span className="dlbl">Пломба</span><span className="dval">{selectedClient.iotSeal || '—'}</span></div>
+                        <div className="detail-row"><span className="dlbl">Дата встановлення</span><span className="dval">{selectedClient.iotInstallDate || '—'}</span></div>
+                        
+                        {selectedClient.iotLastDate && (
+                          <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px dashed #cbd5e1', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <div className="detail-row">
+                              <span className="dlbl">Останній зв'язок</span>
+                              <span className="dval" style={{ color: '#166534', fontWeight: '600', background: '#dcfce7', padding: '2px 6px', borderRadius: '4px' }}>
+                                {selectedClient.iotLastDate} {selectedClient.iotLastTime}
+                              </span>
+                            </div>
+                            <div className="detail-row">
+                              <span className="dlbl">Показник</span>
+                              <span className="dval"><strong>{selectedClient.iotLastReading}</strong></span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {/* --- КІНЕЦЬ БЛОКУ ІОТ --- */}
+
                     {selectedClient.gasDisconnected && (
                     <div className="detail-info-block">
                       <h4><AlertTriangle size={14} />  Відключення</h4>
@@ -2651,6 +2890,45 @@ const handleImportExcel = async (e) => {
                   {selectedClient.columnType && <div className="detail-row"><span className="dlbl">ВПГ</span><span className="dval">{selectedClient.columnType}{selectedClient.columnCount ? ` (${selectedClient.columnCount})` : ''}</span></div>}
                   {!selectedClient.boilerBrand && !selectedClient.stoveType && !selectedClient.columnType && <div className="detail-row"><span className="dlbl">Прилади</span><span className="dval">—</span></div>}
                 </div>
+
+                {/* --- ПОЧАТОК БЛОКУ ІОТ (МОБІЛКА) --- */}
+                {(selectedClient.iotBrand || selectedClient.iotNumber || (selectedClient.iotHistory && selectedClient.iotHistory.length > 0)) && (
+                  <div className="info-block">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <h4><Globe size={14} /> Телеметрія (ІоТ)</h4>
+                      {selectedClient.iotHistory && selectedClient.iotHistory.length > 0 && (
+                        <button 
+                          onClick={() => setIotHistoryModalClient(selectedClient)}
+                          style={{ background: '#e0e7ff', color: '#4338ca', border: 'none', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: '600', cursor: 'pointer' }}
+                        >
+                          Історія ({selectedClient.iotHistory.length})
+                        </button>
+                      )}
+                    </div>
+                    
+                    <div className="detail-row"><span className="dlbl">Модель</span><span className="dval">{selectedClient.iotBrand || '—'}</span></div>
+                    <div className="detail-row"><span className="dlbl">Серійний №</span><span className="dval">{selectedClient.iotNumber || '—'}</span></div>
+                    <div className="detail-row"><span className="dlbl">Пломба</span><span className="dval">{selectedClient.iotSeal || '—'}</span></div>
+                    <div className="detail-row"><span className="dlbl">Дата встановлення</span><span className="dval">{selectedClient.iotInstallDate || '—'}</span></div>
+                    
+                    {selectedClient.iotLastDate && (
+                      <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px dashed #cbd5e1', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <div className="detail-row">
+                          <span className="dlbl">Останній зв'язок</span>
+                          <span className="dval" style={{ color: '#166534', fontWeight: '600', background: '#dcfce7', padding: '2px 6px', borderRadius: '4px' }}>
+                            {selectedClient.iotLastDate} {selectedClient.iotLastTime}
+                          </span>
+                        </div>
+                        <div className="detail-row">
+                          <span className="dlbl">Показник</span>
+                          <span className="dval"><strong>{selectedClient.iotLastReading}</strong></span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {/* --- КІНЕЦЬ БЛОКУ ІОТ --- */}
+
                 {selectedClient.gasDisconnected && (
                 <div className="info-block">
                   <h4><AlertTriangle size={14} /> Відключення</h4>
@@ -2904,6 +3182,32 @@ const handleImportExcel = async (e) => {
                     </div>
                   </div>
 
+                  {/* --- ПОЧАТОК: СЕКЦІЯ ІОТ В МОДАЛЦІ --- */}
+                  <div className="modal-section-blue" style={{ marginTop: '16px', marginBottom: '16px' }}>
+                    <h3 className="modal-section-title" style={{ color: '#059669', borderBottomColor: '#a7f3d0' }}>
+                      <Globe size={18} style={{ color: '#059669', marginRight: '6px' }} /> Телеметрія (ІоТ)
+                    </h3>
+                    <div className="modal-grid-4">
+                      <div>
+                        <label className="form-label">Марка / Модель</label>
+                        <input className="form-input" type="text" value={formData.iotBrand} onChange={(e) => setFormData({...formData, iotBrand: e.target.value})} />
+                      </div>
+                      <div>
+                        <label className="form-label">Серійний №</label>
+                        <input className="form-input" type="text" value={formData.iotNumber} onChange={(e) => setFormData({...formData, iotNumber: e.target.value})} />
+                      </div>
+                      <div>
+                        <label className="form-label">Пломба ІоТ</label>
+                        <input className="form-input" type="text" value={formData.iotSeal} onChange={(e) => setFormData({...formData, iotSeal: e.target.value})} />
+                      </div>
+                      <div>
+                        <label className="form-label">Дата встановлення</label>
+                        <input className="form-input" type="text" placeholder="ДД.ММ.РРРР" value={formData.iotInstallDate} onChange={(e) => setFormData({...formData, iotInstallDate: e.target.value})} />
+                      </div>
+                    </div>
+                  </div>
+                  {/* --- КІНЕЦЬ: СЕКЦІЯ ІОТ В МОДАЛЦІ --- */}
+
                   <div className="modal-section-orange">
                     <h3 className="modal-section-title modal-section-title-orange">Прилади</h3>
                     <div className="modal-grid-2">
@@ -2957,6 +3261,59 @@ const handleImportExcel = async (e) => {
                   </button>
                   <button className="btn-cancel" onClick={resetForm}>Скасувати</button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+
+        {/* --- Знайди низ файлу і встав модалку --- */}
+        {iotHistoryModalClient && (
+          <div className="modal-overlay" onClick={() => setIotHistoryModalClient(null)}>
+            <div className="modal-center">
+              <div className="modal-card" style={{ maxWidth: '500px' }} onClick={e => e.stopPropagation()}>
+                
+                <div className="modal-header">
+                  <div className="modal-title">Історія зв'язку ІоТ</div>
+                  <button className="modal-close" onClick={() => setIotHistoryModalClient(null)}>✕</button>
+                </div>
+                
+                <div className="modal-body" style={{ padding: '0' }}>
+                  <div style={{ padding: '12px 16px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: '12px' }}>
+                    Абонент: <b>{iotHistoryModalClient.fullName}</b><br/>
+                    Серійний №: <b>{iotHistoryModalClient.iotNumber || '—'}</b>
+                  </div>
+                  
+                  <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left' }}>
+                      <thead style={{ position: 'sticky', top: 0, background: 'white', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                        <tr>
+                          <th style={{ padding: '10px 16px', borderBottom: '1px solid #e2e8f0', color: '#64748b' }}>Дата та час</th>
+                          <th style={{ padding: '10px 16px', borderBottom: '1px solid #e2e8f0', color: '#64748b' }}>Показник</th>
+                          <th style={{ padding: '10px 16px', borderBottom: '1px solid #e2e8f0', color: '#64748b' }}>Оброблений</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(iotHistoryModalClient.iotHistory || []).map((log, idx) => (
+                          <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                            <td style={{ padding: '10px 16px', fontWeight: '500' }}>{log.date} <span style={{color: '#94a3b8'}}>{log.time}</span></td>
+                            <td style={{ padding: '10px 16px', fontWeight: '600', color: '#0f172a' }}>{log.reading}</td>
+                            <td style={{ padding: '10px 16px' }}>
+                              <span style={{ 
+                                padding: '2px 6px', borderRadius: '4px', fontSize: '10px', 
+                                background: log.processed === 'Так' ? '#dcfce7' : '#f1f5f9',
+                                color: log.processed === 'Так' ? '#166534' : '#64748b'
+                              }}>
+                                {log.processed || '—'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
               </div>
             </div>
           </div>

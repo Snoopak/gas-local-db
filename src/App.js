@@ -2014,15 +2014,18 @@ const handleImportExcel = async (e) => {
               <div className="nav-title-group">
                 <span className="navbar-title">Абоненти газу</span>
                 <span className="nav-subtitle">
-                  {totalCount > 0 ? (
-                    <>   Всього абонентів: {!isInitialLoading && <strong className="count-fade-in">{totalCount}</strong>}
-                    </>
-                    ) : (
+                  {isInitialLoading ? (
+                    '\u00A0' // Невидимий пробіл тримає каркас і не дає шапці стрибати
+                  ) : totalCount > 0 ? (
                     <>
-                    Абоненти: <strong style={{ color: '#ef4444' }}>Відсутні</strong>
+                      Всього абонентів: <strong className="count-fade-in">{totalCount}</strong>
                     </>
-                    )}
-                  </span>
+                  ) : (
+                    <>
+                      Абоненти: <strong style={{ color: '#ef4444' }}>Відсутні</strong>
+                    </>
+                  )}
+                </span>
               </div>
             </div>
             <div className="navbar-actions">

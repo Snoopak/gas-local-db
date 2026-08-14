@@ -1341,7 +1341,8 @@ const handleTouchEnd = (e) => {
 const closeMobilePanel = useCallback(() => {
     if (overlayRef.current) {
       overlayRef.current.style.transition = 'transform 0.25s cubic-bezier(0.32, 0.72, 0, 1)';
-      overlayRef.current.style.transform = 'translate3d(0, 100%, 0)';
+      // 🚀 СЕКРЕТ ТУТ: Замість 100% використовуємо 120vh (120% від висоти всього екрана телефона)
+      overlayRef.current.style.transform = 'translate3d(0, 120vh, 0)';
       overlayRef.current.style.pointerEvents = 'none'; 
     }
 
@@ -1351,55 +1352,12 @@ const closeMobilePanel = useCallback(() => {
       setSelectedClient(null);
 
       if (overlayRef.current) {
-        overlayRef.current.style.transform = '';
+        // 🛑 Більше не видаляємо transform! Хай порожній блок надійно лежить за межами екрана
         overlayRef.current.style.transition = '';
         overlayRef.current.style.pointerEvents = '';
       }
-      // 🛑 Рядки з window.scrollTo повністю видалено!
     }, 250);
   }, []);
-
-  const performSearch = async (append = false) => {
-    if (isLoadingMore || (!append && loading)) return;
-    
-    if (append) {
-      setIsLoadingMore(true);
-    } else {
-      setLoading(true);
-    }
-    
-    try {
-      const result = await searchClientsPaginated(
-        debouncedSearchTerm, selectedSettlement, selectedStreet,
-        selectedMeterBrand, selectedMeterSize, selectedMeterYear, selectedMeterGroups,
-        filterDisconnected, filterDacha, filterAbsent, filterConnected, debouncedBuilding, debouncedApartment,
-        selectedGrs, meterYearFrom, meterYearTo, verificationYearFrom, verificationYearTo, filterSeal, filterStickerSeal, filterHasIot,
-        currentPage, CONFIG.PAGE_SIZE
-      );
-      
-      if (append) {
-        setClients(prev => [...prev, ...result.items]);
-      } else {
-        setClients(result.items);
-      }
-      
-      setFilteredTotalCount(result.total);
-      setHasMore(result.hasMore);
-      
-      setTimeout(() => {
-        saveScrollState();
-      }, 100);
-      
-    } catch (error) {
-      console.error('Error searching:', error);
-    }
-    
-    if (append) {
-      setIsLoadingMore(false);
-    } else {
-      setLoading(false);
-    }
-  };
 
   // ✅ Асинхронна перевірка дубліката по УСІЙ IndexedDB
 const checkAccountDuplicate = async (accNum) => {

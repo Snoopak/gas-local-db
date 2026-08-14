@@ -1315,6 +1315,7 @@ function ClientDatabase() {
     
     // 2. Примусово знімаємо стилі, якщо шторка зависла посеред закритого стану
     if (overlayRef.current) {
+      overlayRef.current.classList.add('open');
       overlayRef.current.style.transform = '';
       overlayRef.current.style.transition = '';
       overlayRef.current.style.pointerEvents = '';
@@ -1328,7 +1329,6 @@ function ClientDatabase() {
 const closeMobilePanel = useCallback(() => {
     if (overlayRef.current) {
       // Дозволяємо CSS-анімації відпрацювати плавно без ривків
-      overlayRef.current.classList.remove('open');
       overlayRef.current.style.transition = 'transform 0.25s cubic-bezier(0.32, 0.72, 0, 1)';
       overlayRef.current.style.transform = 'translate3d(0, 100%, 0)';
       // Блокуємо фантомні кліки по невидимій шторці

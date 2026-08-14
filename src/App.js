@@ -757,8 +757,14 @@ function ClientDatabase() {
     }
   };
 
-  const handleTouchEnd = () => {
+const handleTouchEnd = (e) => {
     if (!isDragging.current) return;
+    
+    // ✅ Якщо ми дійсно тягнули шторку (а не просто клікнули), вбиваємо фантомні кліки Safari
+    if (e && e.cancelable && touchCurrentY.current > 10) {
+      e.preventDefault();
+    }
+
     isDragging.current = false;
 
     if (rafId.current) cancelAnimationFrame(rafId.current);
@@ -1334,14 +1340,11 @@ function ClientDatabase() {
 
 const closeMobilePanel = useCallback(() => {
     if (overlayRef.current) {
-      // Дозволяємо CSS-анімації відпрацювати плавно без ривків
       overlayRef.current.style.transition = 'transform 0.25s cubic-bezier(0.32, 0.72, 0, 1)';
       overlayRef.current.style.transform = 'translate3d(0, 100%, 0)';
-      // Блокуємо фантомні кліки по невидимій шторці
       overlayRef.current.style.pointerEvents = 'none'; 
     }
 
-    // Очищаємо попередній таймер, якщо він був
     if (closingTimer.current) clearTimeout(closingTimer.current);
 
     closingTimer.current = setTimeout(() => {
@@ -1350,11 +1353,9 @@ const closeMobilePanel = useCallback(() => {
       if (overlayRef.current) {
         overlayRef.current.style.transform = '';
         overlayRef.current.style.transition = '';
-        overlayRef.current.style.pointerEvents = ''; // Повертаємо кліки
+        overlayRef.current.style.pointerEvents = '';
       }
-
-      const savedScrollY = sessionStorage.getItem(STORAGE_KEYS.SCROLL_Y);
-      if (savedScrollY) window.scrollTo(0, parseInt(savedScrollY, 10));
+      // 🛑 Рядки з window.scrollTo повністю видалено!
     }, 250);
   }, []);
 

@@ -2164,6 +2164,8 @@ body.dark .ctx-divider { background: #334155; }
   transition: all 0.2s;
   position: relative;
   flex-wrap: wrap;
+touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 @media (hover: hover) {
 .client-item:hover { background: #fafcff; }

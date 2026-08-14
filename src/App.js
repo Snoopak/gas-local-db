@@ -736,6 +736,12 @@ function ClientDatabase() {
 
   const handleTouchMove = (e) => {
     if (!isDragging.current) return;
+
+// ✅ ДОДАЄМО ЦЕ: Забороняємо браузеру думати, що ми скролимо фон
+    if (e.cancelable && e.type === 'touchmove') {
+      e.preventDefault();
+    }
+
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     const diff = clientY - touchStartY.current;
 
@@ -2804,6 +2810,7 @@ const handleImportIoT = async (e) => {
           {selectedClient && (
             <>
               <div className="mobile-header" onTouchStart={handleTouchStart}
+                style={{ touchAction: 'none' }}
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
                 onMouseDown={handleTouchStart}>

@@ -2165,7 +2165,9 @@ body.dark .ctx-divider { background: #334155; }
   position: relative;
   flex-wrap: wrap;
 }
+@media (hover: hover) {
 .client-item:hover { background: #fafcff; }
+}
 .client-item.selected { 
   background: #fefce8; 
 }
@@ -2302,7 +2304,9 @@ body.dark .badge-off {
 
 /* Темна тема для карток */
 body.dark .client-item { border-bottom-color: #1e293b; }
+@media (hover: hover) {
 body.dark .client-item:hover { background: #1a2940; }
+}
 body.dark .client-item.selected { background: #2d2a14; }
 body.dark .item-avatar { background: linear-gradient(135deg, #334155, #273449); color: #94a3b8; }
 body.dark .item-name { color: #e2e8f0; }
@@ -3116,7 +3120,9 @@ body.dark .client-item {
   background: #0f172a !important; /* Прибираємо білий фон! */
   border-bottom-color: #1e293b !important; 
 }
+@media (hover: hover) {
 body.dark .client-item:hover { background: #1e293b !important; }
+}
 body.dark .client-item.selected { 
   background: #172554 !important; /* Сучасний темно-синій замість болотного */
 }

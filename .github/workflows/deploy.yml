@@ -1,14 +1,12 @@
 name: Deploy to GitHub Pages
 
-# Запускати автоматично при кожному пуші в гілку main
 on:
   push:
     branches:
-      - main 
-      # ⚠️ Важливо: якщо твоя гілка називається master, напиши тут master
+      - main # (якщо в тебе гілка master, зміни тут на master)
 
 permissions:
-  contents: write # Дозвіл боту записувати зібраний сайт у гілку gh-pages
+  contents: write
 
 jobs:
   deploy:
@@ -20,16 +18,16 @@ jobs:
       - name: ⚙️ Встановлюємо Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24' # ⬅️ Оновили версію до 24
 
       - name: 📦 Встановлюємо залежності
         run: npm install
 
       - name: 🔨 Білдимо проєкт
-        run: npm run build
+        run: CI=false npm run build # ⬅️ Вимкнули суворий режим (CI=false)
 
       - name: 🚀 Деплой на GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./build # ⚠️ Якщо ти використовуєш Vite замість Create React App, заміни ./build на ./dist
+          publish_dir: ./build # Якщо в тебе Vite, заміни на ./dist

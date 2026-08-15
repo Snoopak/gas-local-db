@@ -723,7 +723,6 @@ function ClientDatabase() {
   const touchCurrentY = useRef(0);
   const isDragging = useRef(false);
   const rafId = useRef(null);
-  const isListScrolling = useRef(false);
 
   const handleTouchStart = (e) => {
     console.log('[DEBUG TOUCH] 🟡 Початок свайпу (Touch Start)');
@@ -764,6 +763,10 @@ const handleTouchEnd = (e) => {
     if (!isDragging.current) return;
     console.log('[DEBUG TOUCH] 🟠 Кінець свайпу (Touch End). Пройдена відстань:', touchCurrentY.current);
     isDragging.current = false;
+
+    if (window.getSelection) {
+      window.getSelection().removeAllRanges();
+    }
 
     if (rafId.current) cancelAnimationFrame(rafId.current);
 
@@ -844,13 +847,14 @@ const handleTouchEnd = (e) => {
     };
   }, []);
 
-useEffect(() => {
+  useEffect(() => {
     const handleEscape = (e) => {
       if (e.key === 'Escape' && isModalOpen) {
         resetForm();
       }
     };
 
+    
     if (isModalOpen) {
       document.addEventListener('keydown', handleEscape);
       document.body.style.overflow = 'hidden';
@@ -859,7 +863,7 @@ useEffect(() => {
 
     return () => {
       document.removeEventListener('keydown', handleEscape);
-      document.body.style.overflow = ''; // 🧹 Замінили 'unset' на пусту строку, щоб браузер сам відновив стан
+      document.body.style.overflow = 'unset';
       document.documentElement.style.overflow = '';
     };
   }, [isModalOpen]);
@@ -1360,9 +1364,9 @@ const handleClientCardClick = (clientId) => {
   };
 
 const closeMobilePanel = useCallback(() => {
-// window.scrollTo(window.scrollX, window.scrollY);
+    // 🧹 ПРИБРАНО: window.scrollTo та blur(), які "з'їдали" перший тап
+
     if (overlayRef.current) {
-      overlayRef.current.classList.remove('open');
       overlayRef.current.style.transition = 'transform 0.25s cubic-bezier(0.32, 0.72, 0, 1)';
       overlayRef.current.style.transform = 'translate3d(0, 120vh, 0)';
       overlayRef.current.style.pointerEvents = 'none'; 
@@ -1380,7 +1384,7 @@ const closeMobilePanel = useCallback(() => {
           overlayRef.current.style.pointerEvents = '';
         }
       }, 50);
-    }, 300); 
+    }, 600); 
   }, []);
 
   const performSearch = async (append = false) => {
@@ -2581,22 +2585,6 @@ const handleImportIoT = async (e) => {
                           className={`client-item ${selectedClient?.id === c.id && !isMobile() ? 'selected' : ''}`}
                           onClick={() => handleClientCardClick(c.id)}
                           onContextMenu={(e) => handleContextMenu(e, c)}
-                          onTouchStart={() => { 
-                            isListScrolling.current = false; 
-                          }}
-                          onTouchMove={() => { 
-                            isListScrolling.current = true; 
-                          }}
-                          onTouchEnd={(e) => {
-                          // Якщо палець не совався (це був чіткий тап, а не скрол)
-                          if (!isListScrolling.current) {
-                            // Забороняємо браузеру генерувати подальші фантомні кліки
-                            if (e.cancelable) {
-                              e.preventDefault(); 
-                            }
-                            handleClientCardClick(c.id);
-                          }
-                        }}
                         >
                           <div className="item-avatar">{initials}</div>
                           <div className="item-body">
@@ -2856,6 +2844,7 @@ const handleImportIoT = async (e) => {
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
+                onMouseDown={handleTouchStart}
               >
                 <div className="sheet-grabber"></div>
                 <div className="mobile-header-top">

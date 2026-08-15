@@ -1,8 +1,3 @@
-body,
-html {
-  overscroll-behavior-y: none;
-  /* Забороняє Хрому розганяти сторінку і робити Pull-to-refresh */
-}
 /* Фікс блимання/зсуву екрана при блокуванні скролу */
 html {
   scrollbar-gutter: stable;
@@ -12,11 +7,11 @@ html {
 body {
   touch-action: manipulation;
 }
-/* Фіксуємо фоновий контент під час відкритого оверлею без зміни layout
+/* Фіксуємо фоновий контент під час відкритого оверлею без зміни layout */
 body:has(.mobile-overlay.open) {
   touch-action: none;
   overscroll-behavior: contain;
-} */
+}
 
 .mobile-overlay {
   overscroll-behavior: contain; /* Забігає прокручуванню фону, коли досягнуто кінця скролу в шторці */
@@ -2347,6 +2342,8 @@ body.dark .item-right .meter-num { color: #e2e8f0; }
   
   /* Плавний вихід за замовчуванням */
   transition: transform 0.25s cubic-bezier(0.32, 0.72, 0, 1);
+  width: 100%;
+    height: 100%;
 }
 @media (max-width: 959px) {
   .mobile-overlay.open {
@@ -2548,23 +2545,6 @@ body.dark .info-block { background: #1e293b; border-color: #334155; }
   }
 }
 
-/* Апаратне прискорення GPU для мобільної панелі */
-.mobile-overlay {
-  display: none;
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: #ffffff;
-  z-index: 100;
-  flex-direction: column;
-  transform: translate3d(0, 100%, 0);
-  transition: transform 0.25s cubic-bezier(0.32, 0.72, 0, 1);
-  will-change: transform;
-  touch-action: none;
-  pointer-events: none
-}
 
 @media (max-width: 959px) {
   .mobile-overlay {

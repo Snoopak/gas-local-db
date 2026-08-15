@@ -772,9 +772,17 @@ const handleTouchEnd = (e) => {
 
     if (touchCurrentY.current > 120) {
       console.log('[DEBUG TOUCH] Відстань достатня, викликаємо closeMobilePanel()');
-      setTimeout(() => {
+      
+      // 1. ОДРАЗУ вмикаємо плавність, поки шторка ще під пальцем
+      if (overlayRef.current) {
+        overlayRef.current.style.transition = 'transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)';
+      }
+
+      // 2. В наступному кадрі даємо команду на закриття (без затримки)
+      requestAnimationFrame(() => {
         closeMobilePanel();
-      }, 50);
+      });
+
     } else {
       console.log('[DEBUG TOUCH] Відстань замала, повертаємо шторку назад')
       if (overlayRef.current) {
@@ -785,6 +793,8 @@ const handleTouchEnd = (e) => {
 
     touchCurrentY.current = 0;
   };
+
+
 // 🕵️‍♂️ ГЛОБАЛЬНИЙ ДЕБАГГЕР УСІХ КЛІКІВ ТА ТАПІВ
   useEffect(() => {
     const handleGlobalClick = (e) => {
@@ -1394,6 +1404,26 @@ const closeMobilePanel = useCallback(() => {
     }, 350); // 300ms анімація + 50ms запас
   }, []);
   
+
+const refreshCurrentList = async () => {
+  const hasFilters = Boolean(
+    debouncedSearchTerm || selectedSettlement.length > 0 || selectedStreet.length > 0 || 
+    selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || selectedMeterYear.length > 0 || selectedMeterGroups.length > 0 ||
+    filterDisconnected || filterDacha || filterAbsent || filterConnected || debouncedBuilding || debouncedApartment ||
+    selectedGrs.length > 0 || meterYearFrom || meterYearTo || verificationYearFrom || verificationYearTo || filterSeal || filterStickerSeal || filterHasIot
+  );
+
+  setCurrentPage(0); // Після збереження безпечно повертатись на першу сторінку списку
+  setHasMore(true);
+  
+  if (hasFilters) {
+    await performSearch();
+  } else {
+    await loadClients();
+  }
+};
+
+
   const performSearch = async (append = false) => {
     if (isLoadingMore || (!append && loading)) return;
     
@@ -1502,7 +1532,7 @@ const checkAccountDuplicate = async (accNum) => {
       await addClient(formData);
       showToast('success', 'Клієнта успішно додано!');
     }
-    await loadClients();
+    await refreshCurrentList();
     await loadAllCounts();
     await loadSettlements();
     await loadStreets();
@@ -1549,7 +1579,7 @@ const checkAccountDuplicate = async (accNum) => {
       async () => {
         try {
           await deleteClient(id);
-          await loadClients();
+          await refreshCurrentList();
           await loadAllCounts();
           await loadSettlements();
           await loadStreets();
@@ -2288,6 +2318,18 @@ const handleImportIoT = async (e) => {
                       <span>Імпорт JSON</span>
                     </button>
                     
+                    <label className="qa-item">
+                      <div className="qa-icon-box qa-indigo"><Globe size={14} style={{ color: '#6b7280' }} /></div>
+                      <span>Імпорт логів ІоТ</span>
+                      <input 
+                        type="file" 
+                        accept=".xlsx, .xls" 
+                        onChange={handleImportIoT} 
+                        style={{ display: 'none' }} 
+                      />
+                    </label>
+
+                    
                     <div className="qa-divider"></div>
                     
                     {/* Експорт */}
@@ -2317,17 +2359,6 @@ const handleImportIoT = async (e) => {
                       <div className="qa-icon-box qa-orange"><FileText size={14} /></div>
                       <span>Шаблон XLS</span>
                     </button>
-                    {/* Знайди свої кнопки імпорту і додай цю поруч */}
-                    <label className="qa-item">
-                      <div className="qa-icon-box qa-indigo">📡</div>
-                      <span>Імпорт логів ІоТ (Excel)</span>
-                      <input 
-                        type="file" 
-                        accept=".xlsx, .xls" 
-                        onChange={handleImportIoT} 
-                        style={{ display: 'none' }} 
-                      />
-                    </label>
                   </div>
                 </div>
               )}
@@ -3190,7 +3221,7 @@ const handleImportIoT = async (e) => {
                       <div><label className="form-label">Типорозмір</label><input className="form-input" type="text" value={formData.meterSize} onChange={(e) => setFormData({...formData, meterSize: e.target.value})} /></div>
                       <div><label className="form-label">№ лічильника</label><input className="form-input" type="text" value={formData.meterNumber} onChange={(e) => setFormData({...formData, meterNumber: e.target.value})} /></div>
                       <div><label className="form-label">Рік вип.</label><input className="form-input" type="text" value={formData.meterYear} onChange={(e) => setFormData({...formData, meterYear: e.target.value})} /></div>
-                      <div><label className="form-label">Остання повірка</label><input className="form-input" type="text" placeholder="ДД.ММ.РРРР" value={formData.VerificationDate} onChange={(e) => setFormData({...formData, VerificationDate: e.target.value})} /></div>
+                      <div><label className="form-label">Остання повірка</label><input className="form-input" type="text" placeholder="ДД.ММ.РРРР" value={formData.verificationDate} onChange={(e) => setFormData({...formData, verificationDate: e.target.value})} /></div>
                     </div>
 
                     <div className="form-grid-row" style={{ gridTemplateColumns: 'repeat(6, 1fr)' }}>

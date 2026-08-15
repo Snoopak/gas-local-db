@@ -1349,27 +1349,25 @@ const handleTouchEnd = (e) => {
 
 const handleClientCardClick = (clientId) => {
   console.log('[DEBUG CLICK] 🟢 Клік по картці! clientId:', clientId);
-    if (closingTimer.current) clearTimeout(closingTimer.current);
-    
-    if (overlayRef.current) {
-      overlayRef.current.classList.add('open'); 
-      overlayRef.current.style.transform = '';
-      overlayRef.current.style.transition = '';
-      overlayRef.current.style.pointerEvents = '';
-    }
+  if (closingTimer.current) clearTimeout(closingTimer.current);
+  
+  if (overlayRef.current) {
+    overlayRef.current.classList.add('open');
+    overlayRef.current.style.transform = '';
+    overlayRef.current.style.transition = '';
+    overlayRef.current.style.pointerEvents = '';
+  }
 
-    const client = clients.find(c => c.id === clientId);
-    saveScrollState();
-    setSelectedClient(client);
-  };
-
+  const client = clients.find(c => c.id === clientId);
+  saveScrollState();
+  setSelectedClient(client);
+};
 const closeMobilePanel = useCallback(() => {
-    // 🧹 ПРИБРАНО: window.scrollTo та blur(), які "з'їдали" перший тап
-
     if (overlayRef.current) {
       overlayRef.current.style.transition = 'transform 0.25s cubic-bezier(0.32, 0.72, 0, 1)';
       overlayRef.current.style.transform = 'translate3d(0, 120vh, 0)';
-      overlayRef.current.style.pointerEvents = 'none'; 
+      overlayRef.current.style.pointerEvents = 'none';
+      overlayRef.current.classList.remove('open'); // 🟢 ОСЬ ЦЕ!
     }
 
     if (closingTimer.current) clearTimeout(closingTimer.current);
@@ -1384,7 +1382,7 @@ const closeMobilePanel = useCallback(() => {
           overlayRef.current.style.pointerEvents = '';
         }
       }, 50);
-    }, 600); 
+    }, 600);
   }, []);
 
   const performSearch = async (append = false) => {
@@ -2584,8 +2582,14 @@ const handleImportIoT = async (e) => {
                           key={c.id}
                           className={`client-item ${selectedClient?.id === c.id && !isMobile() ? 'selected' : ''}`}
                           onClick={() => handleClientCardClick(c.id)}
+                          onTouchEnd={(e) => {
+                            // Якщо це був свайп (більше 10px) — ігноруємо
+                            if (touchCurrentY.current > 10) return;
+                            e.preventDefault();
+                            handleClientCardClick(c.id);
+                          }}
                           onContextMenu={(e) => handleContextMenu(e, c)}
-                        >
+                          >
                           <div className="item-avatar">{initials}</div>
                           <div className="item-body">
                             <div className="item-name">{c.fullName || '—'}</div>

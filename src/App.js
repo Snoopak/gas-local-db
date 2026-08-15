@@ -734,11 +734,11 @@ function ClientDatabase() {
     }
   };
 
-  const handleTouchMove = (e) => {
+const handleTouchMove = (e) => {
     if (!isDragging.current) return;
-
-// ✅ ДОДАЄМО ЦЕ: Забороняємо браузеру думати, що ми скролимо фон
-    if (e.cancelable && e.type === 'touchmove') {
+    
+    // Блокуємо скрол фону при свайпі, щоб не було фантомних кліків
+    if (e && e.cancelable && e.type === 'touchmove') {
       e.preventDefault();
     }
 
@@ -757,10 +757,10 @@ function ClientDatabase() {
     }
   };
 
-const handleTouchEnd = (e) => {
+  const handleTouchEnd = (e) => {
     if (!isDragging.current) return;
-    
-    // ✅ Якщо ми дійсно тягнули шторку (а не просто клікнули), вбиваємо фантомні кліки Safari
+
+    // Вбиваємо фантомні кліки Safari після свайпу
     if (e && e.cancelable && touchCurrentY.current > 10) {
       e.preventDefault();
     }
@@ -1321,13 +1321,13 @@ const handleTouchEnd = (e) => {
     setCtxMenu({ show: false, x: 0, y: 0, client: null });
   };
 
-  const handleClientCardClick = (clientId) => {
-    // 1. Вбиваємо таймер закриття, якщо ми тапнули дуже швидко після свайпу
+const handleClientCardClick = (clientId) => {
+    // 1. Вбиваємо таймер закриття, якщо тапнули швидко після свайпу
     if (closingTimer.current) clearTimeout(closingTimer.current);
     
-    // 2. Примусово знімаємо стилі, якщо шторка зависла посеред закритого стану
+    // 2. Гарантуємо клас 'open' і збиваємо стилі закриття
     if (overlayRef.current) {
-      overlayRef.current.classList.add('open');
+      overlayRef.current.classList.add('open'); 
       overlayRef.current.style.transform = '';
       overlayRef.current.style.transition = '';
       overlayRef.current.style.pointerEvents = '';
@@ -1340,8 +1340,8 @@ const handleTouchEnd = (e) => {
 
 const closeMobilePanel = useCallback(() => {
     if (overlayRef.current) {
+      // Використовуємо 120vh, щоб пустий блок не блимав краєм при зникненні
       overlayRef.current.style.transition = 'transform 0.25s cubic-bezier(0.32, 0.72, 0, 1)';
-      // 🚀 СЕКРЕТ ТУТ: Замість 100% використовуємо 120vh (120% від висоти всього екрана телефона)
       overlayRef.current.style.transform = 'translate3d(0, 120vh, 0)';
       overlayRef.current.style.pointerEvents = 'none'; 
     }
@@ -1352,12 +1352,55 @@ const closeMobilePanel = useCallback(() => {
       setSelectedClient(null);
 
       if (overlayRef.current) {
-        // 🛑 Більше не видаляємо transform! Хай порожній блок надійно лежить за межами екрана
+        overlayRef.current.style.transform = '';
         overlayRef.current.style.transition = '';
-        overlayRef.current.style.pointerEvents = '';
+        overlayRef.current.style.pointerEvents = ''; 
       }
+      // window.scrollTo() прибрано назавжди!
     }, 250);
   }, []);
+
+  const performSearch = async (append = false) => {
+    if (isLoadingMore || (!append && loading)) return;
+    
+    if (append) {
+      setIsLoadingMore(true);
+    } else {
+      setLoading(true);
+    }
+    
+    try {
+      const result = await searchClientsPaginated(
+        debouncedSearchTerm, selectedSettlement, selectedStreet,
+        selectedMeterBrand, selectedMeterSize, selectedMeterYear, selectedMeterGroups,
+        filterDisconnected, filterDacha, filterAbsent, filterConnected, debouncedBuilding, debouncedApartment,
+        selectedGrs, meterYearFrom, meterYearTo, verificationYearFrom, verificationYearTo, filterSeal, filterStickerSeal, filterHasIot,
+        currentPage, CONFIG.PAGE_SIZE
+      );
+      
+      if (append) {
+        setClients(prev => [...prev, ...result.items]);
+      } else {
+        setClients(result.items);
+      }
+      
+      setFilteredTotalCount(result.total);
+      setHasMore(result.hasMore);
+      
+      setTimeout(() => {
+        saveScrollState();
+      }, 100);
+      
+    } catch (error) {
+      console.error('Error searching:', error);
+    }
+    
+    if (append) {
+      setIsLoadingMore(false);
+    } else {
+      setLoading(false);
+    }
+  };
 
   // ✅ Асинхронна перевірка дубліката по УСІЙ IndexedDB
 const checkAccountDuplicate = async (accNum) => {
@@ -2769,7 +2812,6 @@ const handleImportIoT = async (e) => {
           {selectedClient && (
             <>
               <div className="mobile-header" onTouchStart={handleTouchStart}
-                style={{ touchAction: 'none' }}
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
                 onMouseDown={handleTouchStart}>

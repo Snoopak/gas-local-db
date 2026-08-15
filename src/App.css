@@ -1616,12 +1616,9 @@ body.dark .empty-db-hint {
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.5);
-  z-index: 50;
   overflow-y: auto;
   backdrop-filter: blur(2px);
-  overflow: hidden;
   z-index: 9999;
-
 }
 .modal-center {min-height: 100svh; display: flex; align-items: center; justify-content: center; padding: 16px; }
 .modal-card { 
@@ -2153,7 +2150,7 @@ body.dark .ctx-divider { background: #334155; }
 .btn-cancel { background: white; color: #6b7280; border: 1px solid #e8ecf3; padding: 0.5rem 1rem; border-radius: 10px; font-weight: 600; cursor: pointer; font-size: 0.8rem; display: flex; align-items: center; justify-content: center; gap: 0.3rem; }
 .btn-cancel:hover { background: #fef2f2; }
 
-
+ 
 /* ===== КАРТКИ В СТИЛІ ПРОТОТИПУ ===== */
 .client-item {
   display: flex;
@@ -2165,7 +2162,7 @@ body.dark .ctx-divider { background: #334155; }
   transition: all 0.2s;
   position: relative;
   flex-wrap: wrap;
-touch-action: manipulation;
+  touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
 @media (hover: hover) {

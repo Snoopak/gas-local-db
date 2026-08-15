@@ -1,3 +1,8 @@
+body,
+html {
+  overscroll-behavior-y: none;
+  /* Забороняє Хрому розганяти сторінку і робити Pull-to-refresh */
+}
 /* Фікс блимання/зсуву екрана при блокуванні скролу */
 html {
   scrollbar-gutter: stable;
@@ -7,11 +12,11 @@ html {
 body {
   touch-action: manipulation;
 }
-/* Фіксуємо фоновий контент під час відкритого оверлею без зміни layout */
+/* Фіксуємо фоновий контент під час відкритого оверлею без зміни layout
 body:has(.mobile-overlay.open) {
   touch-action: none;
   overscroll-behavior: contain;
-}
+} */
 
 .mobile-overlay {
   overscroll-behavior: contain; /* Забігає прокручуванню фону, коли досягнуто кінця скролу в шторці */

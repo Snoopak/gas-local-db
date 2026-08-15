@@ -723,6 +723,7 @@ function ClientDatabase() {
   const touchCurrentY = useRef(0);
   const isDragging = useRef(false);
   const rafId = useRef(null);
+  const isListScrolling = useRef(false);
 
   const handleTouchStart = (e) => {
     console.log('[DEBUG TOUCH] 🟡 Початок свайпу (Touch Start)');
@@ -764,10 +765,6 @@ const handleTouchEnd = (e) => {
     console.log('[DEBUG TOUCH] 🟠 Кінець свайпу (Touch End). Пройдена відстань:', touchCurrentY.current);
     isDragging.current = false;
 
-    if (window.getSelection) {
-      window.getSelection().removeAllRanges();
-    }
-
     if (rafId.current) cancelAnimationFrame(rafId.current);
 
     if (touchCurrentY.current > 120) {
@@ -785,6 +782,26 @@ const handleTouchEnd = (e) => {
 
     touchCurrentY.current = 0;
   };
+// 🕵️‍♂️ ГЛОБАЛЬНИЙ ДЕБАГГЕР УСІХ КЛІКІВ ТА ТАПІВ
+  useEffect(() => {
+    const handleGlobalClick = (e) => {
+      console.log('[DEBUG GLOBAL CLICK] 🎯 Клік прилетів у:', e.target.tagName, 'Клас:', e.target.className);
+    };
+    
+    const handleGlobalTouch = (e) => {
+      console.log('[DEBUG GLOBAL TOUCH] 👆 Тап прилетів у:', e.target.tagName, 'Клас:', e.target.className);
+    };
+
+    // Третій параметр { capture: true } дозволяє нам перехопити подію НАЙПЕРШИМИ, 
+    // до того як якийсь інший код її скасує
+    document.addEventListener('click', handleGlobalClick, { capture: true });
+    document.addEventListener('touchstart', handleGlobalTouch, { capture: true });
+
+    return () => {
+      document.removeEventListener('click', handleGlobalClick, { capture: true });
+      document.removeEventListener('touchstart', handleGlobalTouch, { capture: true });
+    };
+  }, []);
 
   useEffect(() => {
     const onMouseMove = (e) => handleTouchMove(e);
@@ -827,14 +844,13 @@ const handleTouchEnd = (e) => {
     };
   }, []);
 
-  useEffect(() => {
+useEffect(() => {
     const handleEscape = (e) => {
       if (e.key === 'Escape' && isModalOpen) {
         resetForm();
       }
     };
 
-    
     if (isModalOpen) {
       document.addEventListener('keydown', handleEscape);
       document.body.style.overflow = 'hidden';
@@ -843,28 +859,10 @@ const handleTouchEnd = (e) => {
 
     return () => {
       document.removeEventListener('keydown', handleEscape);
-      document.body.style.overflow = 'unset';
+      document.body.style.overflow = ''; // 🧹 Замінили 'unset' на пусту строку, щоб браузер сам відновив стан
       document.documentElement.style.overflow = '';
     };
   }, [isModalOpen]);
-
-  // 🚀 ВБИВАЄМО ІНЕРЦІЙНИЙ СКРОЛ ХРОМА ДЛЯ ШТОРКИ
-  useEffect(() => {
-    if (selectedClient && window.innerWidth < 960) {
-      // Коли шторка відкрита - намертво блокуємо прокрутку фону
-      document.body.style.overflow = 'hidden';
-      document.documentElement.style.overflow = 'hidden';
-    } else {
-      // Коли закрита - повертаємо як було
-      document.body.style.overflow = '';
-      document.documentElement.style.overflow = '';
-    }
-
-    return () => {
-      document.body.style.overflow = '';
-      document.documentElement.style.overflow = '';
-    };
-  }, [selectedClient]);
 
   const [formData, setFormData] = useState({
     fullName: '', settlement: '', streetType: '', street: '', building: '', buildingLetter: '',
@@ -1362,24 +1360,16 @@ const handleClientCardClick = (clientId) => {
   };
 
 const closeMobilePanel = useCallback(() => {
-    console.log('[DEBUG PANEL] 🔴 closeMobilePanel запущено. Починаємо анімацію зникнення.');
-    if (document.activeElement && typeof document.activeElement.blur === 'function') {
-      console.log('[DEBUG PANEL] Знімаємо фокус (blur) з:', document.activeElement);
-      document.activeElement.blur();
-    }
+// window.scrollTo(window.scrollX, window.scrollY);
     if (overlayRef.current) {
-      // 1. Відправляємо шторку вниз
+      overlayRef.current.classList.remove('open');
       overlayRef.current.style.transition = 'transform 0.25s cubic-bezier(0.32, 0.72, 0, 1)';
       overlayRef.current.style.transform = 'translate3d(0, 120vh, 0)';
-       
-      // 2. МИТТЄВО робимо її прозорою для кліків, щоб ти міг одразу тапати по картках
       overlayRef.current.style.pointerEvents = 'none'; 
     }
 
     if (closingTimer.current) clearTimeout(closingTimer.current);
-    console.log('[DEBUG PANEL] 🏁 Таймер 600мс минув. Видаляємо клієнта зі стейту.');
-    // 🚀 3. МАГІЯ ТУТ: Чекаємо 600мс замість 250мс!
-    // Даємо Хрому час завершити свої приховані процеси, і тільки потім вбиваємо DOM.
+
     closingTimer.current = setTimeout(() => {
       setSelectedClient(null);
 
@@ -1390,7 +1380,7 @@ const closeMobilePanel = useCallback(() => {
           overlayRef.current.style.pointerEvents = '';
         }
       }, 50);
-    }, 600); 
+    }, 300); 
   }, []);
 
   const performSearch = async (append = false) => {
@@ -2591,6 +2581,22 @@ const handleImportIoT = async (e) => {
                           className={`client-item ${selectedClient?.id === c.id && !isMobile() ? 'selected' : ''}`}
                           onClick={() => handleClientCardClick(c.id)}
                           onContextMenu={(e) => handleContextMenu(e, c)}
+                          onTouchStart={() => { 
+                            isListScrolling.current = false; 
+                          }}
+                          onTouchMove={() => { 
+                            isListScrolling.current = true; 
+                          }}
+                          onTouchEnd={(e) => {
+                          // Якщо палець не совався (це був чіткий тап, а не скрол)
+                          if (!isListScrolling.current) {
+                            // Забороняємо браузеру генерувати подальші фантомні кліки
+                            if (e.cancelable) {
+                              e.preventDefault(); 
+                            }
+                            handleClientCardClick(c.id);
+                          }
+                        }}
                         >
                           <div className="item-avatar">{initials}</div>
                           <div className="item-body">
@@ -2850,7 +2856,6 @@ const handleImportIoT = async (e) => {
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
-                onMouseDown={handleTouchStart}
               >
                 <div className="sheet-grabber"></div>
                 <div className="mobile-header-top">

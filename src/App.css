@@ -2332,18 +2332,16 @@ body.dark .item-right .meter-num { color: #e2e8f0; }
   flex-direction: column;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-
-  /* Використовуємо translate3d для включення GPU прискорення */
   transform: translate3d(0, 100%, 0);
   will-change: transform;
-  
-  /* Дозволяємо стандартний скрол всередині шторки */
   touch-action: pan-y;
-  
-  /* Плавний вихід за замовчуванням */
-  transition: transform 0.25s cubic-bezier(0.32, 0.72, 0, 1);
+  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
   width: 100%;
-    height: 100%;
+  height: 100%;
+}
+.mobile-overlay.closing {
+  transform: translate3d(0, 110vh, 0) !important;
+  pointer-events: none !important;
 }
 @media (max-width: 959px) {
   .mobile-overlay.open {

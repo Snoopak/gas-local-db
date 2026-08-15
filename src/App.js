@@ -1346,16 +1346,22 @@ const handleTouchEnd = (e) => {
     }
     setCtxMenu({ show: false, x: 0, y: 0, client: null });
   };
-
+ 
 const handleClientCardClick = (clientId) => {
   console.log('[DEBUG CLICK] 🟢 Клік по картці! clientId:', clientId);
-  if (closingTimer.current) clearTimeout(closingTimer.current);
+  
+  // Якщо шторка закривається — перериваємо анімацію
+  if (closingTimer.current) {
+    clearTimeout(closingTimer.current);
+    closingTimer.current = null;
+  }
   
   if (overlayRef.current) {
-    overlayRef.current.classList.add('open');
+    // Скидаємо всі інлайн-стилі перед відкриттям
+    overlayRef.current.style.transition = 'transform 0.25s cubic-bezier(0.32, 0.72, 0, 1)';
     overlayRef.current.style.transform = '';
-    overlayRef.current.style.transition = '';
     overlayRef.current.style.pointerEvents = '';
+    overlayRef.current.classList.add('open');
   }
 
   const client = clients.find(c => c.id === clientId);
@@ -1363,26 +1369,29 @@ const handleClientCardClick = (clientId) => {
   setSelectedClient(client);
 };
 const closeMobilePanel = useCallback(() => {
+    // Захист від повторних викликів
+    if (closingTimer.current) return;
+    
     if (overlayRef.current) {
-      overlayRef.current.style.transition = 'transform 0.25s cubic-bezier(0.32, 0.72, 0, 1)';
-      overlayRef.current.style.transform = 'translate3d(0, 120vh, 0)';
+      overlayRef.current.style.transition = 'transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)';
+      overlayRef.current.style.transform = 'translate3d(0, 110vh, 0)';
       overlayRef.current.style.pointerEvents = 'none';
-      overlayRef.current.classList.remove('open'); // 🟢 ОСЬ ЦЕ!
+      overlayRef.current.classList.remove('open');
     }
-
-    if (closingTimer.current) clearTimeout(closingTimer.current);
 
     closingTimer.current = setTimeout(() => {
       setSelectedClient(null);
-
-      setTimeout(() => {
+      
+      // Скидаємо стилі ЧЕРЕЗ requestAnimationFrame, щоб уникнути дьоргання
+      requestAnimationFrame(() => {
         if (overlayRef.current) {
           overlayRef.current.style.transform = '';
           overlayRef.current.style.transition = '';
           overlayRef.current.style.pointerEvents = '';
         }
-      }, 50);
-    }, 600);
+        closingTimer.current = null;
+      });
+    }, 350); // 300ms анімація + 50ms запас
   }, []);
   
   const performSearch = async (append = false) => {

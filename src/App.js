@@ -716,6 +716,7 @@ function ClientDatabase() {
 
   const [selectedClient, setSelectedClient] = useState(null);
   const closingTimer = useRef(null);
+  const lastSwipeTime = useRef(0);
 
   const overlayRef = useRef(null);
   const touchStartY = useRef(0);
@@ -724,6 +725,7 @@ function ClientDatabase() {
   const rafId = useRef(null);
 
   const handleTouchStart = (e) => {
+    console.log('[DEBUG TOUCH] 🟡 Початок свайпу (Touch Start)');
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     touchStartY.current = clientY;
     touchCurrentY.current = 0;
@@ -757,21 +759,24 @@ const handleTouchMove = (e) => {
     }
   };
 
-  const handleTouchEnd = (e) => {
+const handleTouchEnd = (e) => {
     if (!isDragging.current) return;
-
-    // Вбиваємо фантомні кліки Safari після свайпу
-    if (e && e.cancelable && touchCurrentY.current > 10) {
-      e.preventDefault();
-    }
-
+    console.log('[DEBUG TOUCH] 🟠 Кінець свайпу (Touch End). Пройдена відстань:', touchCurrentY.current);
     isDragging.current = false;
+
+    if (window.getSelection) {
+      window.getSelection().removeAllRanges();
+    }
 
     if (rafId.current) cancelAnimationFrame(rafId.current);
 
     if (touchCurrentY.current > 120) {
-      closeMobilePanel();
+      console.log('[DEBUG TOUCH] Відстань достатня, викликаємо closeMobilePanel()');
+      setTimeout(() => {
+        closeMobilePanel();
+      }, 50);
     } else {
+      console.log('[DEBUG TOUCH] Відстань замала, повертаємо шторку назад')
       if (overlayRef.current) {
         overlayRef.current.style.transition = 'transform 0.2s cubic-bezier(0.32, 0.72, 0, 1)';
         overlayRef.current.style.transform = 'translate3d(0, 0, 0)';
@@ -829,6 +834,7 @@ const handleTouchMove = (e) => {
       }
     };
 
+    
     if (isModalOpen) {
       document.addEventListener('keydown', handleEscape);
       document.body.style.overflow = 'hidden';
@@ -841,6 +847,24 @@ const handleTouchMove = (e) => {
       document.documentElement.style.overflow = '';
     };
   }, [isModalOpen]);
+
+  // 🚀 ВБИВАЄМО ІНЕРЦІЙНИЙ СКРОЛ ХРОМА ДЛЯ ШТОРКИ
+  useEffect(() => {
+    if (selectedClient && window.innerWidth < 960) {
+      // Коли шторка відкрита - намертво блокуємо прокрутку фону
+      document.body.style.overflow = 'hidden';
+      document.documentElement.style.overflow = 'hidden';
+    } else {
+      // Коли закрита - повертаємо як було
+      document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
+    }
+
+    return () => {
+      document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
+    };
+  }, [selectedClient]);
 
   const [formData, setFormData] = useState({
     fullName: '', settlement: '', streetType: '', street: '', building: '', buildingLetter: '',
@@ -1322,10 +1346,9 @@ const handleTouchMove = (e) => {
   };
 
 const handleClientCardClick = (clientId) => {
-    // 1. Вбиваємо таймер закриття, якщо тапнули швидко після свайпу
+  console.log('[DEBUG CLICK] 🟢 Клік по картці! clientId:', clientId);
     if (closingTimer.current) clearTimeout(closingTimer.current);
     
-    // 2. Гарантуємо клас 'open' і збиваємо стилі закриття
     if (overlayRef.current) {
       overlayRef.current.classList.add('open'); 
       overlayRef.current.style.transform = '';
@@ -1339,25 +1362,35 @@ const handleClientCardClick = (clientId) => {
   };
 
 const closeMobilePanel = useCallback(() => {
+    console.log('[DEBUG PANEL] 🔴 closeMobilePanel запущено. Починаємо анімацію зникнення.');
+    if (document.activeElement && typeof document.activeElement.blur === 'function') {
+      console.log('[DEBUG PANEL] Знімаємо фокус (blur) з:', document.activeElement);
+      document.activeElement.blur();
+    }
     if (overlayRef.current) {
-      // Використовуємо 120vh, щоб пустий блок не блимав краєм при зникненні
+      // 1. Відправляємо шторку вниз
       overlayRef.current.style.transition = 'transform 0.25s cubic-bezier(0.32, 0.72, 0, 1)';
       overlayRef.current.style.transform = 'translate3d(0, 120vh, 0)';
+       
+      // 2. МИТТЄВО робимо її прозорою для кліків, щоб ти міг одразу тапати по картках
       overlayRef.current.style.pointerEvents = 'none'; 
     }
 
     if (closingTimer.current) clearTimeout(closingTimer.current);
-
+    console.log('[DEBUG PANEL] 🏁 Таймер 600мс минув. Видаляємо клієнта зі стейту.');
+    // 🚀 3. МАГІЯ ТУТ: Чекаємо 600мс замість 250мс!
+    // Даємо Хрому час завершити свої приховані процеси, і тільки потім вбиваємо DOM.
     closingTimer.current = setTimeout(() => {
       setSelectedClient(null);
 
-      if (overlayRef.current) {
-        overlayRef.current.style.transform = '';
-        overlayRef.current.style.transition = '';
-        overlayRef.current.style.pointerEvents = ''; 
-      }
-      // window.scrollTo() прибрано назавжди!
-    }, 250);
+      setTimeout(() => {
+        if (overlayRef.current) {
+          overlayRef.current.style.transform = '';
+          overlayRef.current.style.transition = '';
+          overlayRef.current.style.pointerEvents = '';
+        }
+      }, 50);
+    }, 600); 
   }, []);
 
   const performSearch = async (append = false) => {
@@ -2811,10 +2844,14 @@ const handleImportIoT = async (e) => {
           className={`mobile-overlay ${selectedClient && isMobile() ? 'open' : ''}`}>
           {selectedClient && (
             <>
-              <div className="mobile-header" onTouchStart={handleTouchStart}
+              <div 
+                className="mobile-header" 
+                style={{ touchAction: 'none' }} /* 🚀 ОСЬ ЦЕЙ РЯДОК ВБИВАЄ ПОДВІЙНИЙ ТАП */
+                onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
-                onMouseDown={handleTouchStart}>
+                onMouseDown={handleTouchStart}
+              >
                 <div className="sheet-grabber"></div>
                 <div className="mobile-header-top">
                   <h2>{selectedClient.fullName}</h2>

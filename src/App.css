@@ -2165,7 +2165,7 @@ body.dark .ctx-divider { background: #334155; }
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
 .client-item:hover { background: #fafcff; }
 }
 .client-item.selected { 
@@ -2304,7 +2304,7 @@ body.dark .badge-off {
 
 /* Темна тема для карток */
 body.dark .client-item { border-bottom-color: #1e293b; }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
 body.dark .client-item:hover { background: #1a2940; }
 }
 body.dark .client-item.selected { background: #2d2a14; }
@@ -2361,6 +2361,7 @@ body.dark .item-right .meter-num { color: #e2e8f0; }
   cursor: grab;
   user-select: none;
   touch-action: none;
+  -webkit-user-select: none;
 }
 .mobile-header:active {
   cursor: grabbing;
@@ -2557,6 +2558,7 @@ body.dark .info-block { background: #1e293b; border-color: #334155; }
   transition: transform 0.25s cubic-bezier(0.32, 0.72, 0, 1);
   will-change: transform;
   touch-action: none;
+  pointer-events: none
 }
 
 @media (max-width: 959px) {
@@ -2565,6 +2567,7 @@ body.dark .info-block { background: #1e293b; border-color: #334155; }
   }
   .mobile-overlay.open {
     transform: translate3d(0, 0, 0);
+    pointer-events: auto;
   }
 }
 
@@ -2585,6 +2588,7 @@ body.dark .info-block { background: #1e293b; border-color: #334155; }
   border-radius: 10px;
   margin: 2px auto 8px auto;
   transition: background 0.2s;
+  touch-action: none
 }
 
 .mobile-header:hover .sheet-grabber {
@@ -3120,7 +3124,7 @@ body.dark .client-item {
   background: #0f172a !important; /* Прибираємо білий фон! */
   border-bottom-color: #1e293b !important; 
 }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
 body.dark .client-item:hover { background: #1e293b !important; }
 }
 body.dark .client-item.selected { 

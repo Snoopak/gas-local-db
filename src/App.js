@@ -1364,7 +1364,6 @@ const handleClientCardClick = (clientId) => {
 };
 const closeMobilePanel = useCallback(() => {
     if (overlayRef.current) {
-      // Використовуємо 120vh, щоб пустий блок не блимав краєм при зникненні
       overlayRef.current.style.transition = 'transform 0.25s cubic-bezier(0.32, 0.72, 0, 1)';
       overlayRef.current.style.transform = 'translate3d(0, 120vh, 0)';
       overlayRef.current.style.pointerEvents = 'none';
@@ -1385,7 +1384,7 @@ const closeMobilePanel = useCallback(() => {
       }, 50);
     }, 600);
   }, []);
-
+  
   const performSearch = async (append = false) => {
     if (isLoadingMore || (!append && loading)) return;
     

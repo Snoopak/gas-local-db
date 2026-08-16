@@ -2617,17 +2617,36 @@ const handleImportIoT = async (e) => {
                       const initials = (c.fullName || '?').split(' ').slice(0, 2).map(w => w[0]).join('');
                       const meterShort = c.meterNumber ? `${c.meterBrand ? c.meterBrand.split(' ')[0] : ''} G${c.meterSize || ''} №${c.meterNumber}` : '';
 
+                      // 1. ПРОСТО ДОДАЄМО ЗМІННІ ТУТ
+                      let touchStartX = 0;
+                      let touchStartY = 0;
+
                       return (
                         <div
                           key={c.id}
                           className={`client-item ${selectedClient?.id === c.id && !isMobile() ? 'selected' : ''}`}
                           onClick={() => handleClientCardClick(c.id)}
+                          
+                          // 2. ОБРОБНИКИ ТАПІВ
+                          onTouchStart={(e) => {
+                            touchStartX = e.touches[0].clientX;
+                            touchStartY = e.touches[0].clientY;
+                          }}
                           onTouchEnd={(e) => {
-                            // Якщо це був свайп (більше 10px) — ігноруємо
-                            if (touchCurrentY.current > 10) return;
+                            const touchEndX = e.changedTouches[0].clientX;
+                            const touchEndY = e.changedTouches[0].clientY;
+                            
+                            const diffX = Math.abs(touchEndX - touchStartX);
+                            const diffY = Math.abs(touchEndY - touchStartY);
+                            
+                            // Якщо палець посунувся більше ніж на 10px (це скрол) — ігноруємо
+                            if (diffX > 10 || diffY > 10) return;
+                            
+                            // Якщо це чіткий тап — вбиваємо подвійний клік і відкриваємо
                             e.preventDefault();
                             handleClientCardClick(c.id);
                           }}
+                          
                           onContextMenu={(e) => handleContextMenu(e, c)}
                           >
                           <div className="item-avatar">{initials}</div>

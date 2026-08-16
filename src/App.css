@@ -2139,7 +2139,8 @@ body.dark .filters-panel { background: #0f172a; border-bottom-color: #334155; }
 body.dark .results-bar { background: #0f172a; }
 body.dark .btn-theme { color: #e2e8f0; border-color: #475569; }
 body.dark .modal-card, body.dark .url-modal-card { background: #1e293b; color: #e2e8f0; }
-body.dark .modal-section-blue, body.dark .modal-section-purple, body.dark .modal-section-orange, body.dark .modal-section-red { background: #0f172a; }
+body.dark .modal-section { background: #1e293b !important;  border-color: #334155 !important;}
+body.dark .modal-section-title { color: #e2e8f0 !important; border-color: #334155 !important; }
 body.dark .meta-icon {background: #1e293b !important; color: #94a3b8 !important;}
 
 /* ===== КОНТЕКСТНЕ МЕНЮ ===== */
@@ -3202,13 +3203,16 @@ body.dark .url-modal-close { color: #94a3b8 !important; }
 body.dark .modal-close:hover,
 body.dark .url-modal-close:hover { color: #f8fafc !important; }
 
-/* Кольорові секції в модалці */
-body.dark .modal-section-blue { background: #1e293b !important; border-color: #1e3a8a !important; }
-body.dark .modal-section-purple { background: #1e293b !important; border-color: #4c1d95 !important; }
-body.dark .modal-section-orange { background: #1e293b !important; border-color: #7c2d12 !important; }
-body.dark .modal-section-red { background: #1e293b !important; border-color: #7f1d1d !important; }
+body.dark .modal-section.modal-section-red {
+  background: rgba(239, 68, 68, 0.1) !important;
+  border-color: #7f1d1d !important;
+}
 
-body.dark .modal-section-title-blue { color: #60a5fa !important; }
+body.dark .modal-section-title-red {
+  color: #f87171 !important;
+  border-bottom-color: #7f1d1d !important;
+}
+
 body.dark .modal-section-title-purple { color: #c084fc !important; }
 body.dark .modal-section-title-orange { color: #fb923c !important; }
 body.dark .modal-section-title-red { color: #f87171 !important; }

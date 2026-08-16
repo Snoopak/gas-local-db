@@ -2324,7 +2324,7 @@ const handleImportIoT = async (e) => {
                       <input 
                         type="file" 
                         accept=".xlsx, .xls" 
-                        onChange={handleImportIoT} 
+                        onChange={(e) => { handleImportIoT(e); setShowQuickActions(false); }} 
                         style={{ display: 'none' }} 
                       />
                     </label>
@@ -2949,7 +2949,7 @@ const handleImportIoT = async (e) => {
                   <h4><Gauge size={14} /> Лічильник</h4>
                   {selectedClient.meterNumber ? (
                     <>
-                      <div className="detail-row"><span className="dlbl">Марка / Тип</span><span className="dval">{selectedClient.meterBrand || '—'} G{selectedClient.meterSize || '—'}</span></div>
+                      <div className="detail-row"><span className="dlbl">Марка / Тип</span><span className="dval">{selectedClient.meterBrand || '—'}</span></div>
                       <div className="detail-row"><span className="dlbl">№ лічильника</span><span className="dval">{selectedClient.meterNumber}</span></div>
                       <div className="detail-row"><span className="dlbl">Рік випуску</span><span className="dval">{selectedClient.meterYear || '—'}</span></div>
                       <div className="detail-row"><span className="dlbl">Повірка</span><span className="dval">{selectedClient.verificationDate || '—'}</span></div>

@@ -3466,9 +3466,6 @@ body.dark .iot-status-chip.pending {
 
 /* ===== ОСТАННІЙ ЗВ'ЯЗОК ІОТ (ДЕТАЛІ КЛІЄНТА) ===== */
 .iot-last-connection {
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px dashed #cbd5e1;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -3484,10 +3481,6 @@ body.dark .iot-status-chip.pending {
 }
 
 /* ===== ТЕМНА ТЕМА ДЛЯ ОСТАННЬОГО ЗВ'ЯЗКУ ===== */
-body.dark .iot-last-connection {
-  border-top-color: #334155;
-}
-
 body.dark .iot-status-chip-green {
   background: rgba(34, 197, 94, 0.2);
   color: #4ade80;

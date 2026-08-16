@@ -24,32 +24,23 @@ const parseAppliances = (text) => {
     const isDisconnected = item.toUpperCase().includes('ВІДКЛ');
     const icon = isDisconnected ? ' ❌' : '';
 
-    if (item.includes('(Котел)') || item.includes('(котел)')) {
-      const match = item.match(/\((?:Котел|котел)\)\s*(.+?)(?:\s*-\s*(\d+)\s*шт\.?)?$/i);
-      if (match && match[1]) {
-        const boilerInfo = match[1].trim() + icon; 
-        const count = match[2] ? parseInt(match[2], 10) : 1; 
-        boilers.push({ name: boilerInfo, count: count });
-      }
-    }
-    
-    if (item.includes('(Плита') || item.includes('(плита)') || item.includes('ПГ')) {
-      const match = item.match(/\((?:Плита.*?|плита.*?)\)\s*(.+?)(?:\s*-\s*(\d+)\s*шт\.?)?$/i);
+    // 1. КОТЛИ ТА КОНВЕКТОРИ
+    if (item.includes('(Котел)') || item.includes('(котел)') || item.includes('Конвектор') || item.includes('конвектор')) {
+      // Видаляємо всі можливі комбінації префіксів (включаючи "(колонка)" для двоконтурних котлів)
+      const cleanStr = item.replace(/\((Котел|котел|Колонка|колонка|ВПГ|впг)\)\s*/gi, '').trim();
+      const match = cleanStr.match(/(.+?)(?:\s*-\s*(\d+)\s*шт\.?)?$/i);
+
       if (match && match[1]) {
         const count = match[2] ? parseInt(match[2], 10) : 1;
-        for (let i = 0; i < count; i++) {
-          stoves.push(match[1].trim() + icon);
-        }
-      } else {
-        const pgMatch = item.match(/ПГ[- ]?(\d+)/i);
-        if (pgMatch) {
-          stoves.push('ПГ-' + pgMatch[1] + icon);
-        }
+        boilers.push({ name: match[1].trim() + icon, count: count });
       }
     }
     
-    if (item.includes('(Колонка)') || item.includes('(колонка)') || item.includes('(ВПГ)') || item.includes('(впг)')) {
-      const match = item.match(/\((?:Колонка|колонка|ВПГ|впг)\)\s*(.+?)(?:\s*-\s*(\d+)\s*шт\.?)?$/i);
+    // 2. КОЛОНКИ ТА ВПГ (Обов'язково ПЕРЕД плитами)
+    else if (item.includes('(Колонка)') || item.includes('(колонка)') || item.includes('(ВПГ)') || item.includes('(впг)')) {
+      const cleanStr = item.replace(/\((Колонка|колонка|ВПГ|впг)\)\s*/gi, '').trim();
+      const match = cleanStr.match(/(.+?)(?:\s*-\s*(\d+)\s*шт\.?)?$/i);
+
       if (match && match[1]) {
         const count = match[2] ? parseInt(match[2], 10) : 1;
         for (let i = 0; i < count; i++) {
@@ -57,8 +48,22 @@ const parseAppliances = (text) => {
         }
       }
     }
+    
+    // 3. ПЛИТИ ТА ПОВЕРХНІ
+    else if (item.includes('(Плита') || item.includes('(плита)') || item.includes('ПГ') || item.includes('Поверхня') || item.includes('поверхня')) {
+      const cleanStr = item.replace(/\((Плита.*?|плита.*?)\)\s*/gi, '').trim();
+      const match = cleanStr.match(/(.+?)(?:\s*-\s*(\d+)\s*шт\.?)?$/i);
+
+      if (match && match[1]) {
+        const count = match[2] ? parseInt(match[2], 10) : 1;
+        for (let i = 0; i < count; i++) {
+          stoves.push(match[1].trim() + icon);
+        }
+      }
+    }
   });
 
+  // ЗБІРКА РЕЗУЛЬТАТІВ БЕЗ ЗАДВОЄНЬ
   if (boilers.length > 0) {
     result.boilerBrand = boilers.map(b => b.name).join('; ');
     const totalCount = boilers.reduce((sum, b) => sum + b.count, 0);
@@ -66,28 +71,16 @@ const parseAppliances = (text) => {
   }
 
   if (stoves.length > 0) {
-    const stoveCounts = {};
-    stoves.forEach(s => {
-      stoveCounts[s] = (stoveCounts[s] || 0) + 1;
-    });
-    
-    const uniqueStoves = Object.keys(stoveCounts);
-    result.stoveType = uniqueStoves.map(s => 
-      stoveCounts[s] > 1 ? `${s} (${stoveCounts[s]}шт)` : s
-    ).join(', ');
+    // Беремо лише унікальні назви плит, кількість порахує інтерфейс
+    const uniqueStoves = [...new Set(stoves)];
+    result.stoveType = uniqueStoves.join(', ');
     result.stoveCount = stoves.length.toString() + 'шт.';
   }
 
   if (columns.length > 0) {
-    const columnCounts = {};
-    columns.forEach(c => {
-      columnCounts[c] = (columnCounts[c] || 0) + 1;
-    });
-    
-    const uniqueColumns = Object.keys(columnCounts);
-    result.columnType = uniqueColumns.map(c => 
-      columnCounts[c] > 1 ? `${c} (${columnCounts[c]}шт)` : c
-    ).join(', ');
+    // Те саме для колонок
+    const uniqueColumns = [...new Set(columns)];
+    result.columnType = uniqueColumns.join(', ');
     result.columnCount = columns.length.toString() + 'шт.';
   }
 
@@ -2817,7 +2810,7 @@ const handleImportIoT = async (e) => {
 
                     <div className="detail-info-block">
                       <h4><Flame size={14} /> Прилади</h4>
-                      {selectedClient.boilerBrand && <div className="detail-row"><span className="dlbl">Котел</span><span className="dval">{selectedClient.boilerBrand}</span></div>}
+                      {selectedClient.boilerBrand && <div className="detail-row"><span className="dlbl">Котел</span><span className="dval">{selectedClient.boilerBrand}{selectedClient.boilerCount ? ` (${selectedClient.boilerCount})` : ''}</span></div>}
                       {selectedClient.stoveType && <div className="detail-row"><span className="dlbl">Плита</span><span className="dval">{selectedClient.stoveType}{selectedClient.stoveCount ? ` (${selectedClient.stoveCount})` : ''}</span></div>}
                       {selectedClient.columnType && <div className="detail-row"><span className="dlbl">ВПГ</span><span className="dval">{selectedClient.columnType}{selectedClient.columnCount ? ` (${selectedClient.columnCount})` : ''}</span></div>}
                       {!selectedClient.boilerBrand && !selectedClient.stoveType && !selectedClient.columnType && <div className="detail-row"><span className="dlbl">Прилади</span><span className="dval">—</span></div>}

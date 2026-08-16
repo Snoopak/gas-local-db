@@ -1,15 +1,15 @@
 {
   "files": {
-    "main.css": "/gas-local-db/static/css/main.f74c6731.css",
-    "main.js": "/gas-local-db/static/js/main.4e8f0cff.js",
+    "main.css": "/gas-local-db/static/css/main.5a122f4a.css",
+    "main.js": "/gas-local-db/static/js/main.d8df609e.js",
     "static/js/453.4186fc52.chunk.js": "/gas-local-db/static/js/453.4186fc52.chunk.js",
     "index.html": "/gas-local-db/index.html",
-    "main.f74c6731.css.map": "/gas-local-db/static/css/main.f74c6731.css.map",
-    "main.4e8f0cff.js.map": "/gas-local-db/static/js/main.4e8f0cff.js.map",
+    "main.5a122f4a.css.map": "/gas-local-db/static/css/main.5a122f4a.css.map",
+    "main.d8df609e.js.map": "/gas-local-db/static/js/main.d8df609e.js.map",
     "453.4186fc52.chunk.js.map": "/gas-local-db/static/js/453.4186fc52.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.f74c6731.css",
-    "static/js/main.4e8f0cff.js"
+    "static/css/main.5a122f4a.css",
+    "static/js/main.d8df609e.js"
   ]
 }

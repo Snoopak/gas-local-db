@@ -3061,8 +3061,8 @@ const handleImportIoT = async (e) => {
                 </div>
                 <div className="modal-body">
 
-                  <div className="modal-section-blue">
-                    <h3 className="modal-section-title modal-section-title-blue"><Home size={18} /> ПІБ, Адреса, Особові дані</h3>
+                  <div className="modal-section">
+                    <h3 className="modal-section-title modal-section-title-blue"><UserCircle size={18} /> ПІБ, Адреса, Особові дані</h3>
                     <div className="modal-grid-3">
                       
                       <div className="name-account-fields modal-col-3">
@@ -3169,8 +3169,9 @@ const handleImportIoT = async (e) => {
                         </div>
                       </div>
                     </div>
-                    <div style={{ width: '100%', height: '1px', backgroundColor: '#bfdbfe', margin: '20px 0 10px' }}></div>
-                    <h3 className="modal-section-title modal-section-title-blue">Інша інформація про об'єкт</h3>
+                    </div>
+                    <div className="modal-section">
+                    <h3 className="modal-section-title modal-section-title-blue"><Home size={18} /> Інша інформація про об'єкт</h3>
                     <div className="modal-grid-4">
                       <div><label className="form-label">Площа (м²)</label><input className="form-input" type="text" value={formData.area} onChange={(e) => setFormData({...formData, area: e.target.value})} /></div>
                       <div><label className="form-label">Комун. гос-во</label><input className="form-input" type="text" value={formData.utilityType} onChange={(e) => setFormData({...formData, utilityType: e.target.value})} /></div>
@@ -3197,7 +3198,7 @@ const handleImportIoT = async (e) => {
 
                   </div>
 
-                  <div className="modal-section-purple">
+                  <div className="modal-section">
                     <h3 className="modal-section-title modal-section-title-purple"><Gauge size={18} /> Лічильник</h3>
                     
                     <div className="form-grid-row" style={{ gridTemplateColumns: 'repeat(6, 1fr)' }}>
@@ -3266,8 +3267,8 @@ const handleImportIoT = async (e) => {
                   </div>
 
                   {/* --- ПОЧАТОК: СЕКЦІЯ ІОТ В МОДАЛЦІ --- */}
-                  <div className="modal-section-blue" style={{ marginTop: '16px', marginBottom: '16px' }}>
-                    <h3 className="modal-section-title" style={{ color: '#059669', borderBottomColor: '#a7f3d0' }}>
+                  <div className="modal-section">
+                    <h3 className="modal-section-title">
                       <Globe size={18} style={{ color: '#059669', marginRight: '6px' }} /> Телеметрія (ІоТ)
                     </h3>
                     <div className="modal-grid-4">
@@ -3291,8 +3292,8 @@ const handleImportIoT = async (e) => {
                   </div>
                   {/* --- КІНЕЦЬ: СЕКЦІЯ ІОТ В МОДАЛЦІ --- */}
 
-                  <div className="modal-section-orange">
-                    <h3 className="modal-section-title modal-section-title-orange">Прилади</h3>
+                  <div className="modal-section">
+                    <h3 className="modal-section-title modal-section-title-orange"><Flame size={18} /> Прилади</h3>
                     <div className="modal-grid-2">
                       <div><label className="form-label">Котел — марка</label><input className="form-input" type="text" value={formData.boilerBrand} onChange={(e) => setFormData({...formData, boilerBrand: e.target.value})} /></div>
                       <div><label className="form-label">Котел — кількість</label><input className="form-input" type="text" value={formData.boilerCount} onChange={(e) => setFormData({...formData, boilerCount: e.target.value})} /></div>
@@ -3303,13 +3304,12 @@ const handleImportIoT = async (e) => {
                     </div>
                   </div>
                   
-                  <div className="modal-section-red">
-                    <h3 className="modal-section-title modal-section-title-red">Відключення</h3>
-                    <div className="modal-col-3">
+                  <div className="modal-section modal-section-red">
+                    <h3 className="modal-section-title modal-section-title-red" style={{ marginBottom: '0px' }}><AlertTriangle size={18} /> Відключення</h3>
+                    <div className="modal-col-3" style={{ marginBottom: '5px' }}>
                       <div className="form-checkbox-row"> 
                         <div className="custom-checkbox-wrapper">
-                          <input 
-                            type="checkbox" 
+                          <input type="checkbox" 
                             id="gasDisconnected"
                             className="custom-checkbox-input" 
                             checked={formData.gasDisconnected || false} 
@@ -3321,7 +3321,7 @@ const handleImportIoT = async (e) => {
                           </label>
                         </div>
                       </div>
-                    </div><br/>
+                    </div>
                     <div className="modal-grid-3">
                       <div><label className="form-label">Метод відкл.</label><input className="form-input" type="text" value={formData.disconnectMethod} onChange={(e) => setFormData({...formData, disconnectMethod: e.target.value})} /></div>
                       <div><label className="form-label">Пломба відкл.</label><input className="form-input" type="text" value={formData.disconnectSeal} onChange={(e) => setFormData({...formData, disconnectSeal: e.target.value})} /></div>

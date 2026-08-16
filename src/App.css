@@ -1663,13 +1663,25 @@ body.dark .empty-db-hint {
 .modal-footer .btn-primary,
 .modal-footer button {flex: none; width: auto;}
 
-.modal-section-blue { background: #eff6ff; padding: 16px; border-radius: 8px; border: 2px solid #bfdbfe; }
-.modal-section-purple { background: #f5f3ff; padding: 16px; border-radius: 8px; border: 2px solid #ddd6fe; }
-.modal-section-orange { background: #fff7ed; padding: 16px; border-radius: 8px; border: 2px solid #fed7aa; }
-.modal-section-gray { background: #f3f4f6; padding: 16px; border-radius: 8px; }
-.modal-section-red { background: #fef2f2; padding: 16px; border-radius: 8px; border: 2px solid #fecaca; }
+.modal-section {background-color: #f9fafb; padding: 10px;border-radius: 8px;border: 1px solid #e1e1e1;}
+.modal-section-blue { background: #eff6ff;border: 2px solid #bfdbfe; }
+.modal-section-purple { background: #f5f3ff; border: 2px solid #ddd6fe; }
+.modal-section-orange { background: #fff7ed; border: 2px solid #fed7aa; }
+.modal-section-gray { background: #f3f4f6; border-radius: 8px; }
+.modal-section-red { background: #fef2f2; border-radius: 8px;border: 1px solid #fecaca; padding: 12px; }
 
-.modal-section-title { font-size: 15px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+.modal-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #374151 !important;
+  border-bottom: 1px solid #e1e1e1;
+  padding-bottom: 8px;
+}
+
 .modal-section-title-blue { color: #1e40af; }
 .modal-section-title-purple { color: #5b21b6; }
 .modal-section-title-orange { color: #9a3412; }

@@ -2825,10 +2825,10 @@ const handleImportIoT = async (e) => {
                         <div className="detail-row"><span className="dlbl">Дата встановлення</span><span className="dval">{selectedClient.iotInstallDate || '—'}</span></div>
                         
                         {selectedClient.iotLastDate && (
-                          <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px dashed #cbd5e1', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <div className="iot-last-connection">
                             <div className="detail-row">
                               <span className="dlbl">Останній зв'язок</span>
-                              <span className="dval" style={{ color: '#166534', fontWeight: '600', background: '#dcfce7', padding: '2px 6px', borderRadius: '4px' }}>
+                              <span className="dval iot-status-chip-green">
                                 {selectedClient.iotLastDate} {selectedClient.iotLastTime}
                               </span>
                             </div>
@@ -3350,57 +3350,53 @@ const handleImportIoT = async (e) => {
         )}
 
 
-        {/* --- Знайди низ файлу і встав модалку --- */}
+        
         {iotHistoryModalClient && (
-          <div className="modal-overlay" onClick={() => setIotHistoryModalClient(null)}>
-            <div className="modal-center">
-              <div className="modal-card" style={{ maxWidth: '500px' }} onClick={e => e.stopPropagation()}>
-                
-                <div className="modal-header">
-                  <div className="modal-title">Історія зв'язку ІоТ</div>
-                  <button className="modal-close" onClick={() => setIotHistoryModalClient(null)}>✕</button>
-                </div>
-                
-                <div className="modal-body" style={{ padding: '0' }}>
-                  <div style={{ padding: '12px 16px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: '12px' }}>
-                    Абонент: <b>{iotHistoryModalClient.fullName}</b><br/>
-                    Серійний №: <b>{iotHistoryModalClient.iotNumber || '—'}</b>
-                  </div>
-                  
-                  <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left' }}>
-                      <thead style={{ position: 'sticky', top: 0, background: 'white', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
-                        <tr>
-                          <th style={{ padding: '10px 16px', borderBottom: '1px solid #e2e8f0', color: '#64748b' }}>Дата та час</th>
-                          <th style={{ padding: '10px 16px', borderBottom: '1px solid #e2e8f0', color: '#64748b' }}>Показник</th>
-                          <th style={{ padding: '10px 16px', borderBottom: '1px solid #e2e8f0', color: '#64748b' }}>Оброблений</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(iotHistoryModalClient.iotHistory || []).map((log, idx) => (
-                          <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                            <td style={{ padding: '10px 16px', fontWeight: '500' }}>{log.date} <span style={{color: '#94a3b8'}}>{log.time}</span></td>
-                            <td style={{ padding: '10px 16px', fontWeight: '600', color: '#0f172a' }}>{log.reading}</td>
-                            <td style={{ padding: '10px 16px' }}>
-                              <span style={{ 
-                                padding: '2px 6px', borderRadius: '4px', fontSize: '10px', 
-                                background: log.processed === 'Так' ? '#dcfce7' : '#f1f5f9',
-                                color: log.processed === 'Так' ? '#166534' : '#64748b'
-                              }}>
-                                {log.processed || '—'}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-              </div>
-            </div>
+  <div className="modal-overlay" onClick={() => setIotHistoryModalClient(null)}>
+    <div className="modal-center">
+      <div className="modal-card" style={{ maxWidth: '500px' }} onClick={e => e.stopPropagation()}>
+        
+        <div className="modal-header">
+          <div className="modal-title">Історія зв'язку ІоТ</div>
+          <button className="modal-close" onClick={() => setIotHistoryModalClient(null)}>✕</button>
+        </div>
+        
+        <div className="modal-body iot-history-body">
+          <div className="iot-history-info">
+            Абонент: <b>{iotHistoryModalClient.fullName}</b><br/>
+            Серійний №: <b>{iotHistoryModalClient.iotNumber || '—'}</b>
           </div>
-        )}
+          
+          <div className="iot-history-table-wrap">
+            <table className="iot-history-table">
+              <thead>
+                <tr>
+                  <th>Дата та час</th>
+                  <th>Показник</th>
+                  <th>Оброблений</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(iotHistoryModalClient.iotHistory || []).map((log, idx) => (
+                  <tr key={idx}>
+                    <td>{log.date} <span className="iot-time">{log.time}</span></td>
+                    <td className="iot-reading">{log.reading}</td>
+                    <td>
+                      <span className={`iot-status-chip ${log.processed === 'Так' ? 'processed' : 'pending'}`}>
+                        {log.processed || '—'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+)}
 
         {showImportUrlModal && (
           <div className="url-modal-overlay"

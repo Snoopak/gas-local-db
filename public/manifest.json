@@ -4,7 +4,7 @@
   "description": "Система обліку абонентів газопостачання",
   "start_url": ".",
   "display": "standalone",
-  "background_color": "#EFF6FF",
+  "background_color": "#4F46E5",
   "theme_color": "#4F46E5",
   "orientation": "portrait-primary",
   "icons": [

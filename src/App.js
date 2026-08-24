@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, createContext, useContext, useCallback } from 'react';
-import { Search, Plus, Edit2, Trash2, X, Save, Phone, Home, Gauge, Upload, Download, FileText, CheckCircle, AlertCircle, Info, AlertTriangle, Database, Activity, Flame, MapPin, ChevronUp, ChevronDown, Users, Sun, Moon, Copy, ChevronRight, UserCircle, Pointer, SlidersHorizontal, Globe } from 'lucide-react';
+import { Search, Plus, Edit2, Trash2, X, Save, Phone, Home, Gauge, Upload, Download, FileText, CheckCircle, AlertCircle, Info, AlertTriangle, Database, Activity, Flame, MapPin, ChevronUp, ChevronDown, Users, Sun, Moon, Copy, ChevronRight, UserCircle, Pointer, SlidersHorizontal, Globe, IdCard, Contact } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import './App.css';
 import {METER_CATALOG, METER_SIZES, METER_SUBTYPE, METER_LOCATION, METER_OWNERSHIP, SERVICE_ORG, METER_GROUP, METER_MANUFACTURER, U_STREET_TYPE} from './data';
@@ -2621,7 +2621,6 @@ const handleImportIoT = async (e) => {
                     {clients.map(c => {
                       const dotClass = c.gasDisconnected === true ? 'suspended' : 'active';
                       const addr = [c.settlement, [c.streetType, c.street].filter(Boolean).join(' '), c.building ? `буд. ${c.building}${c.buildingLetter || ''}` : '', c.apartment ? `кв. ${c.apartment}${c.apartmentLetter || ''}` : ''].filter(Boolean).join(', ');
-                      const initials = (c.fullName || '?').split(' ').slice(0, 2).map(w => w[0]).join('');
                       const meterShort = c.meterNumber ? `${c.meterBrand ? c.meterBrand.split(' ')[0] : ''} G${c.meterSize || ''} №${c.meterNumber}` : '';
 
                       // 1. ПРОСТО ДОДАЄМО ЗМІННІ ТУТ
@@ -2656,7 +2655,6 @@ const handleImportIoT = async (e) => {
                           
                           onContextMenu={(e) => handleContextMenu(e, c)}
                           >
-                          <div className="item-avatar">{initials}</div>
                           <div className="item-body">
                             <div className="item-name">{c.fullName || '—'}</div>
                             <div className="item-address"><div className="meta-icon"><MapPin size={11} /></div> {addr}</div>
@@ -2895,7 +2893,15 @@ const handleImportIoT = async (e) => {
                 </>
               ) : (
                 <div className="detail-panel-empty">
-                  <div><Pointer size={40} /><p>Оберіть абонента<br/>для перегляду деталей</p></div>
+                  <div>
+                    <div className="empty-icon-wrapper">
+                      <IdCard size={36} strokeWidth={1.5} />
+                    </div>
+                    <div className="empty-text-group">
+                      <p className="empty-title">Оберіть абонента</p>
+                      <p className="empty-subtitle">для перегляду деталей</p>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

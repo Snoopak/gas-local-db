@@ -2030,22 +2030,90 @@ body.dark .empty-db-hint {
     height: 100%;
   }
 
-  .detail-panel-empty {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #d1d5db;
-    font-size: 0.85rem;
-    text-align: center;
-    padding: 2rem;
-    height: 100%;
-  }
-.detail-panel-empty > div {
+/* =========================================
+   ЗАГЛУШКА ДЕТАЛЕЙ (Empty Panel)
+   ========================================= */
+
+/* --- 1. Головні контейнери --- */
+.detail-panel-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 2rem;
+}
+
+/* Внутрішній контейнер, що центрує картку і текст */
+.detail-panel-empty>div {
   display: flex !important;
   flex-direction: column !important;
   align-items: center !important;
   justify-content: center !important;
-  gap: 12px !important;
+  gap: 16px !important;
+  /* Один відступ між іконкою і текстом замість margin-bottom */
+}
+
+/* --- 2. Обгортка іконки (Фізична картка) --- */
+.empty-icon-wrapper {
+  width: 80px;
+  height: 80px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  /* Кольори для світлої теми */
+  background-color: #f1f5f9;
+  color: #94a3b8;
+  /* Цей колір автоматично застосується до SVG іконки всередині */
+}
+
+/* Самій іконці тепер окремий клас майже не потрібен, 
+   але залишаємо для специфічності, якщо треба */
+.empty-icon {
+  opacity: 0.8;
+  /* Зробив трохи яскравішою, щоб не губилася в картці */
+}
+
+/* --- 3. Текстова частина --- */
+.empty-text-group {
+  text-align: center;
+  color: #64748b;
+}
+
+.empty-title {
+  font-size: 16px;
+  font-weight: 500;
+  margin: 0 0 4px 0;
+}
+
+.empty-subtitle {
+  font-size: 14px;
+  margin: 0;
+  opacity: 0.7;
+}
+
+/* =========================================
+   ТЕМНА ТЕМА (Dark Mode)
+   ========================================= */
+
+/* Збираємо всі стилі для темної теми в одному місці, щоб легко було читати */
+
+body.dark .empty-icon-wrapper {
+  background-color: #1e293b;
+  /* Глибокий синій/сірий (дає той самий об'єм) */
+  color: #475569;
+  /* Лінії іконки трохи світліші за фон */
+}
+
+body.dark .empty-icon {
+  opacity: 1;
+  /* У темній темі прозорість не потрібна, контури і так м'які */
+}
+
+body.dark .empty-text-group {
+  color: #94a3b8;
+  /* Світліший сірий текст для темної теми */
 }
   .detail-panel-header {
     padding: 1rem 1.5rem;
@@ -2201,12 +2269,6 @@ body.dark .ctx-divider { background: #334155; }
   background: #f59e0b;
 }
 
-.item-avatar {
-  width: 40px; height: 40px; border-radius: 14px;
-  background: linear-gradient(135deg, #e8ecf1, #dde1e7);
-  display: flex; align-items: center; justify-content: center;
-  font-weight: 700; font-size: 0.8rem; color: #475569; flex-shrink: 0;
-}
 .item-body { flex: 1; min-width: 0; }
 .item-name { font-weight: 600; font-size: 0.88rem; color: #1a1d23; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .item-address { font-size: 0.72rem; color: #6b7280; display: flex; align-items: center; gap: 0.25rem; margin-top: 0.15rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -2321,7 +2383,6 @@ body.dark .client-item { border-bottom-color: #1e293b; }
 body.dark .client-item:hover { background: #1a2940; }
 }
 body.dark .client-item.selected { background: #2d2a14; }
-body.dark .item-avatar { background: linear-gradient(135deg, #334155, #273449); color: #94a3b8; }
 body.dark .item-name { color: #e2e8f0; }
 body.dark .item-address { color: #94a3b8; }
 body.dark .item-tags .account { color: #94a3b8; }
@@ -3129,7 +3190,6 @@ body.dark .client-item.selected::before {
 }
 
 /* Тексти в картках списку */
-body.dark .item-avatar { background: #1e293b !important; color: #94a3b8 !important; }
 body.dark .item-name { color: #f8fafc !important; }
 body.dark .item-address { color: #94a3b8 !important; }
 body.dark .item-tags .account { color: #94a3b8 !important; }

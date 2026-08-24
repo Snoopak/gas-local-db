@@ -1218,21 +1218,50 @@ const loadClients = async (append = false) => {
     setMeterGroups(uniqueGroups);
   };
 
-const saveScrollState = () => {
+// 🔥 1. Новий автоматичний запис фільтрів
+  useEffect(() => {
+    // Захист від затирання кешу при першому рендері сторінки!
+    if (isFirstRender.current) return;
+
+    const hasAnyFilters = Boolean(
+      searchTerm || selectedSettlement.length > 0 || selectedStreet.length > 0 || 
+      selectedMeterBrand.length > 0 || selectedMeterSize.length > 0 || 
+      selectedMeterYear.length > 0 || selectedMeterGroups.length > 0 ||
+      filterDisconnected || filterDacha || filterAbsent || filterConnected || 
+      filterBuilding || filterApartment || selectedGrs.length > 0 || 
+      meterYearFrom || meterYearTo || verificationYearFrom || verificationYearTo || 
+      filterSeal || filterStickerSeal || filterHasIot
+    );
+
     try {
-      // Зберігаємо виключно налаштування фільтрів
-      sessionStorage.setItem(STORAGE_KEYS.FILTERS, JSON.stringify({
-        searchTerm, selectedSettlement, selectedStreet, selectedMeterBrand,
-        selectedMeterSize, selectedMeterYear, selectedMeterGroups,
-        filterDisconnected, filterDacha, filterAbsent, filterConnected,
-        filterBuilding, filterApartment, selectedGrs, meterYearFrom,
-        meterYearTo, verificationYearFrom, verificationYearTo,
-        filterSeal, filterStickerSeal, filterHasIot
-      }));
+      if (!hasAnyFilters) {
+        // Якщо фільтри скинули — чистимо пам'ять
+        sessionStorage.removeItem(STORAGE_KEYS.FILTERS);
+      } else {
+        // Якщо є фільтри — зберігаємо
+        sessionStorage.setItem(STORAGE_KEYS.FILTERS, JSON.stringify({
+          searchTerm, selectedSettlement, selectedStreet, selectedMeterBrand,
+          selectedMeterSize, selectedMeterYear, selectedMeterGroups,
+          filterDisconnected, filterDacha, filterAbsent, filterConnected,
+          filterBuilding, filterApartment, selectedGrs, meterYearFrom,
+          meterYearTo, verificationYearFrom, verificationYearTo,
+          filterSeal, filterStickerSeal, filterHasIot
+        }));
+      }
     } catch (e) {
       console.error('Error saving filters:', e);
     }
-  };
+  }, [
+    searchTerm, selectedSettlement, selectedStreet, selectedMeterBrand,
+    selectedMeterSize, selectedMeterYear, selectedMeterGroups,
+    filterDisconnected, filterDacha, filterAbsent, filterConnected,
+    filterBuilding, filterApartment, selectedGrs, meterYearFrom,
+    meterYearTo, verificationYearFrom, verificationYearTo,
+    filterSeal, filterStickerSeal, filterHasIot
+  ]);
+
+  // 🔥 2. Залишаємо порожню пустушку, щоб старий код не зламався
+  const saveScrollState = () => {};
 
 const restoreScrollState = () => {
     try {
@@ -1241,8 +1270,25 @@ const restoreScrollState = () => {
       if (savedFilters) {
         const filters = JSON.parse(savedFilters);
         
+        // 🔥 Броня від порожніх об'єктів у пам'яті
+        const hasActualFilters = Boolean(
+          filters.searchTerm || filters.selectedSettlement?.length > 0 || 
+          filters.selectedStreet?.length > 0 || filters.selectedMeterBrand?.length > 0 || 
+          filters.selectedMeterSize?.length > 0 || filters.selectedMeterYear?.length > 0 || 
+          filters.selectedMeterGroups?.length > 0 || filters.filterDisconnected || 
+          filters.filterDacha || filters.filterAbsent || filters.filterConnected || 
+          filters.filterBuilding || filters.filterApartment || filters.selectedGrs?.length > 0 || 
+          filters.meterYearFrom || filters.meterYearTo || filters.verificationYearFrom || 
+          filters.verificationYearTo || filters.filterSeal || filters.filterStickerSeal || filters.filterHasIot
+        );
+
+        if (!hasActualFilters) {
+          sessionStorage.removeItem(STORAGE_KEYS.FILTERS);
+          return false;
+        }
+        
         setSearchTerm(filters.searchTerm || '');
-        setDebouncedSearchTerm(filters.searchTerm || ''); // 🔥 ОДРАЗУ ставимо debounced
+        setDebouncedSearchTerm(filters.searchTerm || ''); 
         
         setSelectedSettlement(filters.selectedSettlement || []);
         setSelectedStreet(filters.selectedStreet || []);
@@ -1256,10 +1302,10 @@ const restoreScrollState = () => {
         setFilterConnected(filters.filterConnected || false);
         
         setFilterBuilding(filters.filterBuilding || '');
-        setDebouncedBuilding(filters.filterBuilding || ''); // 🔥 ОДРАЗУ ставимо debounced
+        setDebouncedBuilding(filters.filterBuilding || ''); 
         
         setFilterApartment(filters.filterApartment || '');
-        setDebouncedApartment(filters.filterApartment || ''); // 🔥 ОДРАЗУ ставимо debounced
+        setDebouncedApartment(filters.filterApartment || ''); 
         
         setSelectedGrs(filters.selectedGrs || []);
         setMeterYearFrom(filters.meterYearFrom || '');
@@ -2348,6 +2394,7 @@ const handleImportIoT = async (e) => {
                   className="btn-reset-icon"
                   title="Скинути всі фільтри"
                   onClick={() => {
+                    // Очищаємо всі стейти
                     setSearchTerm(''); setDebouncedSearchTerm('');
                     setSelectedSettlement([]); setSelectedStreet([]);
                     setSelectedMeterBrand([]); setSelectedMeterSize([]);
@@ -2362,8 +2409,13 @@ const handleImportIoT = async (e) => {
                     setFilterSeal(''); setFilterStickerSeal('');
                     setFilterHasIot(false);
 
-                    setCurrentPage(0); setHasMore(true);
-                    clearScrollState(); loadClients();
+                    setCurrentPage(0); 
+                    setHasMore(true);
+                    
+                    // 🔥 ГОЛОВНА ЗМІНА ТУТ:
+                    // Примусово стираємо фільтри з пам'яті браузера
+                    sessionStorage.removeItem(STORAGE_KEYS.FILTERS);
+                    clearScrollState(); 
                    }}
                   >
                   <X size={16} />

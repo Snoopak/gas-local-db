@@ -1108,54 +1108,26 @@ const handleTouchEnd = (e) => {
     }
   }, [selectedSettlement, selectedStreet, selectedMeterGroups, selectedMeterBrand, selectedMeterSize, selectedMeterYear]);
 
-  useEffect(() => {
+useEffect(() => {
     const initializeApp = async () => {
-      const isPageReload = !sessionStorage.getItem('app_initialized');
-      
       await loadAllCounts();
       loadSettlements();
       loadStreets();
       loadMeterData();
       
-      if (isPageReload) {
-        const savedScrollY = sessionStorage.getItem(STORAGE_KEYS.SCROLL_Y);
-        
-        sessionStorage.removeItem(STORAGE_KEYS.CLIENTS);
-        sessionStorage.removeItem(STORAGE_KEYS.PAGE);
-        sessionStorage.removeItem(STORAGE_KEYS.HAS_MORE);
-        sessionStorage.removeItem(STORAGE_KEYS.FILTERED_TOTAL);
-        
+      // 🔥 ВАЖЛИВО: Знімаємо блокування ПЕРЕД тим, як встановлювати фільтри
+      isFirstRender.current = false;
+      
+      const hasRestoredFilters = restoreScrollState();
+      
+      // Якщо фільтрів немає, вантажимо все
+      // Якщо фільтри є, React побачить зміну стейтів і САМ запустить performSearch
+      if (!hasRestoredFilters) {
         await loadClients();
-        
-        if (savedScrollY) {
-          setTimeout(() => {
-            window.scrollTo(0, parseInt(savedScrollY, 10));
-          }, CONFIG.STATE_RESTORE_DELAY);
-        }
-        
-        sessionStorage.setItem('app_initialized', 'true');
-      } else {
-        const restored = restoreScrollState();
-        if (!restored) {
-          await loadClients();
-        }
       }
-      
-      setIsInitialLoading(false);
-      
-      setTimeout(() => {
-        isFirstRender.current = false;
-      }, CONFIG.STATE_RESTORE_DELAY);
     };
     
     initializeApp();
-    
-    const handleBeforeUnload = () => {
-      sessionStorage.removeItem('app_initialized');
-    };
-    
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1186,26 +1158,21 @@ const handleTouchEnd = (e) => {
     }
   }, [showQuickActions]);
 
-  const loadClients = async (append = false) => {
+const loadClients = async (append = false) => {
     if (isLoadingMore || (!append && loading)) return;
     
-    if (append) {
-      setIsLoadingMore(true);
-    } else {
-      setLoading(true);
-    }
+    if (append) setIsLoadingMore(true);
+    else setLoading(true);
     
     try {
       const data = await getClientsByPage(currentPage, CONFIG.PAGE_SIZE);
       
-      if (append) {
-        setClients(prev => [...prev, ...data]);
-      } else {
-        setClients(data);
-      }
+      if (append) setClients(prev => [...prev, ...data]);
+      else setClients(data);
       
       setHasMore(data.length === CONFIG.PAGE_SIZE);
       
+      // 🔥 ПОВЕРНУЛИ ЗБЕРЕЖЕННЯ
       setTimeout(() => {
         saveScrollState();
       }, 100);
@@ -1214,11 +1181,10 @@ const handleTouchEnd = (e) => {
       console.error('Error loading clients:', error);
     }
     
-    if (append) {
-      setIsLoadingMore(false);
-    } else {
-      setLoading(false);
-    }
+    if (append) setIsLoadingMore(false);
+    else setLoading(false);
+    
+    setIsInitialLoading(false);
   };
 
   const loadSettlements = async () => {
@@ -1252,74 +1218,72 @@ const handleTouchEnd = (e) => {
     setMeterGroups(uniqueGroups);
   };
 
-  const saveScrollState = () => {
+const saveScrollState = () => {
     try {
-      sessionStorage.setItem(STORAGE_KEYS.CLIENTS, JSON.stringify(clients));
-      sessionStorage.setItem(STORAGE_KEYS.SCROLL_Y, window.scrollY.toString());
-      sessionStorage.setItem(STORAGE_KEYS.PAGE, currentPage.toString());
-      sessionStorage.setItem(STORAGE_KEYS.HAS_MORE, hasMore.toString());
-      sessionStorage.setItem(STORAGE_KEYS.FILTERED_TOTAL, filteredTotalCount.toString());
+      // Зберігаємо виключно налаштування фільтрів
       sessionStorage.setItem(STORAGE_KEYS.FILTERS, JSON.stringify({
-        searchTerm,
-        selectedSettlement,
-        selectedStreet,
-        selectedMeterBrand,
-        selectedMeterSize,
-        selectedMeterYear,
-        selectedMeterGroups
+        searchTerm, selectedSettlement, selectedStreet, selectedMeterBrand,
+        selectedMeterSize, selectedMeterYear, selectedMeterGroups,
+        filterDisconnected, filterDacha, filterAbsent, filterConnected,
+        filterBuilding, filterApartment, selectedGrs, meterYearFrom,
+        meterYearTo, verificationYearFrom, verificationYearTo,
+        filterSeal, filterStickerSeal, filterHasIot
       }));
     } catch (e) {
-      console.error('Error saving scroll state:', e);
+      console.error('Error saving filters:', e);
     }
   };
 
-  const restoreScrollState = () => {
+const restoreScrollState = () => {
     try {
-      const savedClients = sessionStorage.getItem(STORAGE_KEYS.CLIENTS);
-      const savedScrollY = sessionStorage.getItem(STORAGE_KEYS.SCROLL_Y);
-      const savedPage = sessionStorage.getItem(STORAGE_KEYS.PAGE);
       const savedFilters = sessionStorage.getItem(STORAGE_KEYS.FILTERS);
-      const savedHasMore = sessionStorage.getItem(STORAGE_KEYS.HAS_MORE);
-      const savedFilteredTotal = sessionStorage.getItem(STORAGE_KEYS.FILTERED_TOTAL);
 
-      if (savedClients && savedPage) {
-        setClients(JSON.parse(savedClients));
-        setCurrentPage(parseInt(savedPage, 10));
-        setHasMore(savedHasMore === 'true');
-        setFilteredTotalCount(parseInt(savedFilteredTotal, 10) || 0);
+      if (savedFilters) {
+        const filters = JSON.parse(savedFilters);
         
-        if (savedFilters) {
-          const filters = JSON.parse(savedFilters);
-          setSearchTerm(filters.searchTerm || '');
-          setSelectedSettlement(filters.selectedSettlement || []);
-          setSelectedStreet(filters.selectedStreet || []);
-          setSelectedMeterBrand(filters.selectedMeterBrand || []);
-          setSelectedMeterSize(filters.selectedMeterSize || []);
-          setSelectedMeterYear(filters.selectedMeterYear || []);
-          setSelectedMeterGroups(filters.selectedMeterGroups || []);
-        }
+        setSearchTerm(filters.searchTerm || '');
+        setDebouncedSearchTerm(filters.searchTerm || ''); // 🔥 ОДРАЗУ ставимо debounced
         
-        setTimeout(() => {
-          if (savedScrollY) {
-            window.scrollTo(0, parseInt(savedScrollY, 10));
-          }
-        }, CONFIG.STATE_RESTORE_DELAY);
+        setSelectedSettlement(filters.selectedSettlement || []);
+        setSelectedStreet(filters.selectedStreet || []);
+        setSelectedMeterBrand(filters.selectedMeterBrand || []);
+        setSelectedMeterSize(filters.selectedMeterSize || []);
+        setSelectedMeterYear(filters.selectedMeterYear || []);
+        setSelectedMeterGroups(filters.selectedMeterGroups || []);
+        setFilterDisconnected(filters.filterDisconnected || false);
+        setFilterDacha(filters.filterDacha || false);
+        setFilterAbsent(filters.filterAbsent || false);
+        setFilterConnected(filters.filterConnected || false);
         
-        stateRestored.current = true;
-        return true;
+        setFilterBuilding(filters.filterBuilding || '');
+        setDebouncedBuilding(filters.filterBuilding || ''); // 🔥 ОДРАЗУ ставимо debounced
+        
+        setFilterApartment(filters.filterApartment || '');
+        setDebouncedApartment(filters.filterApartment || ''); // 🔥 ОДРАЗУ ставимо debounced
+        
+        setSelectedGrs(filters.selectedGrs || []);
+        setMeterYearFrom(filters.meterYearFrom || '');
+        setMeterYearTo(filters.meterYearTo || '');
+        setVerificationYearFrom(filters.verificationYearFrom || '');
+        setVerificationYearTo(filters.verificationYearTo || '');
+        setFilterSeal(filters.filterSeal || '');
+        setFilterStickerSeal(filters.filterStickerSeal || '');
+        setFilterHasIot(filters.filterHasIot || false);
+        
+        return true; 
       }
     } catch (e) {
-      console.error('Error restoring scroll state:', e);
+      console.error('Error restoring filters:', e);
     }
     return false;
   };
 
-  const clearScrollState = () => {
+const clearScrollState = () => {
     try {
       sessionStorage.removeItem(STORAGE_KEYS.CLIENTS);
       sessionStorage.removeItem(STORAGE_KEYS.SCROLL_Y);
       sessionStorage.removeItem(STORAGE_KEYS.PAGE);
-      sessionStorage.removeItem(STORAGE_KEYS.FILTERS);
+      // 🔥 ВИДАЛЕНО: sessionStorage.removeItem(STORAGE_KEYS.FILTERS);
       sessionStorage.removeItem(STORAGE_KEYS.HAS_MORE);
       sessionStorage.removeItem(STORAGE_KEYS.FILTERED_TOTAL);
     } catch (e) {
@@ -1417,14 +1381,11 @@ const refreshCurrentList = async () => {
 };
 
 
-  const performSearch = async (append = false) => {
+const performSearch = async (append = false) => {
     if (isLoadingMore || (!append && loading)) return;
     
-    if (append) {
-      setIsLoadingMore(true);
-    } else {
-      setLoading(true);
-    }
+    if (append) setIsLoadingMore(true);
+    else setLoading(true);
     
     try {
       const result = await searchClientsPaginated(
@@ -1435,15 +1396,13 @@ const refreshCurrentList = async () => {
         currentPage, CONFIG.PAGE_SIZE
       );
       
-      if (append) {
-        setClients(prev => [...prev, ...result.items]);
-      } else {
-        setClients(result.items);
-      }
+      if (append) setClients(prev => [...prev, ...result.items]);
+      else setClients(result.items);
       
       setFilteredTotalCount(result.total);
       setHasMore(result.hasMore);
       
+      // 🔥 ПОВЕРНУЛИ ЗБЕРЕЖЕННЯ
       setTimeout(() => {
         saveScrollState();
       }, 100);
@@ -1452,11 +1411,10 @@ const refreshCurrentList = async () => {
       console.error('Error searching:', error);
     }
     
-    if (append) {
-      setIsLoadingMore(false);
-    } else {
-      setLoading(false);
-    }
+    if (append) setIsLoadingMore(false);
+    else setLoading(false);
+    
+    setIsInitialLoading(false);
   };
 
   // ✅ Асинхронна перевірка дубліката по УСІЙ IndexedDB
@@ -2430,83 +2388,87 @@ const handleImportIoT = async (e) => {
                 </div>
 
                 <div className="drawer-body">
-                  <div className="drawer-section">
-                    <div className="drawer-section-title">Адреса та ГРС</div>
-                    <div className="drawer-grid-2">
-                      <MultiSelectDropdown options={settlements} selected={selectedSettlement} onChange={setSelectedSettlement} label="Нас. пункт" name="settlement" />
-                      <MultiSelectDropdown options={streets} selected={selectedStreet} onChange={setSelectedStreet} label="Вулиця" name="street" />
-                    </div>
-                    
-                    <div className="drawer-grid-2">
-                      <input className="drawer-input" type="text" value={filterBuilding} onChange={e => setFilterBuilding(e.target.value)} placeholder="Будинок" />
-                      <input className="drawer-input" type="text" value={filterApartment} onChange={e => setFilterApartment(e.target.value)} placeholder="Квартира" />
-                    </div>
+  
+  <div className="drawer-section">
+    <div className="drawer-section-title">Адреса та ГРС</div>
+    <div className="drawer-grid-2">
+      <MultiSelectDropdown options={settlements} selected={selectedSettlement} onChange={setSelectedSettlement} label="Нас. пункт" name="settlement" />
+      <MultiSelectDropdown options={streets} selected={selectedStreet} onChange={setSelectedStreet} label="Вулиця" name="street" />
+    </div>
+    
+    <div className="drawer-grid-2">
+      <input className="drawer-input" type="text" value={filterBuilding} onChange={e => setFilterBuilding(e.target.value)} placeholder="Будинок" />
+      <input className="drawer-input" type="text" value={filterApartment} onChange={e => setFilterApartment(e.target.value)} placeholder="Квартира" />
+    </div>
 
-                    <MultiSelectDropdown 
-                      options={grsList} 
-                      selected={selectedGrs} 
-                      onChange={setSelectedGrs} 
-                      label="ГРС" 
-                      name="grs" 
-                    />
-                  </div>
+    <MultiSelectDropdown 
+      options={grsList} 
+      selected={selectedGrs} 
+      onChange={setSelectedGrs} 
+      label="ГРС" 
+      name="grs" 
+    />
+  </div>
 
-                  <div className="drawer-section">
-                    <div className="drawer-section-title">Параметри лічильника</div>
-                    <MultiSelectDropdown options={meterGroups} selected={selectedMeterGroups} onChange={setSelectedMeterGroups} label="Група ліч." name="meterGroup" />
-                    
-                    <div className="drawer-grid-2">
-                      <MultiSelectDropdown options={meterBrands} selected={selectedMeterBrand} onChange={setSelectedMeterBrand} label="Марка" name="meterBrand" />
-                      <MultiSelectDropdown options={meterSizes} selected={selectedMeterSize} onChange={setSelectedMeterSize} label="Розмір" name="meterSize" />
-                    </div>
+  <div className="drawer-section">
+    <div className="drawer-section-title">Параметри лічильника</div>
+    <MultiSelectDropdown options={meterGroups} selected={selectedMeterGroups} onChange={setSelectedMeterGroups} label="Група ліч." name="meterGroup" />
+    
+    <div className="drawer-grid-2">
+      <MultiSelectDropdown options={meterBrands} selected={selectedMeterBrand} onChange={setSelectedMeterBrand} label="Марка" name="meterBrand" />
+      <MultiSelectDropdown options={meterSizes} selected={selectedMeterSize} onChange={setSelectedMeterSize} label="Розмір" name="meterSize" />
+    </div>
 
-                    <div className="drawer-card-box">
-                      <span className="drawer-card-title">Рік випуску</span>
-                      
-                      <MultiSelectDropdown options={meterYears} selected={selectedMeterYear} onChange={setSelectedMeterYear} label="Оберіть конкретні роки" name="meterYear" />
-                      
-                      <div className="drawer-or-divider">
-                        <span>або діапазон</span>
-                      </div>
+    {/* Рідний стиль drawer-card-box для року випуску */}
+    <div className="drawer-card-box">
+      <span className="drawer-card-title">Рік випуску</span>
+      
+      <MultiSelectDropdown options={meterYears} selected={selectedMeterYear} onChange={setSelectedMeterYear} label="Оберіть конкретні роки" name="meterYear" />
+      
+      <div className="drawer-dashed-divider">
+      </div>
 
-                      <div className="drawer-grid-2">
-                        <input className="drawer-input" style={{ textAlign: 'center' }} type="number" placeholder="Від (1995)" value={meterYearFrom} onChange={e => setMeterYearFrom(e.target.value)} />
-                        <input className="drawer-input" style={{ textAlign: 'center' }} type="number" placeholder="До (2010)" value={meterYearTo} onChange={e => setMeterYearTo(e.target.value)} />
-                      </div>
-                    </div>
+      <div className="drawer-grid-2">
+        <input className="drawer-input" style={{ textAlign: 'center' }} type="number" placeholder="Від (1995)" value={meterYearFrom} onChange={e => setMeterYearFrom(e.target.value)} />
+        <input className="drawer-input" style={{ textAlign: 'center' }} type="number" placeholder="До (2010)" value={meterYearTo} onChange={e => setMeterYearTo(e.target.value)} />
+      </div>
+    </div>
 
-                    <div>
-                      <label className="drawer-label">Рік повірки (від — до)</label>
-                      <div className="drawer-grid-2">
-                        <input className="drawer-input" style={{ textAlign: 'center' }} type="number" placeholder="2024" value={verificationYearFrom} onChange={e => setVerificationYearFrom(e.target.value)} />
-                        <input className="drawer-input" style={{ textAlign: 'center' }} type="number" placeholder="2028" value={verificationYearTo} onChange={e => setVerificationYearTo(e.target.value)} />
-                      </div>
-                    </div>
-                  </div>
+    {/* ТАКИЙ САМИЙ блок для року повірки, щоб була єдина стилістика */}
+    <div className="drawer-card-box">
+      <span className="drawer-card-title">Рік повірки</span>
+      <div className="drawer-grid-2">
+        <input className="drawer-input" style={{ textAlign: 'center' }} type="number" placeholder="Від 2024" value={verificationYearFrom} onChange={e => setVerificationYearFrom(e.target.value)} />
+        <input className="drawer-input" style={{ textAlign: 'center' }} type="number" placeholder="До 2028" value={verificationYearTo} onChange={e => setVerificationYearTo(e.target.value)} />
+      </div>
+    </div>
+  </div>
 
-                  <div className="drawer-section">
-                    <div className="drawer-section-title">Телеметрія</div>
-                    <div className="custom-checkbox-wrapper" style={{ marginTop: '8px' }}>
-                      <input 
-                        type="checkbox" 
-                        id="filterIot"
-                        className="custom-checkbox-input" 
-                        checked={filterHasIot} 
-                        onChange={(e) => setFilterHasIot(e.target.checked)} 
-                      />
-                      <label htmlFor="filterIot" className="custom-checkbox-label">
-                        <span className="custom-checkbox-box"></span>
-                        <span style={{ fontWeight: 500, color: '#4338ca' }}>Абоненти з ІоТ модулем</span>
-                      </label>
-                    </div>
-                  </div>
+  <div className="drawer-section">
+    <div className="drawer-section-title">Телеметрія</div>
+    <div className="custom-checkbox-wrapper" style={{ marginTop: '8px' }}>
+      <input 
+        type="checkbox" 
+        id="filterIot"
+        className="custom-checkbox-input" 
+        checked={filterHasIot} 
+        onChange={(e) => setFilterHasIot(e.target.checked)} 
+      />
+      <label htmlFor="filterIot" className="custom-checkbox-label">
+        <span className="custom-checkbox-box"></span>
+        {/* Прибрано інлайн-колір, тепер береться з твого CSS */}
+        <span style={{ fontWeight: 500 }}>Абоненти з ІоТ модулем</span>
+      </label>
+    </div>
+  </div>
 
-                  <div className="drawer-section">
-                    <div className="drawer-section-title">Пошук за номерами пломб</div>
-                    <input className="drawer-input" type="text" placeholder="№ пломби (напр. R261)" value={filterSeal} onChange={e => setFilterSeal(e.target.value)} />
-                    <input className="drawer-input" type="text" placeholder="№ стікерної пломби (напр. B1484)" value={filterStickerSeal} onChange={e => setFilterStickerSeal(e.target.value)} />
-                  </div>
-                </div>
+  <div className="drawer-section">
+    <div className="drawer-section-title">Пошук за номерами пломб</div>
+    <input className="drawer-input" type="text" placeholder="№ пломби (напр. R261)" value={filterSeal} onChange={e => setFilterSeal(e.target.value)} />
+    <input className="drawer-input" type="text" placeholder="№ стікерної пломби (напр. B1484)" value={filterStickerSeal} onChange={e => setFilterStickerSeal(e.target.value)} />
+  </div>
+
+</div>
 
                 <div className="drawer-footer">
                   <button className="btn-apply-drawer" onClick={() => setShowFilterDrawer(false)}>

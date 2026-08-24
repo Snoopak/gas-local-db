@@ -2789,11 +2789,24 @@ body.dark .drawer-header {
 }
 
 .drawer-section-title {
-  font-size: 0.725rem;
-  font-weight: 700;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  font-size: 0.95rem;
+  /* Трохи більший шрифт */
+  font-weight: 600;
+  color: #1f2937;
+  /* Темніший колір */
+  text-transform: none;
+  /* ВІДКЛЮЧАЄМО CAPS LOCK */
+  letter-spacing: normal;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+}
+
+body.dark .drawer-section-title {
+  color: #94a3b8;
+  /* Світло-сірий текст */
+  border-bottom-color: #334155;
+  /* 🔥 Акуратна лінія для темної теми */
 }
 
 .drawer-label {
@@ -2888,6 +2901,7 @@ body.dark .drawer-footer {
   color: #0f172a;
 }
 
+
 body.dark .drawer-header-title {
   color: #f8fafc;
 }
@@ -2911,54 +2925,38 @@ body.dark .drawer-header-title {
 
 /* Карточка для років (замість темної Tailwind плашки) */
 .drawer-card-box {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 12px;
+  background: transparent;
+  border: none;
+  padding: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
 body.dark .drawer-card-box {
-  background: #020617;
-  border-color: #1e293b;
+  background: transparent;
+  border: none;
 }
 
 .drawer-card-title {
   font-size: 0.8rem;
   font-weight: 600;
-  color: #4f46e5;
+  color: #4b5563;
+  /* Суворий сірий замість синього */
 }
 
 body.dark .drawer-card-title {
-  color: #818cf8;
+  color: #cbd5e1;
 }
 
-.drawer-or-divider {
-  display: flex;
-  align-items: center;
-  text-align: center;
-  color: #94a3b8;
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  margin: 2px 0;
+.drawer-dashed-divider {
+  border: none;
+  border-top: 1px dashed #cbd5e1;
+  margin: 6px 0;
 }
 
-.drawer-or-divider::before,
-.drawer-or-divider::after {
-  content: '';
-  flex: 1;
-  border-bottom: 1px solid #e2e8f0;
-}
-
-body.dark .drawer-or-divider::before,
-body.dark .drawer-or-divider::after {
-  border-color: #1e293b;
-}
-
-.drawer-or-divider span {
-  padding: 0 8px;
+body.dark .drawer-dashed-divider {
+  border-top-color: #334155;
 }
 
 /* ===== ОБ'ЄДНАНИЙ ТУЛБАР З ЗВИЧНИМ РОЗТАШУВАННЯМ ЗЛІВА ===== */

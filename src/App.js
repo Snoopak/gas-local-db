@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, createContext, useContext, useCallback } from 'react';
-import { Search, Plus, Edit2, Trash2, X, Save, Phone, Home, Gauge, Upload, Download, FileText, CheckCircle, AlertCircle, Info, AlertTriangle, Database, Activity, Flame, MapPin, ChevronUp, ChevronDown, Users, Sun, Moon, Copy, ChevronRight, UserCircle, Pointer, SlidersHorizontal, Globe, IdCard, Contact } from 'lucide-react';
+import { Search, Plus, Edit2, Trash2, X, Save, Phone, Home, Gauge, Upload, Download, FileText, CheckCircle, AlertCircle, Info, AlertTriangle, Database, Activity, Flame, MapPin, ChevronUp, ChevronDown, Users, Sun, Moon, Copy, ChevronRight, UserCircle, SlidersHorizontal, Globe, IdCard, Hash } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import './App.css';
 import {METER_CATALOG, METER_SIZES, METER_SUBTYPE, METER_LOCATION, METER_OWNERSHIP, SERVICE_ORG, METER_GROUP, METER_MANUFACTURER, U_STREET_TYPE} from './data';
@@ -2659,19 +2659,16 @@ const handleImportIoT = async (e) => {
                             <div className="item-name">{c.fullName || '—'}</div>
                             <div className="item-address"><div className="meta-icon"><MapPin size={11} /></div> {addr}</div>
                             <div className="item-tags">
-                              {/* Рядок 1: Завжди о/р, крапка та лічильник */}
-                              <span className="account">о/р: {c.accountNumber || '—'}</span>
+                              <div className="meta-icon"><Hash size={14} strokeWidth={2} style={{ opacity: 0.5 }} /></div><span className="account">о/р: {c.accountNumber || '—'}</span>
                               <span className={`status-indicator ${dotClass}`}></span>
                               {meterShort && <span className="meter-badge"><i className="fas fa-tachometer-alt"></i> {meterShort}</span>}
-                              {/* --- ПОЧАТОК: БЕЙДЖ ІОТ (ПРОСТИЙ СІРИЙ) --- */}
+                              
                               {(c.iotBrand || c.iotNumber) && (
                                 <div className="meta-icon" title={`ІоТ: ${c.iotBrand || '—'} №${c.iotNumber || '—'}`}>
                                   <Globe size={12} style={{ color: '#6b7280' }} />
                                 </div>
                               )}
-                              {/* --- КІНЕЦЬ: БЕЙДЖ ІОТ --- */}
-
-                              {/* Рядок 2 (на мобілці) / Продовження (на десктопі): Всі статусні беджі */}
+                            {/* Рядок 2 (на мобілці) / Продовження (на десктопі): Всі статусні беджі */}
                               {(c.dacha || c.temporaryAbsent || c.gasDisconnected) && (
                                 <div className="item-badges">
                                   {c.dacha && <span className="badge-chip badge-dacha">Дача</span>}

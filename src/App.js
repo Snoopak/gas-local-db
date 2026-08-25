@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, createContext, useContext, useCallback } from 'react';
-import { Search, Plus, Edit2, Trash2, X, Save, Phone, Home, Gauge, Upload, Download, FileText, CheckCircle, AlertCircle, Info, AlertTriangle, Database, Activity, Flame, MapPin, ChevronUp, ChevronDown, Users, Sun, Moon, Copy, ChevronRight, UserCircle, SlidersHorizontal, Globe, IdCard, Hash } from 'lucide-react';
+import { Search, Plus, Edit2, Trash2, X, Save, Phone, Home, Gauge, Upload, Download, FileText, CheckCircle, AlertCircle, Info, AlertTriangle, Database, Activity, Flame, MapPin, ChevronUp, ChevronDown, Users, Sun, Moon, Copy, ChevronRight, UserCircle, SlidersHorizontal, Globe, IdCard, Hash, SearchX } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import './App.css';
 import {METER_CATALOG, METER_SIZES, METER_SUBTYPE, METER_LOCATION, METER_OWNERSHIP, SERVICE_ORG, METER_GROUP, METER_MANUFACTURER, U_STREET_TYPE} from './data';
@@ -2696,9 +2696,11 @@ const handleImportIoT = async (e) => {
                       <div>
                         {hasActiveFilters ? (
                           <div className="empty-search">
-                            <div className="empty-search-icon">🔍</div>
-                            <p className="empty-search-title">Нічого не знайдено</p>
-                            <p className="empty-search-hint">Спробуйте змінити параметри пошуку</p>
+                            <div className="empty-search-icon-wrapper">
+                              <SearchX size={42} strokeWidth={1.5} />
+                            </div>
+                            <h3 className="empty-search-title">Нічого не знайдено</h3>
+                            <p className="empty-search-hint">За вашим запитом немає результатів.<br/>Спробуйте змінити або скинути параметри пошуку.</p>
                           </div>
                         ) : totalCount === 0 ? (
                           <div className="empty-db">

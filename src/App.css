@@ -1439,11 +1439,62 @@ body.dark .sk-meter-brand {
 
 .list-end-text { text-align: center; padding: 20px; font-size: 11px; color: #9ca3af; }
 
-/* ===== ПОРОЖНІЙ СТАН ===== */
-.empty-search { text-align: center; padding: 48px 16px; }
-.empty-search-icon { font-size: 40px; margin-bottom: 12px; }
-.empty-search-title { font-size: 14px; font-weight: 500; color: #6b7280; }
-.empty-search-hint { font-size: 13px; color: #9ca3af; margin-top: 4px; }
+/* ===== ЕЛЕГАНТНИЙ ПУСТИЙ ПОШУК ===== */
+.empty-search {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 20px;
+  text-align: center;
+  animation: fade-in 0.4s ease-out;
+}
+
+/* М'яка кругла підкладка під іконку */
+.empty-search-icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 88px;
+  height: 88px;
+  background: #f1f5f9;
+  /* Світло-сірий для світлої теми */
+  color: #94a3b8;
+  border-radius: 50%;
+  margin-bottom: 24px;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.02);
+}
+
+.empty-search-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #334155;
+  margin: 0 0 8px 0;
+}
+
+.empty-search-hint {
+  font-size: 0.95rem;
+  color: #64748b;
+  max-width: 320px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* --- ТЕМНА ТЕМА --- */
+body.dark .empty-search-icon-wrapper {
+  background: rgba(30, 41, 59, 0.6);
+  /* Напівпрозорий темний фон */
+  color: #475569;
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+body.dark .empty-search-title {
+  color: #e2e8f0;
+}
+
+body.dark .empty-search-hint {
+  color: #94a3b8;
+}
 
 .empty-db {
   display: flex;

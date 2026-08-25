@@ -793,28 +793,6 @@ const handleTouchEnd = (e) => {
     touchCurrentY.current = 0;
   };
 
-
-// 🕵️‍♂️ ГЛОБАЛЬНИЙ ДЕБАГГЕР УСІХ КЛІКІВ ТА ТАПІВ
-  useEffect(() => {
-    const handleGlobalClick = (e) => {
-      console.log('[DEBUG GLOBAL CLICK] 🎯 Клік прилетів у:', e.target.tagName, 'Клас:', e.target.className);
-    };
-    
-    const handleGlobalTouch = (e) => {
-      console.log('[DEBUG GLOBAL TOUCH] 👆 Тап прилетів у:', e.target.tagName, 'Клас:', e.target.className);
-    };
-
-    // Третій параметр { capture: true } дозволяє нам перехопити подію НАЙПЕРШИМИ, 
-    // до того як якийсь інший код її скасує
-    document.addEventListener('click', handleGlobalClick, { capture: true });
-    document.addEventListener('touchstart', handleGlobalTouch, { capture: true });
-
-    return () => {
-      document.removeEventListener('click', handleGlobalClick, { capture: true });
-      document.removeEventListener('touchstart', handleGlobalTouch, { capture: true });
-    };
-  }, []);
-
   useEffect(() => {
     const onMouseMove = (e) => handleTouchMove(e);
     const onMouseUp = () => handleTouchEnd();
@@ -1356,7 +1334,6 @@ const clearScrollState = () => {
   };
  
 const handleClientCardClick = (clientId) => {
-  console.log('[DEBUG CLICK] 🟢 Клік по картці! clientId:', clientId);
   
   // Якщо шторка закривається — перериваємо анімацію
   if (closingTimer.current) {
@@ -3492,15 +3469,34 @@ const handleImportIoT = async (e) => {
           </div>
         )}
 
-        {ctxMenu.show && (
-          <div className="ctx-menu" style={{position:'fixed', left: ctxMenu.x, top: ctxMenu.y, zIndex: 9999}}>
-            <button className="ctx-item" onClick={() => handleCtxAction('edit')}><Edit2 size={14} /> Редагувати</button>
-            <button className="ctx-item" onClick={() => handleCtxAction('copy')}><Copy size={14} /> Копіювати адресу</button>
-            <button className="ctx-item" onClick={() => handleCtxAction('call')}><Phone size={14} /> Подзвонити</button>
-            <div className="ctx-divider"></div>
-            <button className="ctx-item ctx-item-danger" onClick={() => handleCtxAction('delete')}><Trash2 size={14} /> Видалити</button>
-          </div>
-        )}
+          {ctxMenu.show && (
+            <>
+              {/* Затемнення фону тільки для мобілки */}
+              {isMobile() && (
+                <div 
+                  className="ctx-backdrop" 
+                  onClick={() => setCtxMenu({ show: false, x: 0, y: 0, client: null })}
+                  onContextMenu={(e) => e.preventDefault()}
+                />
+              )}
+              <div 
+                className="ctx-menu" 
+                style={{
+                  position: 'fixed', 
+                  zIndex: 10000,
+                  // На мобілці ігноруємо координати кліку, на десктопі - залишаємо
+                  left: isMobile() ? undefined : ctxMenu.x, 
+                  top: isMobile() ? undefined : ctxMenu.y 
+                }}
+              >
+                <button className="ctx-item" onClick={() => handleCtxAction('edit')}><Edit2 size={16} /> Редагувати</button>
+                <button className="ctx-item" onClick={() => handleCtxAction('copy')}><Copy size={16} /> Копіювати адресу</button>
+                <button className="ctx-item" onClick={() => handleCtxAction('call')}><Phone size={16} /> Подзвонити</button>
+                <div className="ctx-divider"></div>
+                <button className="ctx-item ctx-item-danger" onClick={() => handleCtxAction('delete')}><Trash2 size={16} /> Видалити</button>
+              </div>
+            </>
+          )}
       </div>
     </div> 
   );

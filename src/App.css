@@ -2274,6 +2274,88 @@ body.dark .ctx-item { color: #e2e8f0; }
 body.dark .ctx-item:hover { background: #273449; }
 body.dark .ctx-divider { background: #334155; }
 
+/* ===== СТИЛІ ДЛЯ КОНТЕКСТНОГО МЕНЮ (МОБІЛКА) ===== */
+.ctx-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 9999;
+  animation: fade-in 0.2s ease-out;
+}
+
+@media (max-width: 959px) {
+  .ctx-menu {
+    /* Прибиваємо меню до низу екрану */
+    left: 0 !important;
+    top: auto !important;
+    bottom: 0 !important;
+    width: 100%;
+
+    /* Робимо вигляд шторки */
+    border-radius: 20px 20px 0 0;
+    padding: 24px 16px 32px 16px;
+    /* Більші відступи для пальців */
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    /* Відстань між кнопками */
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.15);
+
+    /* Анімація виїзду знизу */
+    animation: slide-up-ctx 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  body.dark .ctx-menu {
+    background: #1e293b;
+    box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.5);
+    border-top: 1px solid #334155;
+  }
+
+  /* Збільшуємо кнопки для зручного тапу */
+  .ctx-item {
+    padding: 16px;
+    font-size: 16px;
+    border-radius: 14px;
+    background: #f8fafc;
+    justify-content: center;
+    /* Центруємо текст і іконку */
+    font-weight: 500;
+  }
+
+  body.dark .ctx-item {
+    background: #334155;
+    color: #f1f5f9;
+  }
+
+  .ctx-item:active {
+    transform: scale(0.97);
+  }
+
+  .ctx-item-danger {
+    background: #fef2f2;
+    color: #ef4444;
+  }
+
+  body.dark .ctx-item-danger {
+    background: rgba(239, 68, 68, 0.1);
+  }
+
+  .ctx-divider {
+    display: none;
+    /* На мобілці розділювач зайвий, бо є відстань (gap) */
+  }
+}
+
+@keyframes slide-up-ctx {
+  from {
+    transform: translateY(100%);
+  }
+
+  to {
+    transform: translateY(0);
+  }
+}
+
 /* ===== КНОПКИ ===== */
 .btn-theme { width: 34px; height: 34px; border-radius: 50%; border: 1px solid #e8ecf3; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 0.95rem; transition: 0.2s; }
 .btn-theme:hover { background: #f8fafc; }

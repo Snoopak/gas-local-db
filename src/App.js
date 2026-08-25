@@ -1311,7 +1311,7 @@ const clearScrollState = () => {
     setCtxMenu({ show: true, x: e.clientX, y: e.clientY, client });
   };
 
-  const handleCtxAction = (action) => {
+const handleCtxAction = (action) => {
     if (!ctxMenu.client) return;
     const c = ctxMenu.client;
     switch(action) {
@@ -1320,6 +1320,49 @@ const clearScrollState = () => {
         const addr = [c.settlement, c.streetType, c.street, c.building, c.apartment].filter(Boolean).join(' ');
         navigator.clipboard.writeText(addr).then(() => showToast('success', 'Адресу скопійовано!'));
         break;
+      case 'copy_details': {
+        // Формуємо красивий текст для месенджерів
+        const addrFull = [
+          c.settlement, 
+          [c.streetType, c.street].filter(Boolean).join(' '), 
+          c.building ? `буд. ${c.building}${c.buildingLetter || ''}` : '', 
+          c.apartment ? `кв. ${c.apartment}${c.apartmentLetter || ''}` : ''
+        ].filter(Boolean).join(', ');
+
+        let textParts = [];
+        textParts.push(`👤 ${c.fullName || '—'}`);
+        if (c.accountNumber) textParts.push(`🆔 О/Р: ${c.accountNumber}`);
+        if (addrFull) textParts.push(`📍 ${addrFull}`);
+        if (c.phone) textParts.push(`📱 ${c.phone}`);
+        
+        let statuses = [];
+        if (c.gasDisconnected) statuses.push('Відключений ❌');
+        if (c.dacha) statuses.push('Дача');
+        if (c.temporaryAbsent) statuses.push('Не проживає');
+        if (statuses.length > 0) textParts.push(`⚠️ Статус: ${statuses.join(', ')}`);
+
+        // Додаємо розширені дані по лічильнику
+        if (c.meterNumber) {
+          textParts.push(`\n⚙️ Лічильник: ${c.meterBrand || ''} ${c.meterSize ? `G${c.meterSize}` : ''}`.trim());
+          textParts.push(`🔢 №: ${c.meterNumber}`);
+          if (c.meterYear) textParts.push(`🏭 Рік випуску: ${c.meterYear}`);
+          if (c.verificationDate || c.nextVerificationDate) {
+            textParts.push(`📅 Повірка: ${c.verificationDate || '—'} ➡️ Наст.: ${c.nextVerificationDate || '—'}`);
+          }
+          if (c.seal || c.stickerSeal) {
+            textParts.push(`🔒 Пломби: ${[c.seal, c.stickerSeal].filter(Boolean).join(' / ')}`);
+          }
+          if (c.meterLocation) {
+             textParts.push(`🏠 Розташування: ${c.meterLocation}`);
+          }
+        } else {
+          textParts.push(`\n⚙️ Лічильник: Немає даних`);
+        }
+
+        const finalText = textParts.join('\n');
+        navigator.clipboard.writeText(finalText).then(() => showToast('success', 'Всі дані скопійовано!'));
+        break;
+      }
       case 'call':
         if (c.phone) window.location.href = 'tel:' + c.phone;
         else showToast('warning', 'Немає телефону');
@@ -3480,13 +3523,16 @@ const handleImportIoT = async (e) => {
                 style={{
                   position: 'fixed', 
                   zIndex: 10000,
-                  // На мобілці ігноруємо координати кліку, на десктопі - залишаємо
                   left: isMobile() ? undefined : ctxMenu.x, 
                   top: isMobile() ? undefined : ctxMenu.y 
                 }}
               >
                 <button className="ctx-item" onClick={() => handleCtxAction('edit')}><Edit2 size={16} /> Редагувати</button>
-                <button className="ctx-item" onClick={() => handleCtxAction('copy')}><Copy size={16} /> Копіювати адресу</button>
+                <button className="ctx-item" onClick={() => handleCtxAction('copy')}><MapPin size={16} /> Копіювати адресу</button>
+                
+                {/* НОВА КНОПКА ТУТ */}
+                <button className="ctx-item" onClick={() => handleCtxAction('copy_details')}><FileText size={16} /> Копіювати всі дані</button>
+                
                 <button className="ctx-item" onClick={() => handleCtxAction('call')}><Phone size={16} /> Подзвонити</button>
                 <div className="ctx-divider"></div>
                 <button className="ctx-item ctx-item-danger" onClick={() => handleCtxAction('delete')}><Trash2 size={16} /> Видалити</button>

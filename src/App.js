@@ -724,7 +724,6 @@ function ClientDatabase() {
   const rafId = useRef(null);
 
   const handleTouchStart = (e) => {
-    console.log('[DEBUG TOUCH] 🟡 Початок свайпу (Touch Start)');
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     touchStartY.current = clientY;
     touchCurrentY.current = 0;
@@ -760,7 +759,6 @@ const handleTouchMove = (e) => {
 
 const handleTouchEnd = (e) => {
     if (!isDragging.current) return;
-    console.log('[DEBUG TOUCH] 🟠 Кінець свайпу (Touch End). Пройдена відстань:', touchCurrentY.current);
     isDragging.current = false;
 
     if (window.getSelection) {
@@ -770,7 +768,6 @@ const handleTouchEnd = (e) => {
     if (rafId.current) cancelAnimationFrame(rafId.current);
 
     if (touchCurrentY.current > 120) {
-      console.log('[DEBUG TOUCH] Відстань достатня, викликаємо closeMobilePanel()');
       
       // 1. ОДРАЗУ вмикаємо плавність, поки шторка ще під пальцем
       if (overlayRef.current) {
@@ -783,7 +780,6 @@ const handleTouchEnd = (e) => {
       });
 
     } else {
-      console.log('[DEBUG TOUCH] Відстань замала, повертаємо шторку назад')
       if (overlayRef.current) {
         overlayRef.current.style.transition = 'transform 0.2s cubic-bezier(0.32, 0.72, 0, 1)';
         overlayRef.current.style.transform = 'translate3d(0, 0, 0)';

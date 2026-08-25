@@ -828,17 +828,13 @@ const handleTouchEnd = (e) => {
     };
   }, []);
 
-  const [darkMode, setDarkMode] = useState(false);
+
   const [ctxMenu, setCtxMenu] = useState({ show: false, x: 0, y: 0, client: null });
   const isMobile = () => window.innerWidth < 960;
 
-  useEffect(() => {
-    const saved = localStorage.getItem('grm-theme');
-    if (saved === 'dark') {
-      setDarkMode(true);
-      document.body.classList.add('dark');
-    }
-  }, []);
+  const [darkMode, setDarkMode] = useState(() => {
+  return localStorage.getItem('grm-theme') === 'dark';
+  });
 
   useEffect(() => {
     document.body.classList.toggle('dark', darkMode);
@@ -2740,7 +2736,7 @@ const handleImportIoT = async (e) => {
           </div>
 
           {/* ПРАВА ПАНЕЛЬ — ДЕТАЛІ (ДЕСКТОП) */}
-          {!isMobile() && totalCount > 0 && (
+          {!isMobile() && (isInitialLoading || totalCount > 0 || clients.length > 0) && (
             <div className="detail-panel">
               {selectedClient ? (
                 <>

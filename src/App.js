@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, createContext, useContext, useCallback } from 'react';
-import { Search, Plus, Edit2, Trash2, X, Save, Phone, Home, Gauge, Upload, Download, FileText, CheckCircle, AlertCircle, Info, AlertTriangle, Database, Activity, Flame, MapPin, ChevronUp, ChevronDown, Users, Sun, Moon, Copy, ChevronRight, UserCircle, SlidersHorizontal, Globe, IdCard, Hash, SearchX } from 'lucide-react';
+import { Search, Plus, Edit2, Trash2, X, Save, Phone, Home, Gauge, Upload, Download, FileText, CheckCircle, AlertCircle, Info, AlertTriangle, Database, Activity, Flame, MapPin, ChevronUp, ChevronDown, Users, Sun, Moon, Copy, ChevronRight, UserCircle, SlidersHorizontal, Globe, IdCard, Hash, SearchX, Map } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import './App.css';
 import {METER_CATALOG, METER_SIZES, METER_SUBTYPE, METER_LOCATION, METER_OWNERSHIP, SERVICE_ORG, METER_GROUP, METER_MANUFACTURER, U_STREET_TYPE} from './data';
@@ -1368,6 +1368,24 @@ const handleCtxAction = (action) => {
         else showToast('warning', 'Немає телефону');
         break;
       case 'delete': handleDelete(c.id); break;
+      case 'map': {
+        // Збираємо адресу без квартири, щоб Google Карти точно її знайшли
+        const searchAddress = [
+          c.settlement,
+          [c.streetType, c.street].filter(Boolean).join(' '),
+          c.building ? c.building : '' // Карти краще розуміють просто номер будинку
+        ].filter(Boolean).join(', ');
+
+        if (searchAddress) {
+          // Формуємо універсальне посилання для Google Maps
+          const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(searchAddress)}`;
+          // Відкриваємо в новій вкладці (на мобілці це автоматично запустить додаток Карт)
+          window.open(mapUrl, '_blank');
+        } else {
+          showToast('warning', 'Недостатньо даних про адресу');
+        }
+        break;
+      }
     }
     setCtxMenu({ show: false, x: 0, y: 0, client: null });
   };
@@ -3529,10 +3547,8 @@ const handleImportIoT = async (e) => {
               >
                 <button className="ctx-item" onClick={() => handleCtxAction('edit')}><Edit2 size={16} /> Редагувати</button>
                 <button className="ctx-item" onClick={() => handleCtxAction('copy')}><MapPin size={16} /> Копіювати адресу</button>
-                
-                {/* НОВА КНОПКА ТУТ */}
                 <button className="ctx-item" onClick={() => handleCtxAction('copy_details')}><FileText size={16} /> Копіювати всі дані</button>
-                
+                <button className="ctx-item" onClick={() => handleCtxAction('map')}><Map size={16} /> Відкрити на мапі</button>
                 <button className="ctx-item" onClick={() => handleCtxAction('call')}><Phone size={16} /> Подзвонити</button>
                 <div className="ctx-divider"></div>
                 <button className="ctx-item ctx-item-danger" onClick={() => handleCtxAction('delete')}><Trash2 size={16} /> Видалити</button>

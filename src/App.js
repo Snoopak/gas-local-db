@@ -1188,17 +1188,21 @@ const loadClients = async (append = false) => {
     setIsInitialLoading(false);
   };
 
-  const loadSettlements = (allClients) => {
-    const uniqueSettlements = [...new Set(allClients.map(c => c.settlement).filter(s => s))].sort((a, b) => a.localeCompare(b, 'uk', { sensitivity: 'base' }));
-    setSettlements(uniqueSettlements);
-  };
+const loadSettlements = async (providedClients) => {
+  // Якщо дані передали - беремо їх, якщо ні - дістаємо з бази
+  const allClients = providedClients || await getAllClients();
+  const uniqueSettlements = [...new Set(allClients.map(c => c.settlement).filter(s => s))].sort((a, b) => a.localeCompare(b, 'uk', { sensitivity: 'base' }));
+  setSettlements(uniqueSettlements);
+};
 
-  const loadStreets = (allClients) => {
-    const uniqueStreets = [...new Set(allClients.map(c => [c.streetType, c.street].filter(s => s).join(' ')).filter(s => s))].sort((a, b) => a.localeCompare(b, 'uk', { sensitivity: 'base' }));
-    setStreets(uniqueStreets);
-  };
+const loadStreets = async (providedClients) => {
+  const allClients = providedClients || await getAllClients();
+  const uniqueStreets = [...new Set(allClients.map(c => [c.streetType, c.street].filter(s => s).join(' ')).filter(s => s))].sort((a, b) => a.localeCompare(b, 'uk', { sensitivity: 'base' }));
+  setStreets(uniqueStreets);
+};
 
-const loadMeterData = (allClients) => {
+const loadMeterData = async (providedClients) => {
+  const allClients = providedClients || await getAllClients();
   const uniqueBrands = [...new Set(allClients.map(c => c.meterBrand).filter(b => b))].sort((a, b) => a.localeCompare(b, 'uk', { sensitivity: 'base' }));
   setMeterBrands(uniqueBrands);
   const uniqueSizes = [...new Set(allClients.map(c => c.meterSize).filter(s => s))].sort((a, b) => a.localeCompare(b, 'uk', { numeric: true, sensitivity: 'base' }));

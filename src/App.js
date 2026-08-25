@@ -486,18 +486,24 @@ const getClientsByPage = async (page, pageSize) => {
     const store = transaction.objectStore(STORE_NAME);
     const request = store.openCursor();
     const results = [];
-    let skipped = 0;
+    let hasSkipped = false; 
     let collected = 0;
-    
+    const skipCount = page * pageSize;
+
     request.onsuccess = (event) => {
       const cursor = event.target.result;
       if (cursor) {
-        if (skipped < page * pageSize) {
-          skipped++;
-          cursor.continue();
-        } else if (collected < pageSize) {
-          results.push(cursor.value);
-          collected++;
+        // Миттєвий стрибок через непотрібні записи
+        if (skipCount > 0 && !hasSkipped) {
+          hasSkipped = true;
+          cursor.advance(skipCount); 
+          return;
+        }
+        
+        results.push(cursor.value);
+        collected++;
+
+        if (collected < pageSize) {
           cursor.continue();
         } else {
           resolve(results);
@@ -1109,27 +1115,26 @@ const handleTouchEnd = (e) => {
   }, [selectedSettlement, selectedStreet, selectedMeterGroups, selectedMeterBrand, selectedMeterSize, selectedMeterYear]);
 
 useEffect(() => {
-    const initializeApp = async () => {
-      await loadAllCounts();
-      loadSettlements();
-      loadStreets();
-      loadMeterData();
-      
-      // 🔥 ВАЖЛИВО: Знімаємо блокування ПЕРЕД тим, як встановлювати фільтри
-      isFirstRender.current = false;
-      
-      const hasRestoredFilters = restoreScrollState();
-      
-      // Якщо фільтрів немає, вантажимо все
-      // Якщо фільтри є, React побачить зміну стейтів і САМ запустить performSearch
-      if (!hasRestoredFilters) {
-        await loadClients();
-      }
-    };
+  const initializeApp = async () => {
+    // 1. Спочатку завантажуємо лише першу сторінку для миттєвого відображення
+    const hasRestoredFilters = restoreScrollState();
+    if (!hasRestoredFilters) {
+      await loadClients();
+    }
+    isFirstRender.current = false;
+
+    // 2. Витягуємо ВСЮ базу ОДИН РАЗ і роздаємо іншим функціям
+    const allClients = await getAllClients();
     
-    initializeApp();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    // 3. Роздаємо готові дані
+    await loadAllCounts(allClients);
+    loadSettlements(allClients);
+    loadStreets(allClients);
+    loadMeterData(allClients);
+  };
+  
+  initializeApp();
+}, []);
 
   useEffect(() => {
     if (!isFirstRender.current) {
@@ -1187,36 +1192,26 @@ const loadClients = async (append = false) => {
     setIsInitialLoading(false);
   };
 
-  const loadSettlements = async () => {
-    const allClients = await getAllClients();
+  const loadSettlements = (allClients) => {
     const uniqueSettlements = [...new Set(allClients.map(c => c.settlement).filter(s => s))].sort((a, b) => a.localeCompare(b, 'uk', { sensitivity: 'base' }));
     setSettlements(uniqueSettlements);
   };
 
-  const loadStreets = async () => {
-    const allClients = await getAllClients();
-    const uniqueStreets = [...new Set(allClients.map(c => {
-      const streetName = [c.streetType, c.street].filter(s => s).join(' ');
-      return streetName;
-    }).filter(s => s))].sort((a, b) => a.localeCompare(b, 'uk', { sensitivity: 'base' }));
+  const loadStreets = (allClients) => {
+    const uniqueStreets = [...new Set(allClients.map(c => [c.streetType, c.street].filter(s => s).join(' ')).filter(s => s))].sort((a, b) => a.localeCompare(b, 'uk', { sensitivity: 'base' }));
     setStreets(uniqueStreets);
   };
 
-  const loadMeterData = async () => {
-    const allClients = await getAllClients();
-    
-    const uniqueBrands = [...new Set(allClients.map(c => c.meterBrand).filter(b => b))].sort((a, b) => a.localeCompare(b, 'uk', { sensitivity: 'base' }));
-    setMeterBrands(uniqueBrands);
-    
-    const uniqueSizes = [...new Set(allClients.map(c => c.meterSize).filter(s => s))].sort((a, b) => a.localeCompare(b, 'uk', { numeric: true, sensitivity: 'base' }));
-    setMeterSizes(uniqueSizes);
-    
-    const uniqueYears = [...new Set(allClients.map(c => c.meterYear).filter(y => y))].sort((a, b) => a - b);
-    setMeterYears(uniqueYears);
-    
-    const uniqueGroups = [...new Set(allClients.map(c => c.meterGroup).filter(g => g))].sort((a, b) => a.localeCompare(b, 'uk', { sensitivity: 'base' }));
-    setMeterGroups(uniqueGroups);
-  };
+const loadMeterData = (allClients) => {
+  const uniqueBrands = [...new Set(allClients.map(c => c.meterBrand).filter(b => b))].sort((a, b) => a.localeCompare(b, 'uk', { sensitivity: 'base' }));
+  setMeterBrands(uniqueBrands);
+  const uniqueSizes = [...new Set(allClients.map(c => c.meterSize).filter(s => s))].sort((a, b) => a.localeCompare(b, 'uk', { numeric: true, sensitivity: 'base' }));
+  setMeterSizes(uniqueSizes);
+  const uniqueYears = [...new Set(allClients.map(c => c.meterYear).filter(y => y))].sort((a, b) => a - b);
+  setMeterYears(uniqueYears);
+  const uniqueGroups = [...new Set(allClients.map(c => c.meterGroup).filter(g => g))].sort((a, b) => a.localeCompare(b, 'uk', { sensitivity: 'base' }));
+  setMeterGroups(uniqueGroups);
+};
 
 // 🔥 1. Новий автоматичний запис фільтрів
   useEffect(() => {
@@ -2594,7 +2589,6 @@ const handleImportIoT = async (e) => {
                 <div className="skeleton-list">
                   {[...Array(12)].map((_, i) => (
                     <div key={i} className="skeleton-client-card">
-                      <div className="sk-avatar"></div>
                       <div className="sk-body">
                         <div className="sk-name" style={{ width: `${60 + (i % 3) * 10}%` }}></div>
                         <div className="sk-address-row">

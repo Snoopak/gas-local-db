@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, createContext, useContext, useCallback } from 'react';
-import { Search, Plus, Edit2, Trash2, X, Save, Phone, Home, Gauge, Upload, Download, FileText, CheckCircle, AlertCircle, Info, AlertTriangle, Database, Activity, Flame, MapPin, ChevronUp, ChevronDown, Users, Sun, Moon, Copy, ChevronRight, UserCircle, SlidersHorizontal, Globe, IdCard, Hash, SearchX, Map } from 'lucide-react';
+import { Search, Plus, Edit2, Trash2, X, Save, Phone, Home, Gauge, Upload, Download, FileText, CheckCircle, AlertCircle, Info, AlertTriangle, Database, Activity, Flame, MapPin, ChevronUp, ChevronDown, Users, Sun, Moon, Copy, ChevronRight, UserCircle, SlidersHorizontal, Globe, IdCard, Hash, SearchX, Map as MapIcon } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import './App.css';
 import {METER_CATALOG, METER_SIZES, METER_SUBTYPE, METER_LOCATION, METER_OWNERSHIP, SERVICE_ORG, METER_GROUP, METER_MANUFACTURER, U_STREET_TYPE} from './data';
@@ -1054,9 +1054,10 @@ const handleTouchEnd = (e) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage]);
 
-  const loadAllCounts = useCallback(async () => {
+  const loadAllCounts = useCallback(async (providedClients) => {
     try {
-      const allClients = await getAllClients();
+      // Броня: якщо передали масив - беремо його, якщо ні - дістаємо з бази
+      const allClients = providedClients || await getAllClients();
       
       const total = allClients.length;
       
@@ -2621,7 +2622,7 @@ const handleImportIoT = async (e) => {
             <div className="clients-list">
               {isInitialLoading ? (
                 <div className="skeleton-list">
-                  {[...Array(12)].map((_, i) => (
+                  {[...Array(6)].map((_, i) => (
                     <div key={i} className="skeleton-client-card">
                       <div className="sk-body">
                         <div className="sk-name" style={{ width: `${60 + (i % 3) * 10}%` }}></div>
@@ -2732,37 +2733,50 @@ const handleImportIoT = async (e) => {
 
                     {clients.length === 0 && !loading && (
                       <div>
-                        {hasActiveFilters ? (
+                        {totalCount === 0 ? (
+                          <div className="empty-db">
+                            <div className="empty-db-icon-wrapper">
+                              <Database size={48} strokeWidth={1.2} />
+                            </div>
+                            
+                            <h2 className="empty-db-title">База порожня</h2>
+                            <p className="empty-db-hint">
+                              Почніть роботу, додавши першого абонента,<br/> 
+                              або завантажте існуючу базу з файлу.
+                            </p>
+                            
+                            <div className="empty-db-primary-action">
+                              <button className="btn-primary-large" onClick={handleAdd}>
+                                <Plus size={18} /> Додати першого абонента
+                              </button>
+                            </div>
+                            
+                            <div className="empty-db-divider">
+                              <span>або</span>
+                            </div>
+
+                            <div className="empty-db-secondary-actions">
+                              <label className="btn" onMouseDown={(e) => e.stopPropagation()}>
+                                <Upload size={14} /> Імпорт XLS
+                                <input type="file" accept=".xlsx,.xls" onChange={(e) => { handleImportExcel(e); setShowQuickActions(false); }} className="hidden" disabled={loading} />
+                              </label>
+                              
+                              <button className="btn" onClick={() => setShowImportUrlModal(true)}>
+                                <Globe size={14} /> Імпорт JSON
+                              </button>
+                              
+                              <button className="btn" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDownloadTemplate(); setShowQuickActions(false); }}>
+                                <FileText size={14} /> Шаблон XLS
+                              </button>
+                            </div>
+                          </div>  
+                        ) : hasActiveFilters ? (
                           <div className="empty-search">
                             <div className="empty-search-icon-wrapper">
                               <SearchX size={42} strokeWidth={1.5} />
                             </div>
                             <h3 className="empty-search-title">Нічого не знайдено</h3>
                             <p className="empty-search-hint">За вашим запитом немає результатів.<br/>Спробуйте змінити або скинути параметри пошуку.</p>
-                          </div>
-                        ) : totalCount === 0 ? (
-                          <div className="empty-db">
-                            <div className="empty-db-icon">📋</div>
-                            <h2 className="empty-db-title">База порожня</h2>
-                            <p className="empty-db-hint">Додайте першого абонента або імпортуйте з Excel</p>
-                            <div className="empty-db-btns">
-                              <label className="btn" onMouseDown={(e) => {e.stopPropagation();}}><Upload size={13} />Імпорт XLS
-                                <input type="file" accept=".xlsx,.xls" onChange={(e) => { handleImportExcel(e); setShowQuickActions(false); }} className="hidden" disabled={loading} />
-                              </label>
-                              <button className="btn" onClick={() => setShowImportUrlModal(true)}><Upload size={14} /> Імпорт JSON по URL </button>
-                              <button onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleDownloadTemplate(); 
-                                setShowQuickActions(false); 
-                              }}
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                              }}
-                              className="btn"><FileText size={13} />Шаблон XLS</button>
-                              <button className="btn-primary" onClick={handleAdd}><Plus size={14} /> Додати абонента</button>
-                            </div>
                           </div>
                         ) : !isInitialLoading ? (
                           <div className="list-end-text">Немає клієнтів</div>
@@ -2776,7 +2790,7 @@ const handleImportIoT = async (e) => {
           </div>
 
           {/* ПРАВА ПАНЕЛЬ — ДЕТАЛІ (ДЕСКТОП) */}
-          {!isMobile() && (isInitialLoading || totalCount > 0 || clients.length > 0) && (
+          {!isMobile() && totalCount > 0 && (
             <div className="detail-panel">
               {selectedClient ? (
                 <>
@@ -2913,8 +2927,12 @@ const handleImportIoT = async (e) => {
                     )}
 
                     <div style={{display:'flex', gap:'0.5rem', marginTop:'0.5rem'}}>
-                      <button className="btn-save" onClick={() => handleEdit(selectedClient)} style={{flex:1}}>✎ Редагувати</button>
-                      <button className="btn-cancel" onClick={() => handleDelete(selectedClient.id)} style={{flex:1, color:'#dc2626'}}>🗑 Видалити</button>
+                      <button className="btn-save" onClick={() => handleEdit(selectedClient)} style={{flex:1}}>
+                        <Edit2 size={16} /> Редагувати
+                      </button>
+                      <button className="btn-cancel" onClick={() => handleDelete(selectedClient.id)} style={{flex:1, color:'#ef4444', borderColor:'#fecaca'}}>
+                        <Trash2 size={16} /> Видалити
+                      </button>
                     </div>
                   </div>
                 </>
@@ -3548,7 +3566,7 @@ const handleImportIoT = async (e) => {
                 <button className="ctx-item" onClick={() => handleCtxAction('edit')}><Edit2 size={16} /> Редагувати</button>
                 <button className="ctx-item" onClick={() => handleCtxAction('copy')}><MapPin size={16} /> Копіювати адресу</button>
                 <button className="ctx-item" onClick={() => handleCtxAction('copy_details')}><FileText size={16} /> Копіювати всі дані</button>
-                <button className="ctx-item" onClick={() => handleCtxAction('map')}><Map size={16} /> Відкрити на мапі</button>
+                <button className="ctx-item" onClick={() => handleCtxAction('map')}><MapIcon size={16} /> Відкрити на мапі</button>
                 <button className="ctx-item" onClick={() => handleCtxAction('call')}><Phone size={16} /> Подзвонити</button>
                 <div className="ctx-divider"></div>
                 <button className="ctx-item ctx-item-danger" onClick={() => handleCtxAction('delete')}><Trash2 size={16} /> Видалити</button>

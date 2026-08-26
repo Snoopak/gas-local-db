@@ -2790,15 +2790,22 @@ const handleImportIoT = async (e) => {
           </div>
 
           {/* ПРАВА ПАНЕЛЬ — ДЕТАЛІ (ДЕСКТОП) */}
-          {!isMobile() && totalCount > 0 && (
-            <div className="detail-panel">
-              {selectedClient ? (
-                <>
-                  <div className="detail-panel-header">
-                    <h3>{selectedClient.fullName}</h3>
-                    <button className="btn-icon" onClick={() => setSelectedClient(null)}><X size={18} /></button>
-                  </div>
-                  <div className="detail-panel-body">
+          {!isMobile() && (
+            isInitialLoading ? (
+              /* СТАН 1: ЗАВАНТАЖЕННЯ. Невидима розпірка. 
+                 Вона тримає ширину макета, але не блимає сірим фоном */
+              <div className="detail-panel" style={{ visibility: 'hidden', pointerEvents: 'none' }}></div>
+            ) : (clients.length > 0 || totalCount > 0) ? (
+              /* СТАН 2: Є ДАНІ (або база повна, або йде пошук). 
+                 Тут рендериться справжня панель */
+              <div className="detail-panel">
+                {selectedClient ? (
+                  <>
+                    <div className="detail-panel-header">
+                      <h3>{selectedClient.fullName}</h3>
+                      <button className="btn-icon" onClick={() => setSelectedClient(null)}><X size={18} /></button>
+                    </div>
+<div className="detail-panel-body">
                     <div className="detail-info-block">
                       <h4><UserCircle size={14} /> Особові дані</h4>
                       <div className="detail-row"><span className="dlbl">Особовий рахунок</span><span className="dval">{selectedClient.accountNumber}</span></div>
@@ -2935,21 +2942,22 @@ const handleImportIoT = async (e) => {
                       </button>
                     </div>
                   </div>
-                </>
-              ) : (
-                <div className="detail-panel-empty">
-                  <div>
-                    <div className="empty-icon-wrapper">
-                      <IdCard size={36} strokeWidth={1.5} />
-                    </div>
-                    <div className="empty-text-group">
-                      <p className="empty-title">Оберіть абонента</p>
-                      <p className="empty-subtitle">для перегляду деталей</p>
+</>
+                ) : (
+                  <div className="detail-panel-empty">
+                    <div>
+                      <div className="empty-icon-wrapper">
+                        <IdCard size={36} strokeWidth={1.5} />
+                      </div>
+                      <div className="empty-text-group">
+                        <p className="empty-title">Оберіть абонента</p>
+                        <p className="empty-subtitle">для перегляду деталей</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            ) : null /* СТАН 3: БАЗА ТОЧНО ПОРОЖНЯ. Панель навіть не намагається з'явитися */
           )}
         </div>
 

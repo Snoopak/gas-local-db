@@ -2457,24 +2457,21 @@ body.dark .ctx-divider { background: #334155; }
 }
 
 @media (max-width: 959px) {
+  .client-item {
+      -webkit-user-select: none;
+      user-select: none;
+    }
   .ctx-menu {
-    /* Прибиваємо меню до низу екрану */
     left: 0 !important;
     top: auto !important;
     bottom: 0 !important;
     width: 100%;
-
-    /* Робимо вигляд шторки */
     border-radius: 20px 20px 0 0;
-    padding: 24px 16px 32px 16px;
-    /* Більші відступи для пальців */
+    padding: 16px 16px 24px 16px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    /* Відстань між кнопками */
+    gap: 4px;
     box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.15);
-
-    /* Анімація виїзду знизу */
     animation: slide-up-ctx 0.3s cubic-bezier(0.32, 0.72, 0, 1);
   }
 
@@ -2486,19 +2483,23 @@ body.dark .ctx-divider { background: #334155; }
 
   /* Збільшуємо кнопки для зручного тапу */
   .ctx-item {
-    padding: 16px;
-    font-size: 16px;
-    border-radius: 14px;
-    background: #f8fafc;
-    justify-content: center;
-    /* Центруємо текст і іконку */
-    font-weight: 500;
+  padding: 14px 20px ;
+  font-size: 16px;
+  border-radius: 14px;
+  background: #f8fafc;
+  justify-content: flex-start;
+  font-weight: 500;
   }
 
   body.dark .ctx-item {
     background: #334155;
     color: #f1f5f9;
   }
+
+.ctx-item svg {
+  margin-right: 12px;
+  opacity: 0.8;
+}
 
   .ctx-item:active {
     transform: scale(0.97);

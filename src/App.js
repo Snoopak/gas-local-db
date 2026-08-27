@@ -479,6 +479,18 @@ const getAllClients = async () => {
   });
 };
 
+const getTotalClientsCount = async () => {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([STORE_NAME], 'readonly');
+    const store = transaction.objectStore(STORE_NAME);
+    // IndexedDB віддає .count() за 1-2 мілісекунди, бо не читає самі дані
+    const request = store.count(); 
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+};
+
 const getClientsByPage = async (page, pageSize) => {
   const db = await openDB();
   return new Promise((resolve, reject) => {
@@ -694,6 +706,7 @@ function ClientDatabase() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const isFirstRender = useRef(true);
   const stateRestored = useRef(false);
+  const activeRequest = useRef(0);
   
   const STORAGE_KEYS = {
     CLIENTS: 'clients_infinite_scroll',
@@ -1087,21 +1100,29 @@ const handleTouchEnd = (e) => {
 
 useEffect(() => {
   const initializeApp = async () => {
-    // 1. Спочатку завантажуємо лише першу сторінку для миттєвого відображення
+    // 🔥 1. МИТТЄВО беремо загальну кількість для шапки (працює за 1 мс)
+    try {
+      const quickCount = await getTotalClientsCount();
+      setTotalCount(quickCount);
+    } catch (e) {
+      console.error('Помилка швидкого підрахунку:', e);
+    }
+
+    // 2. Спочатку завантажуємо лише першу сторінку для миттєвого відображення
     const hasRestoredFilters = restoreScrollState();
     if (!hasRestoredFilters) {
       await loadClients();
     }
     isFirstRender.current = false;
 
-    // 2. Витягуємо ВСЮ базу ОДИН РАЗ і роздаємо іншим функціям
-    const allClients = await getAllClients();
-    
-    // 3. Роздаємо готові дані
-    await loadAllCounts(allClients);
-    loadSettlements(allClients);
-    loadStreets(allClients);
-    loadMeterData(allClients);
+    // 🔥 3. Запускаємо важкий процес у фоні (.then замість await)
+    // Це дозволяє відмалювати інтерфейс, не чекаючи витягування всієї бази
+    getAllClients().then(allClients => {
+      loadAllCounts(allClients); // Оновлює беджі статусів (відключені, дачі тощо)
+      loadSettlements(allClients);
+      loadStreets(allClients);
+      loadMeterData(allClients);
+    });
   };
   
   initializeApp();
@@ -1137,18 +1158,21 @@ useEffect(() => {
 const loadClients = async (append = false) => {
     if (isLoadingMore || (!append && loading)) return;
     
+    const reqId = ++activeRequest.current; // 🔥 Фіксуємо номер цього запиту
+    
     if (append) setIsLoadingMore(true);
     else setLoading(true);
     
     try {
       const data = await getClientsByPage(currentPage, CONFIG.PAGE_SIZE);
       
+      if (reqId !== activeRequest.current) return; // 🔥 Якщо почався новий пошук - викидаємо ці дані!
+      
       if (append) setClients(prev => [...prev, ...data]);
       else setClients(data);
       
       setHasMore(data.length === CONFIG.PAGE_SIZE);
       
-      // 🔥 ПОВЕРНУЛИ ЗБЕРЕЖЕННЯ
       setTimeout(() => {
         saveScrollState();
       }, 100);
@@ -1156,6 +1180,8 @@ const loadClients = async (append = false) => {
     } catch (error) {
       console.error('Error loading clients:', error);
     }
+    
+    if (reqId !== activeRequest.current) return; // 🔥 Блокуємо зміну лоадерів для скасованого запиту
     
     if (append) setIsLoadingMore(false);
     else setLoading(false);
@@ -1458,7 +1484,11 @@ const refreshCurrentList = async () => {
 
 
 const performSearch = async (append = false) => {
-    if (isLoadingMore || (!append && loading)) return;
+    if (isLoadingMore) return; // 🔥 Прибрали (!append && loading), тепер пошук агресивніший
+    
+    const reqId = ++activeRequest.current; // 🔥 Перебиваємо номер запиту
+    
+    if (!append) setClients([]); // 🔥 Миттєво чистимо екран від старих даних
     
     if (append) setIsLoadingMore(true);
     else setLoading(true);
@@ -1472,13 +1502,14 @@ const performSearch = async (append = false) => {
         currentPage, CONFIG.PAGE_SIZE
       );
       
+      if (reqId !== activeRequest.current) return; // 🔥 Захист
+      
       if (append) setClients(prev => [...prev, ...result.items]);
       else setClients(result.items);
       
       setFilteredTotalCount(result.total);
       setHasMore(result.hasMore);
       
-      // 🔥 ПОВЕРНУЛИ ЗБЕРЕЖЕННЯ
       setTimeout(() => {
         saveScrollState();
       }, 100);
@@ -1486,6 +1517,8 @@ const performSearch = async (append = false) => {
     } catch (error) {
       console.error('Error searching:', error);
     }
+    
+    if (reqId !== activeRequest.current) return;
     
     if (append) setIsLoadingMore(false);
     else setLoading(false);

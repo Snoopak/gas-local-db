@@ -1759,6 +1759,58 @@ const handleImportFromURL = async () => {
   }
 };
 
+const handleLocalFileUpload = async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  setLoading(true); // Вмикаємо ваш лоадер
+
+  const reader = new FileReader();
+  
+  reader.onload = async (event) => {
+    try {
+      const parsedData = JSON.parse(event.target.result);
+      const clientsToImport = Array.isArray(parsedData) ? parsedData : parsedData.clients;
+
+      if (!clientsToImport || !Array.isArray(clientsToImport)) {
+        showToast('error', 'Помилка: Файл не містить списку клієнтів у правильному форматі.');
+        return;
+      }
+
+      // 1. Очищаємо стару базу перед завантаженням нової (як у вашому імпорті з URL)
+      const db = await openDB();
+      const clearTransaction = db.transaction([STORE_NAME], 'readwrite');
+      await new Promise((res, rej) => {
+        const req = clearTransaction.objectStore(STORE_NAME).clear();
+        req.onsuccess = res;
+        req.onerror = rej;
+      });
+
+      // 2. Зберігаємо дані через ВАШУ пакетну функцію
+      await addClientsBatch(clientsToImport);
+      
+      // 3. Оновлюємо інтерфейс вашими ж функціями
+      await refreshCurrentList();
+      await loadAllCounts();
+      await loadSettlements();
+      await loadStreets();
+      await loadMeterData();
+      
+      showToast('success', `Успішно завантажено ${clientsToImport.length} абонентів!`);
+      setShowImportUrlModal(false); // Закриваємо модальне вікно
+      
+    } catch (error) {
+      showToast('error', 'Помилка при читанні файлу JSON.');
+      console.error(error);
+    } finally {
+      e.target.value = ''; 
+      setLoading(false);
+    }
+  };
+
+  reader.readAsText(file);
+};
+
 const handleImportExcel = async (e) => {
   const file = e.target.files[0];
   if (!file) return;
@@ -3571,6 +3623,26 @@ const handleImportIoT = async (e) => {
                     placeholder="https://raw.githubusercontent.com/your-name/repo/main/backup.json"
                     disabled={importingFromUrl} />
                   <p className="url-input-hint">Приклад: https://raw.githubusercontent.com/Snoopak/gas-local-db/main/backups/clients.json</p>
+                </div>
+
+                <div className="import-divider">
+                <span>або</span>
+                </div>
+
+                <div className="file-upload-box">
+                  <input 
+                    type="file" 
+                    id="local-file-upload" 
+                    accept=".json" 
+                    style={{ display: 'none' }} 
+                    onChange={handleLocalFileUpload} 
+                  />
+                  <label htmlFor="local-file-upload" className="btn-file-upload">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                    </svg>
+                    Обрати JSON файл з пристрою
+                  </label>
                 </div>
 
                 <div className="code-box">

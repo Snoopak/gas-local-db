@@ -11,6 +11,8 @@ body {
 html:has(.mobile-overlay.open),
 html:has(.drawer-backdrop),
 html:has(.ctx-backdrop),
+html:has(.url-modal-overlay),
+html:has(.modal-overlay),
 body:has(.mobile-overlay.open),
 body:has(.drawer-backdrop),
 body:has(.ctx-backdrop),
@@ -2100,6 +2102,81 @@ body.dark .btn-cancel:hover {
 .btn-cancel-url:hover { background: #f9fafb; }
 .btn-cancel-url:disabled { opacity: 0.5; cursor: not-allowed; }
 
+
+/* ===== ЗАВАНТАЖЕННЯ ЛОКАЛЬНОГО ФАЙЛУ ===== */
+.import-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 20px 0;
+  color: #94a3b8;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.import-divider::before,
+.import-divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.import-divider span {
+  padding: 0 12px;
+}
+
+.file-upload-box {
+  margin-bottom: 16px;
+}
+
+.btn-file-upload {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 14px;
+  background: #f8fafc;
+  border: 2px dashed #cbd5e1;
+  border-radius: 8px;
+  color: #475569;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.btn-file-upload:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.btn-file-upload:active {
+  transform: scale(0.98);
+}
+
+/* --- ТЕМНА ТЕМА --- */
+body.dark .import-divider::before,
+body.dark .import-divider::after {
+  border-bottom-color: #334155;
+}
+
+body.dark .btn-file-upload {
+  background: #0f172a;
+  border-color: #334155;
+  color: #cbd5e1;
+}
+
+body.dark .btn-file-upload:hover {
+  background: #1e293b;
+  border-color: #475569;
+  color: #f8fafc;
+}
+
 /* ===== ТЕМНА ТЕМА: МОДАЛКА ІМПОРТУ ПО URL ===== */
 
 /* Перефарбовуємо системний скролбар у темний колір */
@@ -4092,3 +4169,4 @@ body.dark .url-modal-footer {
 body.dark .url-modal-footer {
   box-shadow: 0 -10px 20px rgba(0, 0, 0, 0.4);
 }
+

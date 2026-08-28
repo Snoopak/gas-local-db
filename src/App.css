@@ -2100,6 +2100,37 @@ body.dark .btn-cancel:hover {
 .btn-cancel-url:hover { background: #f9fafb; }
 .btn-cancel-url:disabled { opacity: 0.5; cursor: not-allowed; }
 
+/* ===== ТЕМНА ТЕМА: МОДАЛКА ІМПОРТУ ПО URL ===== */
+
+/* Перефарбовуємо системний скролбар у темний колір */
+body.dark .url-modal-card {
+  color-scheme: dark;
+}
+
+/* Темний інфо-блок (синій) */
+body.dark .info-box {
+  background: rgba(59, 130, 246, 0.1) !important;
+  border-color: #1e3a8a !important;
+}
+
+body.dark .info-box-text {
+  color: #bfdbfe !important;
+}
+
+/* Темний блок із кодом (сірий) */
+body.dark .code-box {
+  background: #0f172a !important;
+  border-color: #334155 !important;
+}
+
+body.dark .code-box-title {
+  color: #e2e8f0 !important;
+}
+
+body.dark .code-hint {
+  color: #94a3b8 !important;
+}
+
 
 .name-account-fields {
   display: grid;
@@ -3473,35 +3504,54 @@ body.dark .drawer-dashed-divider {
 /* Мобільна адаптація: скрол в один рядок */
 @media (max-width: 768px) {
   .status-toolbar-left {
-    flex-wrap: nowrap;
-    /* Сам тулбар не переноситься */
+  flex-direction: row !important;
+  /* Повертаємо в один рядок */
+  flex-wrap: nowrap !important;
+  align-items: center;
+  gap: 8px;
   }
-
-  /* Скролиться ТІЛЬКИ цей блок із кнопками */
+  .stats-left-group {
+  width: 125px !important;
+  flex-shrink: 0 !important;
+  padding: 4px 8px;
+  box-sizing: border-box;
+  }
+  .status-chip {
+  min-width: auto !important;
+  padding: 4px 8px !important;
+  gap: 5px !important;
+  }
+  .status-chip .chip-text {
+  font-size: 12px !important;
+  /* Робимо шрифт ледь меншим */
+  }
   .status-chips-scroll {
-    overflow-x: auto;
-    white-space: nowrap;
-    -webkit-overflow-scrolling: touch;
-    /* Плавність на iOS */
-    scrollbar-width: none;
-    /* Ховаємо скроллбар Firefox */
-    padding-right: 4px;
-    /* Мікро-відступ в кінці скролу */
+  width: 100%;
+  overflow-x: auto;
+  white-space: nowrap;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding-bottom: 0;
   }
 
   .status-chips-scroll::-webkit-scrollbar {
-    display: none;
-    /* Ховаємо скроллбар Chrome/Safari */
+  display: none;
   }
 
-  /* Забороняємо кнопкам стискатися */
   .status-chips-scroll .status-chip {
-    flex-shrink: 0;
+  flex-shrink: 0;
   }
 
   .status-label {
-    flex-shrink: 0;
-    /* Напис "Статус:" теж фіксований */
+  display: none !important;
+  }
+  .toolbar-v-divider {
+  display: block !important;
+  height: 16px;
+  }
+  .status-group {
+  flex: 1;
+  min-width: 0;
   }
 }
 /* Підтримка темної теми */ 
@@ -3950,4 +4000,95 @@ body.dark .iot-status-chip-green {
     border-radius: 0 !important;
     padding-bottom: max(16px, env(safe-area-inset-bottom)) !important;
   }
+}
+
+@media (min-width: 768px) {
+  .url-modal-card {
+    /* Збільшуємо максимальну ширину (було 640px) */
+    max-width: 780px !important;
+    /* Дозволяємо вікну займати трохи більше висоти екрана (було 90vh) */
+    max-height: 96vh !important;
+  }
+
+  .url-modal-body {
+    /* Робимо трохи більші відступи по боках для візуального балансу */
+    padding: 24px 32px !important;
+  }
+}
+/* ===== ФІКС: ПРИКЛЕЄНІ КНОПКИ ДЛЯ МОДАЛКИ URL ===== */
+.url-modal-card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden !important; /* Забороняємо прокрутку всієї картки */
+}
+
+.url-modal-body {
+  flex: 1;
+  overflow-y: auto; /* Дозволяємо прокрутку ТІЛЬКИ центральної частини */
+}
+
+.url-modal-header,
+.url-modal-footer {
+  flex-shrink: 0 !important; /* Шапка і футер надійно зафіксовані і не стискаються */
+}
+
+/* Прибираємо відступи навколо оверлею на телефоні, щоб низ не обрізався */
+@media (max-width: 768px) {
+  .url-modal-overlay {
+    padding: 0 !important;
+  }
+}
+/* ===== СУПЕР-ФІКС: ПРИКЛЕЄНІ КНОПКИ ТА ШАПКА ===== */
+.url-modal-card {
+  overflow: hidden !important;
+  /* Забороняємо картці прокручуватись цілком */
+}
+
+.url-modal-body {
+  overflow-y: auto !important;
+  position: relative;
+  padding: 24px !important;
+  max-height: 90vh;
+  /* Обмеження висоти для екрану */
+}
+
+/* Для мобільних екранів даємо висоту на весь екран */
+@media (max-width: 768px) {
+  .url-modal-body {
+    max-height: 100svh;
+  }
+}
+
+/* 1. Приклеюємо шапку (заголовок + хрестик) догори */
+.url-modal-header {
+  position: sticky;
+  top: -24px;
+  background: white;
+  margin: -24px -24px 20px -24px;
+  /* Нівелюємо padding батька */
+  padding: 24px 24px 16px 24px;
+  z-index: 20;
+}
+
+/* 2. Приклеюємо футер з кнопками донизу */
+.url-modal-footer {
+  position: sticky;
+  bottom: -24px;
+  background: white;
+  margin: 16px -24px -24px -24px;
+  /* Розтягуємо на всю ширину */
+  padding: 16px 24px 24px 24px;
+  z-index: 20;
+  box-shadow: 0 -10px 20px rgba(0, 0, 0, 0.06);
+  /* М'яка тінь, щоб текст гарно ховався під кнопки */
+}
+
+/* 3. Підтримка темної теми для приклеєних блоків */
+body.dark .url-modal-header,
+body.dark .url-modal-footer {
+  background: #0f172a;
+}
+
+body.dark .url-modal-footer {
+  box-shadow: 0 -10px 20px rgba(0, 0, 0, 0.4);
 }

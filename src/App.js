@@ -2765,7 +2765,7 @@ const handleImportIoT = async (e) => {
                     )}
 
                     {clients.length === 0 && !loading && (
-                      <div>
+                      <div className="empty-state-wrapper">
                         {totalCount === 0 ? (
                           <div className="empty-db">
                             <div className="empty-db-icon-wrapper">

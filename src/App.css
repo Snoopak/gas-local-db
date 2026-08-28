@@ -918,6 +918,26 @@ body.dark .status-chip.status-on.active .chip-dot {
 .clients-inner {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  box-sizing: border-box;
+}
+.empty-state-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.empty-search,
+.empty-db {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  box-sizing: border-box;
+  /* min-height: 100% видаляємо */
 }
 
 /* ===== КАРТКА КЛІЄНТА ===== */
@@ -2216,7 +2236,28 @@ body.dark .btn-cancel:hover {
     gap: 8px;
   }
 }
+/* 1. Робимо головні контейнери гнучкими на мобілках */
+@media (max-width: 959px) {
+.app-container {
+    min-height: calc(100vh - 16px) !important;
+    height: auto !important;
+    /* Скидаємо глобальний height, якщо він є */
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+  }
 
+  .main-content,
+  .list-panel,
+  .clients-list {
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow-y: visible !important;
+  }
+}
 /* ===== DESKTOP SPLIT LAYOUT ===== */
 /* ===== DESKTOP SPLIT LAYOUT — ВИПРАВЛЕНО ===== */
 /* ===== DESKTOP SPLIT LAYOUT ===== */

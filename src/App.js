@@ -2662,7 +2662,7 @@ const handleImportIoT = async (e) => {
             <div className="clients-list">
               {isInitialLoading ? (
                 <div className="skeleton-list">
-                  {[...Array(6)].map((_, i) => (
+                  {[...Array(Math.ceil(window.innerHeight / 75))].map((_, i) => (
                     <div key={i} className="skeleton-client-card">
                       <div className="sk-body">
                         <div className="sk-name" style={{ width: `${60 + (i % 3) * 10}%` }}></div>
@@ -2834,7 +2834,7 @@ const handleImportIoT = async (e) => {
             isInitialLoading ? (
               /* СТАН 1: ЗАВАНТАЖЕННЯ. Невидима розпірка. 
                  Вона тримає ширину макета, але не блимає сірим фоном */
-              <div className="detail-panel" style={{ visibility: 'hidden', pointerEvents: 'none' }}></div>
+              <div className="detail-panel" style={{ pointerEvents: 'none' }}></div>
             ) : (clients.length > 0 || totalCount > 0) ? (
               /* СТАН 2: Є ДАНІ (або база повна, або йде пошук). 
                  Тут рендериться справжня панель */

@@ -3389,7 +3389,7 @@ body.dark .drawer-dashed-divider {
   padding: 4px 10px;
   border-radius: 8px;
   border: 1px solid #e2e8f0;
-  min-width: 140px;
+  min-width: 148px;
 }
 
 .stats-item {
@@ -3397,7 +3397,24 @@ body.dark .drawer-dashed-divider {
   align-items: center;
   gap: 5px;
 }
+.stats-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  /* Дозволяє внутрішньому блоку зайняти всі 140px */
+}
 
+.stats-item strong {
+  color: #0f172a;
+  font-weight: 700;
+  margin-left: auto;
+  /* Відштовхує елемент максимально праворуч */
+  text-align: right;
+  /* Вирівнює текст по правому краю */
+  min-width: 36px;
+  /* Резервує місце під 4 цифри, щоб блок не звужувався при переході з 8040 на 848 */
+}
 .stats-icon {
   color: #64748b;
 }

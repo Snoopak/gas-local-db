@@ -700,7 +700,11 @@ function ClientDatabase() {
 
   const [iotHistoryModalClient, setIotHistoryModalClient] = useState(null);
   
-  const [statusCounts, setStatusCounts] = useState({ disconnected: 0, dacha: 0, absent: 0 });
+  const [statusCounts, setStatusCounts] = useState(() => {
+    // При першому рендері миттєво дістаємо останні відомі цифри
+    const cached = localStorage.getItem('grm_status_counts');
+    return cached ? JSON.parse(cached) : { disconnected: 0, dacha: 0, absent: 0 };
+  });
   
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -1093,6 +1097,9 @@ const handleTouchEnd = (e) => {
 
       setTotalCount(total);
       setStatusCounts(counts);
+
+      localStorage.setItem('grm_status_counts', JSON.stringify(counts));
+
     } catch (error) {
       console.error('Error loading counts:', error);
     }

@@ -8,8 +8,21 @@ body {
   touch-action: manipulation;
 }
 /* Фіксуємо фоновий контент під час відкритого оверлею без зміни layout */
-body:has(.mobile-overlay.open) {
-  touch-action: none;
+html:has(.mobile-overlay.open),
+html:has(.drawer-backdrop),
+html:has(.ctx-backdrop),
+body:has(.mobile-overlay.open),
+body:has(.drawer-backdrop),
+body:has(.ctx-backdrop),
+html:has(.mobile-overlay.open) .app-wrapper,
+html:has(.drawer-backdrop) .app-wrapper,
+html:has(.ctx-backdrop) .app-wrapper,
+html:has(.mobile-overlay.open) .app-container,
+html:has(.drawer-backdrop) .app-container,
+html:has(.ctx-backdrop) .app-container {
+  overflow: hidden !important;
+  overflow-y: hidden !important;
+  touch-action: none !important;
   overscroll-behavior: contain;
 }
 
@@ -3908,4 +3921,33 @@ body.dark .iot-status-chip.pending {
 body.dark .iot-status-chip-green {
   background: rgba(34, 197, 94, 0.2);
   color: #4ade80;
+}
+
+
+/* ===== ПОВНОЕКРАННІ МОДАЛКИ ДЛЯ МОБІЛОК ===== */
+@media (max-width: 768px) {
+
+  /* Прибираємо сірі поля навколо модалки */
+  .modal-center {
+    padding: 0 !important;
+  }
+
+  /* Розтягуємо картку на 100% ширини і висоти (svh враховує панелі браузера) */
+  .modal-card,
+  .url-modal-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 100svh !important;
+    max-height: 100svh !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    border: none !important;
+  }
+
+  /* Прибираємо скруглення нижніх кутів та додаємо безпечну зону для свайпу на iPhone (safe-area) */
+  .modal-footer,
+  .url-modal-footer {
+    border-radius: 0 !important;
+    padding-bottom: max(16px, env(safe-area-inset-bottom)) !important;
+  }
 }

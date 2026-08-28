@@ -1730,7 +1730,7 @@ const handleImportFromURL = async () => {
       }
     }
 
-    await loadClients();
+    await refreshCurrentList();
     await loadAllCounts();
     await loadSettlements();
     await loadStreets();
@@ -1922,7 +1922,7 @@ const handleImportExcel = async (e) => {
         }
       }
 
-      await loadClients();
+      await refreshCurrentList();
       await loadAllCounts();
       await loadSettlements();
       await loadStreets();
@@ -2043,7 +2043,7 @@ const handleImportIoT = async (e) => {
       }
     }
     
-    await loadClients();
+    await refreshCurrentList();
     showToast('success', `Готово! Додано нових записів ІоТ: ${updatedCount}`);
   } catch (error) {
     showToast('error', `Помилка: ${error.message}`);
@@ -3120,7 +3120,7 @@ const handleImportIoT = async (e) => {
                     <div className="detail-row"><span className="dlbl">Дата встановлення</span><span className="dval">{selectedClient.iotInstallDate || '—'}</span></div>
                     
                     {selectedClient.iotLastDate && (
-                      <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px dashed #cbd5e1', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <div className="dval iot-status-chip-green">
                         <div className="detail-row">
                           <span className="dlbl">Останній зв'язок</span>
                           <span className="dval" style={{ color: '#166534', fontWeight: '600', background: '#dcfce7', padding: '2px 6px', borderRadius: '4px' }}>

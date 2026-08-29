@@ -3182,13 +3182,13 @@ const handleImportIoT = async (e) => {
                     <div className="detail-row"><span className="dlbl">Дата встановлення</span><span className="dval">{selectedClient.iotInstallDate || '—'}</span></div>
                     
                     {selectedClient.iotLastDate && (
-                      <div className="dval iot-status-chip-green">
+                      <div className="dval">
                         <div className="detail-row">
                           <span className="dlbl">Останній зв'язок</span>
-                          <span className="dval" style={{ color: '#166534', fontWeight: '600', background: '#dcfce7', padding: '2px 6px', borderRadius: '4px' }}>
+                          <span className="dval iot-status-chip-green">
                             {selectedClient.iotLastDate} {selectedClient.iotLastTime}
                           </span>
-                        </div>
+                        </div> 
                         <div className="detail-row">
                           <span className="dlbl">Показник</span>
                           <span className="dval"><strong>{selectedClient.iotLastReading}</strong></span>

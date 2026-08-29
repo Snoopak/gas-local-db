@@ -196,7 +196,7 @@ const Modal = ({ type, title, message, onConfirm, onCancel, onClose }) => {
 
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 bg-black bg-opacity-50 z-[100001] flex items-center justify-center p-4"
       style={{ animation: 'fade-in 0.3s ease-out' }}
       onClick={handleBackdropClick}
     >
@@ -266,7 +266,7 @@ const Snackbar = ({ message, actionText, onAction, onClose }) => {
   };
 
   return (
-    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50">
+    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[99999]">
       <div
         className={`bg-gray-900 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-4 min-w-[300px] max-w-md transform transition-all duration-300 ${
           isVisible ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'
@@ -339,7 +339,7 @@ const AlertProvider = ({ children }) => {
     <AlertContext.Provider value={value}>
       {children}
       
-      <div className="fixed top-4 right-4 z-50 space-y-2">
+      <div className="fixed top-4 right-4 z-[99999] space-y-2">
         {toasts.map(toast => (
           <ProgressToast
             key={toast.id}

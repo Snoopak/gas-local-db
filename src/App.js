@@ -2691,21 +2691,21 @@ const handleImportIoT = async (e) => {
                   <span className="chip-dot"></span>
                   <span className="chip-text">{isCompact ? 'Відкл.' : 'Відключений'}</span>
                   <span className={`chip-count ${!isInitialLoading && statusCounts.disconnected > 0 ? 'chip-count-visible' : 'chip-count-placeholder'}`}>
-                    ({isInitialLoading ? '000' : statusCounts.disconnected})
+                    {isInitialLoading ? '...' : statusCounts.disconnected}
                   </span>
                 </button>
                 <button className={`status-chip status-dacha ${filterDacha ? 'active' : ''}`} onClick={() => setFilterDacha(!filterDacha)}>
                   <span className="chip-dot"></span>
                   <span className="chip-text">Дача</span>
                   <span className={`chip-count ${!isInitialLoading && statusCounts.dacha > 0 ? 'chip-count-visible' : 'chip-count-placeholder'}`}>
-                    ({isInitialLoading ? '0000' : statusCounts.dacha})
+                    {isInitialLoading ? '...' : statusCounts.dacha}
                   </span>
                 </button>
                 <button className={`status-chip status-absent ${filterAbsent ? 'active' : ''}`} onClick={() => setFilterAbsent(!filterAbsent)}>
                   <span className="chip-dot"></span>
                   <span className="chip-text">{isCompact ? 'Не прож.' : 'Не проживає'}</span>
                   <span className={`chip-count ${!isInitialLoading && statusCounts.absent > 0 ? 'chip-count-visible' : 'chip-count-placeholder'}`}>
-                    ({isInitialLoading ? '000' : statusCounts.absent})
+                    {isInitialLoading ? '...' : statusCounts.absent}
                   </span>
                 </button>
                 <button className={`status-chip status-on ${filterConnected ? 'active' : ''}`} onClick={() => setFilterConnected(!filterConnected)}>

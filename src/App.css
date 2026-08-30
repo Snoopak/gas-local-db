@@ -676,17 +676,69 @@ body.dark .qa-icon-box.qa-orange {
     gap: 8px;
     justify-content: flex-start;
     line-height: 1;
-    padding: 5px 12px;
+    /* padding: 5px 12px; */
     transition: all 0.15s ease-in-out;
     -webkit-user-select: none;
     user-select: none;
+    height: 29px;
+    /* Фіксована висота зрівняє всі кнопки */
+    padding: 0 6px 0 12px;
+    /* Залишаємо відступи тільки по боках */
+    box-sizing: border-box;
 }
 .status-chip .chip-text {
     color: #475569;
 }
+/* Базовий вигляд "пігулки" з кількістю */
 .chip-count {
-    font-weight: 600;
-    margin-left: auto;
+  background-color: #e2e8f0;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 12px;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+/* Адаптація для активних станів (щоб цифра не зливалася) */
+.status-chip.status-off.active .chip-count {
+  background-color: #fecaca;
+  color: #991b1b;
+}
+
+.status-chip.status-dacha.active .chip-count {
+  background-color: #fde68a;
+  color: #92400e;
+}
+
+.status-chip.status-absent.active .chip-count {
+  background-color: #fed7aa;
+  color: #9a3412;
+}
+
+/* Темна тема */
+body.dark .chip-count {
+  background-color: #334155;
+  color: #cbd5e1;
+}
+
+body.dark .status-chip.status-off.active .chip-count {
+  background-color: rgba(239, 68, 68, 0.25);
+  color: #f87171;
+}
+
+body.dark .status-chip.status-dacha.active .chip-count {
+  background-color: rgba(245, 158, 11, 0.25);
+  color: #fbbf24;
+}
+
+body.dark .status-chip.status-absent.active .chip-count {
+  background-color: rgba(249, 115, 22, 0.25);
+  color: #fb923c;
 }
 .status-chip.status-off {
     min-width: 155px;

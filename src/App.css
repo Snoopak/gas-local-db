@@ -676,14 +676,11 @@ body.dark .qa-icon-box.qa-orange {
     gap: 8px;
     justify-content: flex-start;
     line-height: 1;
-    /* padding: 5px 12px; */
     transition: all 0.15s ease-in-out;
     -webkit-user-select: none;
     user-select: none;
-    height: 29px;
-    /* Фіксована висота зрівняє всі кнопки */
+    height: 28px;
     padding: 0 6px 0 12px;
-    /* Залишаємо відступи тільки по боках */
     box-sizing: border-box;
 }
 .status-chip .chip-text {

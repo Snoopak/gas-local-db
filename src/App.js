@@ -528,6 +528,20 @@ const getClientsByPage = async (page, pageSize) => {
   });
 };
 
+// ⚡ Швидкий пошук клієнта за особовим рахунком через індекс
+const getClientByAccountNumber = async (accountNumber) => {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([STORE_NAME], 'readonly');
+    const store = transaction.objectStore(STORE_NAME);
+    const index = store.index('accountNumber');
+    const request = index.get(String(accountNumber).trim());
+
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => reject(request.error);
+  });
+};
+
 // ⭐ ВИПРАВЛЕНО: Пошукова функція зі строгим співставленням та перевіркою типів
 const searchClients = async (
   searchTerm, settlements, streets, meterBrands, meterSizes, meterYears, meterGroups, 
@@ -731,6 +745,28 @@ function ClientDatabase() {
     FILTERED_TOTAL: 'clients_filtered_total'
   };
   
+    // 🔗 Робота з хешем URL: #/clients/<о/р>
+  const setClientHash = (accountNumber) => {
+    try {
+      const hash = `/clients/${encodeURIComponent(String(accountNumber))}`;
+      if (window.location.hash !== `#${hash}`) {
+        window.location.hash = hash;
+      }
+    } catch (e) {
+      console.warn('Не вдалося записати хеш:', e);
+    }
+  };
+
+  const clearClientHash = () => {
+    try {
+      if (window.location.hash.startsWith('#/clients/')) {
+        window.history.pushState(null, '', window.location.pathname + window.location.search);
+      }
+    } catch (e) {
+      console.warn('Не вдалося очистити хеш:', e);
+    }
+  };
+
   const searchTimeoutRef = useRef(null);
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const buildingTimeoutRef = useRef(null);
@@ -1144,6 +1180,56 @@ useEffect(() => {
   
   initializeApp();
 }, []);
+  // 🔥 Відновлення відкритої картки з хеша після F5 / повторного відкриття
+  useEffect(() => {
+    const restoreFromHash = async () => {
+      const match = window.location.hash.match(/^#\/clients\/(.+)$/);
+      if (!match) return;
+
+      try {
+        const accountNumber = decodeURIComponent(match[1]);
+        const client = await getClientByAccountNumber(accountNumber); // ← через індекс, миттєво
+
+        if (client) {
+          setSelectedClient(client);
+        } else {
+          // О/р не знайдено — чистимо застарілий хеш
+          clearClientHash();
+        }
+      } catch (e) {
+        console.error('Помилка відновлення картки з хеша:', e);
+      }
+    };
+
+    restoreFromHash();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+// 🔄 Слухач зміни хеша: кнопка «Назад» браузера теж закриває/відкриває картку
+useEffect(() => {
+  const onHashChange = async () => {
+    const match = window.location.hash.match(/^#\/clients\/(.+)$/);
+
+    if (!match) {
+      setSelectedClient(null);
+      return;
+    }
+
+    try {
+      const accountNumber = decodeURIComponent(match[1]);
+      const client = await getClientByAccountNumber(accountNumber); // ← через індекс
+
+      if (client && selectedClient?.id !== client.id) {
+        setSelectedClient(client);
+      }
+    } catch (e) {
+      console.error('Помилка hashchange:', e);
+    }
+  };
+
+  window.addEventListener('hashchange', onHashChange);
+  return () => window.removeEventListener('hashchange', onHashChange);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [selectedClient]); // ← прибрали clients із залежностей
 
   useEffect(() => {
     if (!isFirstRender.current) {
@@ -1453,6 +1539,7 @@ const handleClientCardClick = (clientId) => {
   const client = clients.find(c => c.id === clientId);
   saveScrollState();
   setSelectedClient(client);
+  setClientHash(client.accountNumber);
 };
 const closeMobilePanel = useCallback(() => {
     // Захист від повторних викликів
@@ -1467,6 +1554,7 @@ const closeMobilePanel = useCallback(() => {
 
     closingTimer.current = setTimeout(() => {
       setSelectedClient(null);
+      clearClientHash();
       
       // Скидаємо стилі ЧЕРЕЗ requestAnimationFrame, щоб уникнути дьоргання
       requestAnimationFrame(() => {
@@ -1657,6 +1745,11 @@ const checkAccountDuplicate = async (accNum) => {
         try {
           await deleteClient(id);
           await refreshCurrentList();
+                    // Якщо видалили саме того, чия картка відкрита — закриваємо і чистимо хеш
+          if (selectedClient?.id === id) {
+            setSelectedClient(null);
+            clearClientHash();
+          }
           await loadAllCounts();
           await loadSettlements();
           await loadStreets();
@@ -2905,9 +2998,9 @@ const handleImportIoT = async (e) => {
                   <>
                     <div className="detail-panel-header">
                       <h3>{selectedClient.fullName}</h3>
-                      <button className="btn-icon" onClick={() => setSelectedClient(null)}><X size={18} /></button>
+                      <button className="btn-icon" onClick={() => { setSelectedClient(null); clearClientHash(); }}><X size={18} /></button>
                     </div>
-<div className="detail-panel-body">
+                  <div className="detail-panel-body">
                     <div className="detail-info-block">
                       <h4><UserCircle size={14} /> Особові дані</h4>
                       <div className="detail-row"><span className="dlbl">Особовий рахунок</span><span className="dval">{selectedClient.accountNumber}</span></div>
